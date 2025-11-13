@@ -10,10 +10,10 @@ export default function DashboardPage() {
           </div>
         </div>
         <h1 className="text-2xl font-semibold text-foreground mb-2" data-testid="text-dashboard-title">
-          Welcome to ChatApp
+          Bem-vindo ao ChatApp
         </h1>
         <p className="text-base text-muted-foreground max-w-md mx-auto" data-testid="text-dashboard-description">
-          Your messaging platform is ready. Start a conversation or explore your contacts to get connected.
+          Sua plataforma de mensagens está pronta. Inicie uma conversa ou explore seus contatos para se conectar.
         </p>
       </div>
     </div>

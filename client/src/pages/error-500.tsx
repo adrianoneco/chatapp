@@ -15,13 +15,13 @@ export default function Error500() {
           500
         </h1>
         <h2 className="text-2xl font-semibold text-foreground mb-2" data-testid="text-error-title-500">
-          Server Error
+          Erro do Servidor
         </h2>
         <p className="text-base text-muted-foreground mb-6" data-testid="text-error-description-500">
-          Something went wrong on our end. Our team has been notified and we're working to fix it.
+          Algo deu errado do nosso lado. Nossa equipe foi notificada e estamos trabalhando para corrigir.
         </p>
         <Button asChild data-testid="button-back-dashboard-500">
-          <Link href="/">Go to Dashboard</Link>
+          <Link href="/">Ir para o Painel</Link>
         </Button>
       </div>
     </div>

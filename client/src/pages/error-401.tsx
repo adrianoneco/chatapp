@@ -15,13 +15,13 @@ export default function Error401() {
           401
         </h1>
         <h2 className="text-2xl font-semibold text-foreground mb-2" data-testid="text-error-title-401">
-          Unauthorized
+          Não Autorizado
         </h2>
         <p className="text-base text-muted-foreground mb-6" data-testid="text-error-description-401">
-          You need to be authenticated to access this resource. Please log in to continue.
+          Você precisa estar autenticado para acessar este recurso. Por favor, faça login para continuar.
         </p>
         <Button asChild data-testid="button-back-login-401">
-          <Link href="/auth">Back to Login</Link>
+          <Link href="/auth">Voltar para Login</Link>
         </Button>
       </div>
     </div>

@@ -15,13 +15,13 @@ export default function Error400() {
           400
         </h1>
         <h2 className="text-2xl font-semibold text-foreground mb-2" data-testid="text-error-title-400">
-          Bad Request
+          Requisição Inválida
         </h2>
         <p className="text-base text-muted-foreground mb-6" data-testid="text-error-description-400">
-          The request you sent is invalid or malformed. Please check your input and try again.
+          A requisição que você enviou é inválida ou malformada. Por favor, verifique sua entrada e tente novamente.
         </p>
         <Button asChild data-testid="button-back-dashboard-400">
-          <Link href="/">Go to Dashboard</Link>
+          <Link href="/">Ir para o Painel</Link>
         </Button>
       </div>
     </div>

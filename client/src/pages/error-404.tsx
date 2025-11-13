@@ -15,13 +15,13 @@ export default function Error404() {
           404
         </h1>
         <h2 className="text-2xl font-semibold text-foreground mb-2" data-testid="text-error-title-404">
-          Page Not Found
+          Página Não Encontrada
         </h2>
         <p className="text-base text-muted-foreground mb-6" data-testid="text-error-description-404">
-          The page you're looking for doesn't exist or has been moved. Let's get you back on track.
+          A página que você está procurando não existe ou foi movida. Vamos te colocar de volta no caminho certo.
         </p>
         <Button asChild data-testid="button-back-dashboard-404">
-          <Link href="/">Go to Dashboard</Link>
+          <Link href="/">Ir para o Painel</Link>
         </Button>
       </div>
     </div>

@@ -15,13 +15,13 @@ export default function Error403() {
           403
         </h1>
         <h2 className="text-2xl font-semibold text-foreground mb-2" data-testid="text-error-title-403">
-          Forbidden
+          Acesso Negado
         </h2>
         <p className="text-base text-muted-foreground mb-6" data-testid="text-error-description-403">
-          You don't have permission to access this resource. Contact your administrator if you believe this is an error.
+          Você não tem permissão para acessar este recurso. Entre em contato com seu administrador se acredita que isto é um erro.
         </p>
         <Button asChild data-testid="button-back-dashboard-403">
-          <Link href="/">Go to Dashboard</Link>
+          <Link href="/">Ir para o Painel</Link>
         </Button>
       </div>
     </div>

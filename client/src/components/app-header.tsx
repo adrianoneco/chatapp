@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ChevronDown, User, Settings, LogOut } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/generated_images/ChatApp_logo_blue_violet_gradient_58d9e49b.png";
@@ -45,15 +45,13 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b bg-background px-6 shadow-sm">
-      <div className="flex items-center gap-4">
-        <SidebarTrigger data-testid="button-sidebar-toggle" />
-        <div className="flex items-center gap-3">
-          <img src={logoImage} alt="ChatApp Logo" className="h-10 w-10" />
-          <h1 className="text-xl font-semibold text-foreground">ChatApp</h1>
-        </div>
+      <div className="flex items-center gap-3">
+        <img src={logoImage} alt="ChatApp Logo" className="h-10 w-10" />
+        <h1 className="text-xl font-semibold text-foreground">ChatApp</h1>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button 
@@ -84,20 +82,20 @@ export function AppHeader() {
             <DropdownMenuSeparator />
             <DropdownMenuItem className="p-3">
               <div className="flex items-center justify-between w-full">
-                <span className="text-sm">Role</span>
+                <span className="text-sm">Função</span>
                 <Badge variant={getRoleBadgeVariant(user?.role || "client")}>
-                  {user?.role}
+                  {user?.role === "admin" ? "Administrador" : user?.role === "attendant" ? "Atendente" : "Cliente"}
                 </Badge>
               </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="p-3" data-testid="menu-profile">
               <User className="mr-2 h-4 w-4" />
-              <span>Profile</span>
+              <span>Perfil</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="p-3" data-testid="menu-settings">
               <Settings className="mr-2 h-4 w-4" />
-              <span>Settings</span>
+              <span>Configurações</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
@@ -106,7 +104,7 @@ export function AppHeader() {
               data-testid="button-logout"
             >
               <LogOut className="mr-2 h-4 w-4" />
-              <span>Logout</span>
+              <span>Sair</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

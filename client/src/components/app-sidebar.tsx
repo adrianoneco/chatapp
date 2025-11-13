@@ -5,30 +5,32 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
 
 const menuItems = [
   {
-    title: "Dashboard",
+    title: "Painel",
     url: "/",
     icon: LayoutDashboard,
   },
   {
-    title: "Messages",
+    title: "Mensagens",
     url: "/messages",
     icon: MessageSquare,
   },
   {
-    title: "Contacts",
+    title: "Contatos",
     url: "/contacts",
     icon: Users,
   },
   {
-    title: "Settings",
+    title: "Configurações",
     url: "/settings",
     icon: Settings,
   },
@@ -39,10 +41,16 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
+      <SidebarHeader className="p-4 border-b">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-medium text-muted-foreground">Navegação</span>
+          <SidebarTrigger data-testid="button-sidebar-toggle" />
+        </div>
+      </SidebarHeader>
       <SidebarContent className="p-4">
         <SidebarGroup>
           <SidebarGroupLabel className="text-sm font-medium text-muted-foreground mb-2">
-            Navigation
+            Menu
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
