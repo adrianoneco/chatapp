@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ChevronDown, User, Settings, LogOut } from "lucide-react";
 import { useLocation } from "wouter";
-import logoImage from "@assets/generated_images/ChatApp_logo_blue_violet_gradient_58d9e49b.png";
+import logoIcon from "@assets/generated_images/Chat_app_icon_gradient_8d46b942.png";
 
 export function AppHeader() {
   const { user, logoutMutation } = useAuth();
@@ -45,8 +45,8 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b bg-background px-6 shadow-sm">
-      <div className="flex items-center gap-3">
-        <img src={logoImage} alt="ChatApp Logo" className="h-10 w-10" />
+      <div className="flex items-center gap-2">
+        <img src={logoIcon} alt="ChatApp" className="h-8 w-8" data-testid="img-logo" />
         <h1 className="text-xl font-semibold text-foreground">ChatApp</h1>
       </div>
 

@@ -1,6 +1,12 @@
-import { users, type User, type InsertUser, type InsertClient, type UpdateClient, meetings, type Meeting, type InsertMeeting, type UpdateMeeting } from "@shared/schema";
+import { 
+  users, type User, type InsertUser, type InsertClient, type UpdateClient, 
+  meetings, type Meeting, type InsertMeeting, type UpdateMeeting,
+  channels, type Channel, type InsertChannel,
+  conversations, type Conversation, type InsertConversation, type UpdateConversation,
+  messages, type Message, type InsertMessage
+} from "@shared/schema";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, isNull, or, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -32,6 +38,22 @@ export interface IStorage {
   getMeetingByLinkId(linkId: string): Promise<Meeting | undefined>;
   updateMeeting(id: string, userId: string, updates: UpdateMeeting): Promise<Meeting | undefined>;
   deleteMeeting(id: string, userId: string): Promise<boolean>;
+  
+  getChannels(): Promise<Channel[]>;
+  getChannelById(id: string): Promise<Channel | undefined>;
+  getChannelBySlug(slug: string): Promise<Channel | undefined>;
+  createChannel(channel: InsertChannel): Promise<Channel>;
+  
+  getConversations(params: { channelId?: string; status?: string; assignedTo?: string }): Promise<Conversation[]>;
+  getConversationById(id: string): Promise<Conversation | undefined>;
+  createConversation(conversation: InsertConversation): Promise<Conversation>;
+  updateConversation(id: string, updates: UpdateConversation): Promise<Conversation | undefined>;
+  findOrCreateConversation(channelId: string, externalContactId: string): Promise<Conversation>;
+  
+  getMessages(conversationId: string, limit?: number): Promise<Message[]>;
+  createMessage(message: InsertMessage): Promise<Message>;
+  findMessageByExternalId(externalId: string): Promise<Message | undefined>;
+  
   sessionStore: session.SessionStore;
 }
 
@@ -247,6 +269,142 @@ export class DatabaseStorage implements IStorage {
       .delete(meetings)
       .where(and(eq(meetings.id, id), eq(meetings.createdBy, userId)));
     return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async getChannels(): Promise<Channel[]> {
+    return await db.select().from(channels).where(eq(channels.isActive, true));
+  }
+
+  async getChannelById(id: string): Promise<Channel | undefined> {
+    const [channel] = await db.select().from(channels).where(eq(channels.id, id));
+    return channel || undefined;
+  }
+
+  async getChannelBySlug(slug: string): Promise<Channel | undefined> {
+    const [channel] = await db.select().from(channels).where(eq(channels.slug, slug));
+    return channel || undefined;
+  }
+
+  async createChannel(insertChannel: InsertChannel): Promise<Channel> {
+    const [channel] = await db.insert(channels).values(insertChannel).returning();
+    return channel;
+  }
+
+  async getConversations(params: { channelId?: string; status?: string; assignedTo?: string }): Promise<Conversation[]> {
+    let query = db.select().from(conversations);
+    
+    const conditions = [];
+    if (params.channelId) {
+      conditions.push(eq(conversations.channelId, params.channelId));
+    }
+    if (params.status) {
+      conditions.push(eq(conversations.status, params.status as any));
+    }
+    if (params.assignedTo) {
+      conditions.push(eq(conversations.assignedTo, params.assignedTo));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(
+      sql`${conversations.lastMessageAt} DESC NULLS LAST`,
+      desc(conversations.createdAt)
+    );
+  }
+
+  async getConversationById(id: string): Promise<Conversation | undefined> {
+    const [conversation] = await db.select().from(conversations).where(eq(conversations.id, id));
+    return conversation || undefined;
+  }
+
+  async createConversation(insertConversation: InsertConversation): Promise<Conversation> {
+    const [conversation] = await db.insert(conversations).values(insertConversation).returning();
+    return conversation;
+  }
+
+  async updateConversation(id: string, updates: UpdateConversation): Promise<Conversation | undefined> {
+    const [conversation] = await db
+      .update(conversations)
+      .set(updates)
+      .where(eq(conversations.id, id))
+      .returning();
+    return conversation || undefined;
+  }
+
+  async findOrCreateConversation(channelId: string, externalContactId: string): Promise<Conversation> {
+    const result = await db
+      .insert(conversations)
+      .values({
+        channelId,
+        externalContactId,
+        status: "open",
+      })
+      .onConflictDoUpdate({
+        target: [conversations.channelId, conversations.externalContactId],
+        set: {
+          status: sql`CASE 
+            WHEN conversations.status IN ('open', 'pending') THEN conversations.status 
+            ELSE 'open' 
+          END`,
+        },
+      })
+      .returning();
+    
+    return result[0];
+  }
+
+  async getMessages(conversationId: string, limit: number = 100): Promise<Message[]> {
+    return await db
+      .select()
+      .from(messages)
+      .where(eq(messages.conversationId, conversationId))
+      .orderBy(desc(messages.createdAt))
+      .limit(limit);
+  }
+
+  async createMessage(insertMessage: InsertMessage): Promise<Message> {
+    if (insertMessage.externalId) {
+      const [message] = await db
+        .insert(messages)
+        .values(insertMessage)
+        .onConflictDoNothing({ target: messages.externalId })
+        .returning();
+      
+      if (!message) {
+        const existing = await this.findMessageByExternalId(insertMessage.externalId);
+        if (existing) {
+          return existing;
+        }
+        throw new Error("Failed to create or find message by externalId");
+      }
+      
+      await db
+        .update(conversations)
+        .set({ lastMessageAt: message.createdAt })
+        .where(eq(conversations.id, insertMessage.conversationId));
+      
+      return message;
+    }
+
+    const [message] = await db.insert(messages).values(insertMessage).returning();
+    
+    await db
+      .update(conversations)
+      .set({ lastMessageAt: message.createdAt })
+      .where(eq(conversations.id, insertMessage.conversationId));
+    
+    return message;
+  }
+
+  async findMessageByExternalId(externalId: string): Promise<Message | undefined> {
+    const [message] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.externalId, externalId))
+      .limit(1);
+    return message || undefined;
   }
 }
 

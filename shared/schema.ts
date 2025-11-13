@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, foreignKey, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -142,3 +142,106 @@ export const updateMeetingSchema = z.object({
 export type InsertMeeting = z.infer<typeof insertMeetingSchema>;
 export type UpdateMeeting = z.infer<typeof updateMeetingSchema>;
 export type Meeting = typeof meetings.$inferSelect;
+
+export const channels = pgTable("channels", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  slug: text("slug").notNull().unique(),
+  provider: text("provider", { enum: ["web", "whatsapp", "telegram", "instagram"] }).notNull(),
+  name: text("name").notNull(),
+  config: jsonb("config").$type<Record<string, any>>(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const channelConnections = pgTable("channel_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  channelId: varchar("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+  instanceId: text("instance_id").notNull().unique(),
+  apiKey: text("api_key"),
+  webhookSecret: text("webhook_secret"),
+  status: text("status", { enum: ["connected", "disconnected", "error"] }).notNull().default("disconnected"),
+  metadata: jsonb("metadata").$type<Record<string, any>>(),
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const conversations = pgTable("conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  channelId: varchar("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+  customerContactId: varchar("customer_contact_id").references(() => users.id, { onDelete: "set null" }),
+  externalContactId: text("external_contact_id"),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  assignedTo: varchar("assigned_to").references(() => users.id, { onDelete: "set null" }),
+  status: text("status", { enum: ["open", "pending", "resolved", "closed"] }).notNull().default("open"),
+  lastMessageAt: timestamp("last_message_at"),
+  metadata: jsonb("metadata").$type<Record<string, any>>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueChannelExternal: uniqueIndex("conversations_channel_external_unique").on(table.channelId, table.externalContactId),
+}));
+
+export const messages = pgTable("messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  senderType: text("sender_type", { enum: ["user", "customer", "system"] }).notNull(),
+  senderId: varchar("sender_id").references(() => users.id, { onDelete: "set null" }),
+  direction: text("direction", { enum: ["inbound", "outbound"] }).notNull(),
+  content: jsonb("content").$type<{ text?: string; mediaUrl?: string; caption?: string }>().notNull(),
+  messageType: text("message_type", { enum: ["text", "image", "audio", "video", "file", "system"] }).notNull().default("text"),
+  externalId: text("external_id"),
+  deliveredAt: timestamp("delivered_at"),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueExternalId: uniqueIndex("messages_external_id_unique").on(table.externalId),
+}));
+
+export const insertChannelSchema = createInsertSchema(channels).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertConversationSchema = createInsertSchema(conversations).omit({
+  id: true,
+  createdAt: true,
+  lastMessageAt: true,
+  createdBy: true,
+});
+
+export const updateConversationSchema = z.object({
+  assignedTo: z.string().uuid().nullable().optional(),
+  status: z.enum(["open", "pending", "resolved", "closed"]).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+  deliveredAt: true,
+  readAt: true,
+}).extend({
+  content: z.object({
+    text: z.string().optional(),
+    mediaUrl: z.string().url().optional(),
+    caption: z.string().optional(),
+  }),
+});
+
+export const insertChannelConnectionSchema = createInsertSchema(channelConnections).omit({
+  id: true,
+  createdAt: true,
+  lastSyncAt: true,
+});
+
+export type Channel = typeof channels.$inferSelect;
+export type InsertChannel = z.infer<typeof insertChannelSchema>;
+
+export type ChannelConnection = typeof channelConnections.$inferSelect;
+export type InsertChannelConnection = z.infer<typeof insertChannelConnectionSchema>;
+
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type UpdateConversation = z.infer<typeof updateConversationSchema>;
+
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
