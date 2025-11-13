@@ -1,6 +1,10 @@
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
+if (!GROQ_API_KEY) {
+  throw new Error("GROQ_API_KEY environment variable is required but not set. Please configure it in your environment.");
+}
+
 interface GroqMessage {
   role: "system" | "user" | "assistant";
   content: string;

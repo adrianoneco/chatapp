@@ -99,6 +99,17 @@ Preferred communication style: Simple, everyday language.
 - `GET /api/conversations/:id/messages` - List messages (with pagination)
 - `POST /api/conversations/:id/messages` - Create message (idempotent via externalId)
 
+*AI Integration (Nov 2025):*
+- `POST /api/ai/correct-text` - Text correction using Groq AI (grammar, spelling, punctuation)
+  - Body: `{ text: string, language?: string }`
+  - Returns: `{ success: boolean, correctedText: string, originalText: string }`
+- `POST /api/ai/assistant` - Generate AI assistant response with context
+  - Body: `{ userMessage: string, context?: { conversationId, clientName, attendantName, conversationHistory }, systemPrompt?: string }`
+  - Returns: `{ success: boolean, response: string }`
+- `POST /api/ai/search-templates` - Search knowledge base templates using AI
+  - Body: `{ query: string, templates: string[] }`
+  - Returns: `{ success: boolean, result: string }`
+
 **Middleware Stack:**
 - JSON body parsing with raw body preservation
 - Request logging with performance tracking
@@ -214,7 +225,15 @@ Preferred communication style: Simple, everyday language.
 - **lucide-react**: Icon library
 - **embla-carousel-react** (^8.6.0): Carousel component
 
+### AI Integration
+- **Groq API** (direct fetch): AI-powered text correction and assistant responses
+  - Used via direct fetch API to avoid Vite peer dependency conflicts
+  - Model: llama-3.3-70b-versatile
+  - Service location: server/services/groq.ts
+  - Features: Text correction, context-aware responses, template search
+
 ### Environment Requirements
 - **DATABASE_URL**: PostgreSQL connection string (required)
 - **SESSION_SECRET**: Session encryption key (required)
+- **GROQ_API_KEY**: Groq AI API key for text correction and assistant features (required)
 - **NODE_ENV**: Environment flag (development/production)
