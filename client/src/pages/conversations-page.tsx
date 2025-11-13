@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Send, User } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 
 export default function ConversationsPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -56,22 +54,40 @@ export default function ConversationsPage() {
   };
 
   const formatMessageTime = (date: string | Date) => {
-    return format(new Date(date), "HH:mm", { locale: ptBR });
+    const d = new Date(date);
+    return d.toLocaleTimeString('pt-BR', { 
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const formatConversationTime = (date: string | Date | null) => {
     if (!date) return "";
+    
     const messageDate = new Date(date);
-    const today = new Date();
-    const yesterday = new Date(today);
+    const now = new Date();
+    
+    const spFormatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    
+    const messageDateStr = spFormatter.format(messageDate);
+    const todayStr = spFormatter.format(now);
+    
+    const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
-
-    if (messageDate.toDateString() === today.toDateString()) {
-      return format(messageDate, "HH:mm", { locale: ptBR });
-    } else if (messageDate.toDateString() === yesterday.toDateString()) {
+    const yesterdayStr = spFormatter.format(yesterday);
+    
+    if (messageDateStr === todayStr) {
+      return formatMessageTime(messageDate);
+    } else if (messageDateStr === yesterdayStr) {
       return "Ontem";
     } else {
-      return format(messageDate, "dd/MM/yyyy", { locale: ptBR });
+      return messageDateStr;
     }
   };
 

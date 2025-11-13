@@ -6,7 +6,7 @@ import {
   messages, type Message, type InsertMessage
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, isNull, or, sql } from "drizzle-orm";
+import { eq, and, desc, asc, isNull, or, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -393,7 +393,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(messages)
       .where(eq(messages.conversationId, conversationId))
-      .orderBy(desc(messages.createdAt))
+      .orderBy(asc(messages.createdAt))
       .limit(limit);
   }
 
