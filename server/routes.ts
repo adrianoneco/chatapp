@@ -10,6 +10,8 @@ import meetingsRoutes from "./routes/meetings";
 import aiRoutes from "./routes/ai";
 import templatesRoutes from "./routes/templates";
 import settingsRoutes from "./routes/settings";
+import webhooksRoutes from "./routes/webhooks";
+import conversationExportRoutes from "./routes/conversation-export";
 import { createConversationsRouter } from "./routes/conversations";
 
 export function registerRoutes(app: Express): Server {
@@ -23,6 +25,8 @@ export function registerRoutes(app: Express): Server {
   app.use("/api", aiRoutes);
   app.use("/api", templatesRoutes);
   app.use("/api", settingsRoutes);
+  app.use("/api", conversationExportRoutes);
+  app.use("/webhooks", webhooksRoutes);
   app.use("/api", createConversationsRouter(storage));
 
   const httpServer = createServer(app);

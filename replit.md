@@ -124,3 +124,67 @@ wscat -H "Authorization: Bearer $GLOBAL_API_KEY" -c wss://chatapp.local/ws
 - Para uso completo de API key, handlers precisariam verificar `req.apiKeyContext` antes de acessar `req.user`
 - Capabilities atualmente são amplas (admin+attendant+client) - pode ser refinado no futuro
 - Rate limiting não implementado (próximo passo de segurança)
+
+## Recent Features (Nov 13, 2025 - Segunda Sessão)
+
+### Evolution API Integration
+
+**Serviço Evolution API** (server/services/evolution.ts):
+- Integração com Evolution API WhatsApp
+- Métodos: sendTextMessage, getInstanceStatus, setWebhook
+- processIncomingMessage: Processa mensagens recebidas, cria/atualiza conversations
+- sendOutboundMessage: Envia mensagens para WhatsApp
+- Separação por channelId: Usa externalContactId para identificar contatos do WhatsApp
+- **Uso**: EVOLUTION_API_URL e EVOLUTION_API_KEY (env vars)
+
+**Webhook Handler** (server/routes/webhooks.ts):
+- Endpoint: POST /webhooks/evolution/:channelId
+- Recebe webhooks do Evolution API
+- Processa evento "messages.upsert"
+- Ignora mensagens outbound (fromMe=true)
+- Auto-cria conversations para novos contatos
+
+### Email & Transcription System
+
+**Serviço de Email** (server/services/email.ts):
+- sendEmail: Serviço base (stub - logs apenas)
+- sendConversationTranscription: Envia transcrição formatada
+- sendMeetingNotification: Notificações de reuniões (created/updated/cancelled)
+- **Uso**: SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD
+- **Limitação**: Stub apenas (logs) - nodemailer pendente por conflito de dependências
+
+**Exportação de Transcrição** (server/routes/conversation-export.ts):
+- Endpoint: POST /api/conversations/:id/export
+- Somente agentes (attendant/admin)
+- Envia transcrição por email para usuário logado
+- Formata: [timestamp] Sender: Message
+- Suporta HTML e plain text
+
+### Meetings Schema Update
+
+**Campo Adicionado**:
+- `mentionedParticipants`: Array JSONB de user IDs
+- `status`: Enum estendido incluindo "cancelled"
+
+**Migração**: Aplicada via SQL manual (ALTER TABLE)
+
+### Limitações Conhecidas
+
+**Email Service**:
+- Implementação stub (logs apenas)
+- Nodemailer não instalado (peer dependency conflict)
+- Emails não são realmente enviados
+- Aparece como "sucesso" mas apenas loga
+
+**Meetings Notifications**:
+- Schema atualizado mas notificações não integradas nas rotas de meetings
+- Funcionalidade sendMeetingNotification implementada mas não chamada
+
+**LSP Warnings**:
+- 1 diagnostic restante em conversation-export.ts (não bloqueia execução)
+
+**Frontend**:
+- Não atualizado para usar novas funcionalidades
+- Botão "Exportar Transcrição" não implementado na UI
+- Integration Evolution API não visível no frontend
+
