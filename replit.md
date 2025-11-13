@@ -125,9 +125,56 @@ wscat -H "Authorization: Bearer $GLOBAL_API_KEY" -c wss://chatapp.local/ws
 - Capabilities atualmente são amplas (admin+attendant+client) - pode ser refinado no futuro
 - Rate limiting não implementado (próximo passo de segurança)
 
-## Recent Features (Nov 13, 2025 - Segunda Sessão)
+## Recent Features (Nov 13, 2025)
 
-### Evolution API Integration
+### AI Template System Enhancement - Terceira Sessão
+
+**Variáveis de Template** (shared/template-variables.ts):
+- Sistema completo de variáveis categorizadas (conversa, atendente, cliente)
+- Cada variável tem: key (ex: {{clientName}}), label PT-BR, descrição
+- getVariablesByCategory() retorna variáveis filtradas por categoria
+- getAllVariableKeys() retorna todas as chaves para fallback
+
+**Backend - Sugestão Inteligente de Templates** (server/routes/ai.ts):
+- Endpoint: POST /api/ai/suggest-template
+- Recebe: { title, category, description? }
+- Detecção automática de variáveis mencionadas em title + description
+- Se nenhuma variável detectada, usa todas (fallback inteligente)
+- Retorna: { suggestedContent, promptUsed, variablesUsed }
+- Integração com Groq API para geração profissional
+
+**Frontend - UI Completa** (client/src/components/settings/ai-assistant-tab.tsx):
+- Layout 2 colunas: formulário + sidebar de variáveis (lg:grid-cols-[1fr_18rem])
+- Sidebar direita com ScrollArea mostrando todas as variáveis
+- Variáveis agrupadas por categoria com descrições
+- Click-to-insert: clicar em variável insere no cursor do textarea
+- Botão "Sugestão IA" ao lado de "Criar/Atualizar"
+- Card mostrando prompt enviado à IA com botão copiar
+- Estados visuais: loading (Gerando...), copied (ícone Check)
+- Preserva posição do cursor ao inserir variáveis via ref
+
+**Fluxo de Uso:**
+1. Usuário preenche título e categoria do template
+2. Opcionalmente digita variáveis no conteúdo (ex: {{clientName}})
+3. Clica em "Sugestão IA"
+4. Backend detecta variáveis mencionadas ou usa todas
+5. Groq gera template profissional com variáveis apropriadas
+6. Frontend insere conteúdo gerado e mostra prompt usado
+7. Usuário pode copiar prompt, adicionar mais variáveis, e salvar
+
+**Correções de UX:**
+- Toast agora tem pointer-events-none no viewport (não bloqueia cliques)
+- Toast individual mantém pointer-events-auto (permanece interativo)
+
+**Testes E2E Realizados:**
+✅ Sugestão IA com variável mencionada (detecção funciona)
+✅ Sugestão IA sem variáveis (fallback para todas)
+✅ Inserção de variáveis via sidebar (cursor preservado)
+✅ Copiar prompt usado pela IA
+✅ CRUD completo de templates
+✅ Toast não bloqueia botão de salvar
+
+### Evolution API Integration - Segunda Sessão
 
 **Serviço Evolution API** (server/services/evolution.ts):
 - Integração com Evolution API WhatsApp
@@ -144,7 +191,7 @@ wscat -H "Authorization: Bearer $GLOBAL_API_KEY" -c wss://chatapp.local/ws
 - Ignora mensagens outbound (fromMe=true)
 - Auto-cria conversations para novos contatos
 
-### Email & Transcription System
+### Email & Transcription System - Segunda Sessão
 
 **Serviço de Email** (server/services/email.ts):
 - sendEmail: Serviço base (stub - logs apenas)
@@ -160,7 +207,7 @@ wscat -H "Authorization: Bearer $GLOBAL_API_KEY" -c wss://chatapp.local/ws
 - Formata: [timestamp] Sender: Message
 - Suporta HTML e plain text
 
-### Meetings Schema Update
+### Meetings Schema Update - Segunda Sessão
 
 **Campo Adicionado**:
 - `mentionedParticipants`: Array JSONB de user IDs
@@ -180,11 +227,7 @@ wscat -H "Authorization: Bearer $GLOBAL_API_KEY" -c wss://chatapp.local/ws
 - Schema atualizado mas notificações não integradas nas rotas de meetings
 - Funcionalidade sendMeetingNotification implementada mas não chamada
 
-**LSP Warnings**:
-- 1 diagnostic restante em conversation-export.ts (não bloqueia execução)
-
 **Frontend**:
-- Não atualizado para usar novas funcionalidades
-- Botão "Exportar Transcrição" não implementado na UI
-- Integration Evolution API não visível no frontend
+- Botão "Exportar Transcrição" não implementado na UI (backend pronto)
+- Integration Evolution API não visível no frontend (backend pronto)
 
