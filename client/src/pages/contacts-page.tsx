@@ -33,19 +33,29 @@ export default function ContactsPage() {
     queryKey: ["/api/channels"],
   });
 
+  const [startingConversationFor, setStartingConversationFor] = useState<string | null>(null);
+
   const startConversationMutation = useMutation({
     mutationFn: async (clientId: string) => {
+      if (startingConversationFor) {
+        throw new Error("Já existe uma conversa sendo iniciada");
+      }
+      
+      setStartingConversationFor(clientId);
+      
       let webChannel = channels.find(c => c.slug === "web");
       
       if (!webChannel) {
         const channelsResponse = await apiRequest("GET", "/api/channels");
         if (!channelsResponse.ok) {
+          setStartingConversationFor(null);
           throw new Error("Falha ao carregar canais");
         }
         const fetchedChannels: Channel[] = await channelsResponse.json();
         webChannel = fetchedChannels.find((c) => c.slug === "web");
         
         if (!webChannel) {
+          setStartingConversationFor(null);
           throw new Error("Canal web não encontrado");
         }
       }
@@ -59,6 +69,7 @@ export default function ContactsPage() {
       const response = await apiRequest("POST", "/api/conversations", data);
       
       if (!response.ok) {
+        setStartingConversationFor(null);
         const error = await response.json().catch(() => ({ message: "Falha ao criar conversa" }));
         throw new Error(error.message || "Falha ao criar conversa");
       }
@@ -66,12 +77,14 @@ export default function ContactsPage() {
       const conversation = await response.json();
       
       if (!conversation?.id || !conversation?.channelId) {
+        setStartingConversationFor(null);
         throw new Error("Resposta inválida do servidor");
       }
       
-      return conversation as { id: string; channelId: string };
+      return conversation as { id: string; channelId: string; customerContactId?: string };
     },
     onSuccess: (conversation) => {
+      setStartingConversationFor(null);
       queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
       setLocation(`/conversations/${conversation.channelId}/${conversation.id}`);
       toast({
@@ -80,6 +93,7 @@ export default function ContactsPage() {
       });
     },
     onError: () => {
+      setStartingConversationFor(null);
       toast({
         title: "Erro",
         description: "Falha ao iniciar conversa",
@@ -245,11 +259,11 @@ export default function ContactsPage() {
                   className="w-full mt-2" 
                   variant="default"
                   onClick={() => startConversationMutation.mutate(contact.id)}
-                  disabled={startConversationMutation.isPending || channelsLoading}
+                  disabled={startingConversationFor !== null || channelsLoading}
                   data-testid={`button-start-conversation-${contact.id}`}
                 >
                   <MessageCircle className="h-4 w-4 mr-2" />
-                  {startConversationMutation.isPending ? "Iniciando..." : "Iniciar Conversa"}
+                  {startingConversationFor === contact.id ? "Iniciando..." : "Iniciar Conversa"}
                 </Button>
               </CardContent>
             </Card>
