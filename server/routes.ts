@@ -1,11 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
+import { storage } from "./storage";
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/user";
 import contactsRoutes from "./routes/contacts";
 import attendantsRoutes from "./routes/attendants";
 import meetingsRoutes from "./routes/meetings";
+import { createConversationsRouter } from "./routes/conversations";
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
@@ -15,6 +17,7 @@ export function registerRoutes(app: Express): Server {
   app.use("/api", contactsRoutes);
   app.use("/api", attendantsRoutes);
   app.use("/api", meetingsRoutes);
+  app.use("/api", createConversationsRouter(storage));
 
   const httpServer = createServer(app);
 

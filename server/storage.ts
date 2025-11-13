@@ -48,7 +48,7 @@ export interface IStorage {
   getConversationById(id: string): Promise<Conversation | undefined>;
   createConversation(conversation: InsertConversation): Promise<Conversation>;
   updateConversation(id: string, updates: UpdateConversation): Promise<Conversation | undefined>;
-  findOrCreateConversation(channelId: string, externalContactId: string): Promise<Conversation>;
+  findOrCreateConversation(channelId: string, externalContactId: string): Promise<{ conversation: Conversation; created: boolean }>;
   
   getMessages(conversationId: string, limit?: number): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
@@ -333,26 +333,59 @@ export class DatabaseStorage implements IStorage {
     return conversation || undefined;
   }
 
-  async findOrCreateConversation(channelId: string, externalContactId: string): Promise<Conversation> {
-    const result = await db
-      .insert(conversations)
-      .values({
-        channelId,
-        externalContactId,
-        status: "open",
-      })
-      .onConflictDoUpdate({
-        target: [conversations.channelId, conversations.externalContactId],
-        set: {
-          status: sql`CASE 
-            WHEN conversations.status IN ('open', 'pending') THEN conversations.status 
-            ELSE 'open' 
-          END`,
-        },
-      })
-      .returning();
+  async findOrCreateConversation(
+    channelId: string,
+    externalContactId: string
+  ): Promise<{ conversation: Conversation; created: boolean }> {
+    interface ConversationRow {
+      id: string;
+      channel_id: string;
+      customer_contact_id: string | null;
+      external_contact_id: string | null;
+      created_by: string | null;
+      assigned_to: string | null;
+      status: "open" | "pending" | "resolved" | "closed";
+      last_message_at: Date | null;
+      metadata: Record<string, any> | null;
+      created_at: Date;
+      created: boolean;
+    }
+
+    const result = await pool.query<ConversationRow>(
+      `
+      INSERT INTO conversations (channel_id, external_contact_id, status)
+      VALUES ($1, $2, 'open')
+      ON CONFLICT (channel_id, external_contact_id) DO UPDATE
+        SET status = CASE 
+          WHEN conversations.status IN ('open', 'pending') THEN conversations.status
+          ELSE 'open'
+        END,
+        last_message_at = conversations.last_message_at
+      RETURNING *, (xmax = 0) AS created
+      `,
+      [channelId, externalContactId]
+    );
+
+    if (!result.rows[0]) {
+      throw new Error("Failed to create or find conversation");
+    }
+
+    const row = result.rows[0];
     
-    return result[0];
+    const conversation: Conversation = {
+      id: row.id,
+      channelId: row.channel_id,
+      customerContactId: row.customer_contact_id,
+      externalContactId: row.external_contact_id,
+      createdBy: row.created_by,
+      assignedTo: row.assigned_to,
+      status: row.status,
+      lastMessageAt: row.last_message_at,
+      metadata: row.metadata,
+      createdAt: row.created_at,
+    };
+
+    return { conversation, created: row.created };
   }
 
   async getMessages(conversationId: string, limit: number = 100): Promise<Message[]> {
