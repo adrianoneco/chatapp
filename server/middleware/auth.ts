@@ -1,5 +1,16 @@
 import type { Request, Response, NextFunction } from "express";
 
+declare global {
+  namespace Express {
+    interface Request {
+      apiKeyContext?: {
+        isApiKey: true;
+        capabilities: string[];
+      };
+    }
+  }
+}
+
 function isValidGlobalApiKey(apiKey: string | undefined): boolean {
   if (!apiKey || !process.env.GLOBAL_API_KEY) {
     return false;
@@ -12,13 +23,18 @@ function extractApiKeyFromRequest(req: Request): string | undefined {
   if (authHeader?.startsWith("Bearer ")) {
     return authHeader.substring(7);
   }
-  return req.query.api_key as string | undefined;
+  return undefined;
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const apiKey = extractApiKeyFromRequest(req);
   
   if (isValidGlobalApiKey(apiKey)) {
+    req.apiKeyContext = {
+      isApiKey: true,
+      capabilities: ["admin", "attendant", "client"],
+    };
+    console.log(`[API_KEY] Authorized request to ${req.method} ${req.path}`);
     return next();
   }
   
@@ -28,17 +44,11 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-const API_KEY_CAPABILITIES = {
-  allowedRoles: ["admin", "attendant", "client"] as const,
-};
-
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const apiKey = extractApiKeyFromRequest(req);
-    
-    if (isValidGlobalApiKey(apiKey)) {
+    if (req.apiKeyContext) {
       const hasCapability = roles.some(role => 
-        API_KEY_CAPABILITIES.allowedRoles.includes(role as any)
+        req.apiKeyContext!.capabilities.includes(role)
       );
       
       if (!hasCapability) {
@@ -46,7 +56,6 @@ export function requireRole(...roles: string[]) {
         return res.status(403).json({ message: "API key não tem permissão para este recurso" });
       }
       
-      console.log(`[API_KEY] Authorized request to ${req.method} ${req.path}`);
       return next();
     }
     

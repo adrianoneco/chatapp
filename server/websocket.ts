@@ -74,10 +74,11 @@ export class WebSocketManager {
         const apiKey = authHeader.substring(7);
         if (isValidGlobalApiKey(apiKey)) {
           ws.isApiKeyAuth = true;
-          ws.userId = "api-service";
-          this.clients.set("api-service", ws);
-          console.log("[WS] API key authenticated connection established");
-          ws.send(JSON.stringify({ type: "auth-success", userId: "api-service", isApiKey: true }));
+          const uniqueId = `api-key-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          ws.userId = uniqueId;
+          this.clients.set(uniqueId, ws);
+          console.log(`[WS] API key authenticated connection established: ${uniqueId}`);
+          ws.send(JSON.stringify({ type: "auth-success", userId: uniqueId, isApiKey: true }));
         }
       }
 

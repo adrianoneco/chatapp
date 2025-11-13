@@ -88,3 +88,39 @@ Preferred communication style: Simple, everyday language.
 - `DATABASE_URL`: PostgreSQL connection string.
 - `SESSION_SECRET`: Session encryption key.
 - `GROQ_API_KEY`: Groq AI API key.
+### GLOBAL_API_KEY Protection System (Nov 13, 2025)
+
+**Proteção implementada para WebSocket e rotas de API:**
+
+**Middleware (server/middleware/auth.ts):**
+- `requireAuth`: Aceita sessão autenticada OU GLOBAL_API_KEY via Authorization Bearer
+- `requireRole`: Capability-based access control para API key
+- `req.apiKeyContext`: Contexto explícito para requisições via API key
+  - `isApiKey: true`
+  - `capabilities: ["admin", "attendant", "client"]`
+- Security logging: Logs de uso de API key e tentativas não autorizadas
+- Query param removido (apenas Authorization Bearer por segurança)
+
+**WebSocket (server/websocket.ts):**
+- `verifyClient`: Validação no HTTP upgrade request (antes do handshake)
+- Aceita Authorization Bearer com GLOBAL_API_KEY válida
+- IDs únicos por conexão: `api-key-${timestamp}-${random}`
+- Previne que conexões API key se autentiquem como usuários reais
+- Security logging: Logs de conexões autorizadas/rejeitadas
+- Suporte a múltiplas conexões API key simultâneas
+
+**Uso:**
+```bash
+# HTTP API
+curl -H "Authorization: Bearer $GLOBAL_API_KEY" https://chatapp.local/api/conversations
+
+# WebSocket
+wscat -H "Authorization: Bearer $GLOBAL_API_KEY" -c wss://chatapp.local/ws
+```
+
+**Limitações conhecidas:**
+- Alguns handlers ainda assumem `req.user` existe e podem falhar com API key
+- Rotas testadas e funcionais: `/api/webhooks`, `/api/evolution-instances`, `/api/templates`
+- Para uso completo de API key, handlers precisariam verificar `req.apiKeyContext` antes de acessar `req.user`
+- Capabilities atualmente são amplas (admin+attendant+client) - pode ser refinado no futuro
+- Rate limiting não implementado (próximo passo de segurança)
