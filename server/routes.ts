@@ -9,6 +9,7 @@ import attendantsRoutes from "./routes/attendants";
 import meetingsRoutes from "./routes/meetings";
 import aiRoutes from "./routes/ai";
 import templatesRoutes from "./routes/templates";
+import settingsRoutes from "./routes/settings";
 import { createConversationsRouter } from "./routes/conversations";
 
 export function registerRoutes(app: Express): Server {
@@ -21,6 +22,7 @@ export function registerRoutes(app: Express): Server {
   app.use("/api", meetingsRoutes);
   app.use("/api", aiRoutes);
   app.use("/api", templatesRoutes);
+  app.use("/api", settingsRoutes);
   app.use("/api", createConversationsRouter(storage));
 
   const httpServer = createServer(app);

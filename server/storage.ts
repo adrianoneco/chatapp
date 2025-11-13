@@ -4,7 +4,9 @@ import {
   channels, type Channel, type InsertChannel,
   conversations, type Conversation, type InsertConversation, type UpdateConversation,
   messages, type Message, type InsertMessage,
-  responseTemplates, type ResponseTemplate, type InsertResponseTemplate, type UpdateResponseTemplate
+  responseTemplates, type ResponseTemplate, type InsertResponseTemplate, type UpdateResponseTemplate,
+  webhooks, type Webhook, type InsertWebhook,
+  evolutionInstances, type EvolutionInstance, type InsertEvolutionInstance
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, isNull, or, sql } from "drizzle-orm";
@@ -60,6 +62,16 @@ export interface IStorage {
   createResponseTemplate(template: InsertResponseTemplate, userId: string): Promise<ResponseTemplate>;
   updateResponseTemplate(id: string, userId: string, updates: UpdateResponseTemplate): Promise<ResponseTemplate | undefined>;
   deleteResponseTemplate(id: string, userId: string): Promise<boolean>;
+  
+  getWebhooks(userId: string): Promise<Webhook[]>;
+  getWebhookById(id: string, userId: string): Promise<Webhook | undefined>;
+  createWebhook(webhook: InsertWebhook, userId: string): Promise<Webhook>;
+  deleteWebhook(id: string, userId: string): Promise<boolean>;
+  
+  getEvolutionInstances(): Promise<EvolutionInstance[]>;
+  getEvolutionInstanceById(id: string): Promise<EvolutionInstance | undefined>;
+  createEvolutionInstance(instance: InsertEvolutionInstance): Promise<EvolutionInstance>;
+  deleteEvolutionInstance(id: string): Promise<boolean>;
   
   sessionStore: session.SessionStore;
 }
@@ -484,6 +496,68 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .delete(responseTemplates)
       .where(and(eq(responseTemplates.id, id), eq(responseTemplates.createdBy, userId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async getWebhooks(userId: string): Promise<Webhook[]> {
+    return db.select().from(webhooks).where(eq(webhooks.createdBy, userId));
+  }
+
+  async getWebhookById(id: string, userId: string): Promise<Webhook | undefined> {
+    const [webhook] = await db
+      .select()
+      .from(webhooks)
+      .where(and(eq(webhooks.id, id), eq(webhooks.createdBy, userId)));
+    return webhook || undefined;
+  }
+
+  async createWebhook(webhook: InsertWebhook, userId: string): Promise<Webhook> {
+    const [created] = await db
+      .insert(webhooks)
+      .values({ ...webhook, createdBy: userId })
+      .returning();
+    return created;
+  }
+
+  async deleteWebhook(id: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(webhooks)
+      .where(and(eq(webhooks.id, id), eq(webhooks.createdBy, userId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async getEvolutionInstances(): Promise<EvolutionInstance[]> {
+    const instances = await db.select().from(evolutionInstances);
+    return instances.map(inst => ({
+      ...inst,
+      apiKey: inst.apiKey.replace(/.(?=.{4})/g, '*')
+    }));
+  }
+
+  async getEvolutionInstanceById(id: string): Promise<EvolutionInstance | undefined> {
+    const [instance] = await db
+      .select()
+      .from(evolutionInstances)
+      .where(eq(evolutionInstances.id, id));
+    if (!instance) return undefined;
+    return {
+      ...instance,
+      apiKey: instance.apiKey.replace(/.(?=.{4})/g, '*')
+    };
+  }
+
+  async createEvolutionInstance(instance: InsertEvolutionInstance): Promise<EvolutionInstance> {
+    const [created] = await db
+      .insert(evolutionInstances)
+      .values(instance)
+      .returning();
+    return created;
+  }
+
+  async deleteEvolutionInstance(id: string): Promise<boolean> {
+    const result = await db
+      .delete(evolutionInstances)
+      .where(eq(evolutionInstances.id, id));
     return result.rowCount !== null && result.rowCount > 0;
   }
 }

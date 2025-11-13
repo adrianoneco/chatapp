@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Plus, Trash2, Edit, Key } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { insertWebhookSchema, type Webhook } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 

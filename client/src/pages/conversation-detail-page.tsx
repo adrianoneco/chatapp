@@ -152,6 +152,26 @@ export default function ConversationDetailPage() {
     });
   };
 
+  const handleAIAssistant = () => {
+    toast({ title: "Assistente IA", description: "Funcionalidade em desenvolvimento" });
+  };
+
+  const handleRecordAudio = () => {
+    toast({ title: "Gravar áudio", description: "Funcionalidade em desenvolvimento" });
+  };
+
+  const handleRecordVideo = () => {
+    toast({ title: "Gravar vídeo", description: "Funcionalidade em desenvolvimento" });
+  };
+
+  const handleSendPhoto = () => {
+    toast({ title: "Enviar foto", description: "Funcionalidade em desenvolvimento" });
+  };
+
+  const handleSendAttachment = () => {
+    toast({ title: "Enviar anexo", description: "Funcionalidade em desenvolvimento" });
+  };
+
   const handleStartAudioCall = async () => {
     if (!contact) return;
 
@@ -460,6 +480,7 @@ export default function ConversationDetailPage() {
               <Button 
                 size="icon" 
                 variant="ghost" 
+                onClick={handleAIAssistant}
                 data-testid="button-ai-assistant"
                 className="h-8 w-8"
                 title="Assistente IA"
@@ -469,6 +490,7 @@ export default function ConversationDetailPage() {
               <Button 
                 size="icon" 
                 variant="ghost" 
+                onClick={handleRecordAudio}
                 data-testid="button-record-audio"
                 className="h-8 w-8"
                 title="Gravar áudio"
@@ -478,6 +500,7 @@ export default function ConversationDetailPage() {
               <Button 
                 size="icon" 
                 variant="ghost" 
+                onClick={handleRecordVideo}
                 data-testid="button-record-video"
                 className="h-8 w-8"
                 title="Gravar vídeo"
@@ -487,6 +510,7 @@ export default function ConversationDetailPage() {
               <Button 
                 size="icon" 
                 variant="ghost" 
+                onClick={handleSendPhoto}
                 data-testid="button-send-photo"
                 className="h-8 w-8"
                 title="Enviar foto"
@@ -496,6 +520,7 @@ export default function ConversationDetailPage() {
               <Button 
                 size="icon" 
                 variant="ghost" 
+                onClick={handleSendAttachment}
                 data-testid="button-send-attachment"
                 className="h-8 w-8"
                 title="Enviar anexo"

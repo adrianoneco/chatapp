@@ -77,10 +77,10 @@ export function AIAssistantTab() {
       form.reset();
       setEditingTemplate(null);
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
         title: "Erro ao atualizar template",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
+        description: error.message || "Erro desconhecido",
         variant: "destructive",
       });
     },
