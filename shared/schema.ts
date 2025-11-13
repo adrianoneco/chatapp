@@ -14,6 +14,9 @@ export const users = pgTable(
     role: text("role", { enum: ["client", "admin", "attendant"] }).notNull().default("client"),
     phone: text("phone"),
     notes: text("notes"),
+    avatarUrl: text("avatar_url"),
+    isOnline: boolean("is_online").notNull().default(false),
+    lastSeenAt: timestamp("last_seen_at"),
     createdBy: varchar("created_by"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -120,6 +123,10 @@ export const meetings = pgTable("meetings", {
   scheduledAt: timestamp("scheduled_at").notNull(),
   isPublic: boolean("is_public").notNull().default(false),
   linkId: varchar("link_id", { length: 21 }).notNull().unique(),
+  status: text("status", { enum: ["scheduled", "live", "ended"] }).notNull().default("scheduled"),
+  notes: text("notes"),
+  participants: jsonb("participants").$type<Array<{ userId: string; joinedAt: string; leftAt?: string }>>().default(sql`'[]'::jsonb`),
+  chatMessages: jsonb("chat_messages").$type<Array<{ userId: string; text: string; timestamp: string }>>().default(sql`'[]'::jsonb`),
   createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -189,6 +196,10 @@ export const messages = pgTable("messages", {
   content: jsonb("content").$type<{ text?: string; mediaUrl?: string; caption?: string }>().notNull(),
   messageType: text("message_type", { enum: ["text", "image", "audio", "video", "file", "system"] }).notNull().default("text"),
   externalId: text("external_id"),
+  replyToId: varchar("reply_to_id").references(() => messages.id, { onDelete: "set null" }),
+  forwardedFromId: varchar("forwarded_from_id").references(() => messages.id, { onDelete: "set null" }),
+  reactions: jsonb("reactions").$type<Array<{ userId: string; emoji: string }>>().default(sql`'[]'::jsonb`),
+  isPrivate: boolean("is_private").notNull().default(false),
   deliveredAt: timestamp("delivered_at"),
   readAt: timestamp("read_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -270,3 +281,24 @@ export const updateResponseTemplateSchema = z.object({
 export type ResponseTemplate = typeof responseTemplates.$inferSelect;
 export type InsertResponseTemplate = z.infer<typeof insertResponseTemplateSchema>;
 export type UpdateResponseTemplate = z.infer<typeof updateResponseTemplateSchema>;
+
+export const calls = pgTable("calls", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").references(() => conversations.id, { onDelete: "cascade" }),
+  meetingId: varchar("meeting_id").references(() => meetings.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["audio", "video"] }).notNull(),
+  status: text("status", { enum: ["ringing", "ongoing", "ended", "missed", "rejected"] }).notNull().default("ringing"),
+  initiatedBy: varchar("initiated_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  participants: jsonb("participants").$type<Array<{ userId: string; joinedAt?: string; leftAt?: string }>>().default(sql`'[]'::jsonb`),
+  startedAt: timestamp("started_at"),
+  endedAt: timestamp("ended_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCallSchema = createInsertSchema(calls).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Call = typeof calls.$inferSelect;
+export type InsertCall = z.infer<typeof insertCallSchema>;

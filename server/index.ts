@@ -2,8 +2,10 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDevAdmin, seedTestUsers } from "./utils/seed";
+import { WebSocketManager } from "./websocket";
 
 const app = express();
+let wsManager: WebSocketManager;
 
 declare module 'http' {
   interface IncomingMessage {
@@ -49,6 +51,10 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+
+  // Initialize WebSocket server
+  wsManager = new WebSocketManager(server);
+  log("WebSocket server initialized on /ws");
 
   await seedDevAdmin();
   await seedTestUsers();
