@@ -15,6 +15,7 @@ import { insertClientSchema, updateClientSchema, type PublicUser, type InsertCli
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { UserAvatar } from "@/components/user-avatar";
+import AvatarUploader from "@/components/avatar-uploader";
 import { usePresence } from "@/contexts/PresenceContext";
 
 export default function ContactsPage() {
@@ -327,8 +328,33 @@ function ContactFormDialog({ open, onClose, contact, onSubmit, isPending }: Cont
       email: "",
       phone: "",
       notes: "",
+      avatarUrl: "",
     },
   });
+
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | undefined>(undefined);
+
+  const uploadAvatarFile = async (file: File) => {
+    setUploadingAvatar(true);
+    try {
+      const res = await fetch(`/api/uploads?type=image&name=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": file.type,
+        },
+        body: await file.arrayBuffer(),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      const data = await res.json();
+      form.setValue("avatarUrl", data.mediaUrl);
+      setAvatarPreview(data.mediaUrl);
+      return data.mediaUrl;
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -338,6 +364,7 @@ function ContactFormDialog({ open, onClose, contact, onSubmit, isPending }: Cont
         phone: contact?.phone || "",
         notes: contact?.notes || "",
       });
+      setAvatarPreview(contact?.avatarUrl || undefined);
     }
   }, [open, contact, form]);
 
@@ -413,6 +440,14 @@ function ContactFormDialog({ open, onClose, contact, onSubmit, isPending }: Cont
                 </FormItem>
               )}
             />
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Foto de Perfil</label>
+                  <AvatarUploader
+                    initialImage={contact?.avatarUrl || avatarPreview}
+                    onChange={(url) => form.setValue("avatarUrl", url)}
+                  />
+                </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={handleClose} data-testid="button-cancel-form">

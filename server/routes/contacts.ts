@@ -27,7 +27,8 @@ router.post("/contacts", requireAuth, async (req, res, next) => {
 
 router.get("/contacts", requireAuth, async (req, res, next) => {
   try {
-    const clients = await storage.getClients(req.user!.id);
+    // Return all users with role = 'client'
+    const clients = await storage.getAllClients();
     res.json(clients.map(sanitizeUser));
   } catch (error) {
     next(error);

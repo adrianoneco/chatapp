@@ -65,9 +65,11 @@ export function createConversationsRouter(storage: IStorage): Router {
       }
 
       if (parsed.data.channelId && parsed.data.externalContactId) {
+        const protocolHeader = (req.headers['etag'] as string) || (req.headers['if-none-match'] as string) || undefined;
         const { conversation, created } = await storage.findOrCreateConversation(
           parsed.data.channelId,
-          parsed.data.externalContactId
+          parsed.data.externalContactId,
+          protocolHeader
         );
         const status = created ? 201 : 200;
         if (created) {

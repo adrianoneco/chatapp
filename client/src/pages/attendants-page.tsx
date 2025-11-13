@@ -22,6 +22,7 @@ import { insertAttendantSchema, updateAttendantSchema, type PublicUser, type Ins
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { UserAvatar } from "@/components/user-avatar";
+import AvatarUploader from "@/components/avatar-uploader";
 import { usePresence } from "@/contexts/PresenceContext";
 
 export default function AttendantsPage() {
@@ -259,8 +260,33 @@ function AttendantFormDialog({ open, onClose, attendant, onSubmit, isPending }: 
       email: "",
       username: "",
       password: "",
+      avatarUrl: "",
     },
   });
+
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | undefined>(undefined);
+
+  const uploadAvatarFile = async (file: File) => {
+    setUploadingAvatar(true);
+    try {
+      const res = await fetch(`/api/uploads?type=image&name=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": file.type,
+        },
+        body: await file.arrayBuffer(),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      const data = await res.json();
+      form.setValue("avatarUrl", data.mediaUrl);
+      setAvatarPreview(data.mediaUrl);
+      return data.mediaUrl;
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -269,7 +295,9 @@ function AttendantFormDialog({ open, onClose, attendant, onSubmit, isPending }: 
         email: attendant?.email || "",
         username: attendant?.username || "",
         password: "",
+        avatarUrl: attendant?.avatarUrl || "",
       });
+      setAvatarPreview(attendant?.avatarUrl || undefined);
     }
   }, [open, attendant, form]);
 
@@ -355,6 +383,14 @@ function AttendantFormDialog({ open, onClose, attendant, onSubmit, isPending }: 
                 </FormItem>
               )}
             />
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Foto de Perfil</label>
+              <AvatarUploader
+                initialImage={attendant?.avatarUrl || avatarPreview}
+                onChange={(url) => form.setValue("avatarUrl", url)}
+              />
+            </div>
 
             <DialogFooter>
               <Button

@@ -36,5 +36,22 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    // Allow overriding HMR connection details via environment variables.
+    // Useful when the dev server is proxied (e.g. chatapp.easydev.com.br)
+    host: true,
+    port: Number(process.env.VITE_PORT || process.env.PORT || 5173),
+    hmr: ((): any => {
+      const hmrHost = process.env.HMR_HOST;
+      if (!hmrHost) return undefined;
+      const protocol = process.env.HMR_PROTOCOL || (hmrHost.includes("localhost") ? "ws" : "wss");
+      const port = process.env.HMR_PORT ? Number(process.env.HMR_PORT) : undefined;
+      const clientPort = process.env.HMR_CLIENT_PORT ? Number(process.env.HMR_CLIENT_PORT) : undefined;
+      return {
+        protocol,
+        host: hmrHost,
+        port,
+        clientPort,
+      };
+    })(),
   },
 });

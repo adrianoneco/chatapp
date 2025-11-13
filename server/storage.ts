@@ -9,6 +9,7 @@ import {
   evolutionInstances, type EvolutionInstance, type InsertEvolutionInstance
 } from "@shared/schema";
 import { db } from "./db";
+import { dispatchWebhookEvent } from "./services/webhooks";
 import { eq, and, desc, asc, isNull, or, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -51,7 +52,7 @@ export interface IStorage {
   getConversationById(id: string): Promise<Conversation | undefined>;
   createConversation(conversation: InsertConversation): Promise<Conversation>;
   updateConversation(id: string, updates: UpdateConversation): Promise<Conversation | undefined>;
-  findOrCreateConversation(channelId: string, externalContactId: string): Promise<{ conversation: Conversation; created: boolean }>;
+  findOrCreateConversation(channelId: string, externalContactId: string, protocol?: string): Promise<{ conversation: Conversation; created: boolean }>;
   
   getMessages(conversationId: string, limit?: number): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
@@ -84,6 +85,20 @@ export class DatabaseStorage implements IStorage {
     this.sessionStore = new PostgresSessionStore({ 
       pool, 
       createTableIfMissing: true 
+    });
+    // Ensure the session table exists as a fallback. Some environments
+    // may not allow `connect-pg-simple` to create it automatically,
+    // so we run a safe `CREATE TABLE IF NOT EXISTS` here and log errors.
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS "session" (
+        "sid" varchar NOT NULL PRIMARY KEY,
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL
+      )
+    `).then(() => {
+      console.log('[storage] ensured "session" table exists');
+    }).catch((err) => {
+      console.error('[storage] error ensuring "session" table exists:', err?.message || err);
     });
   }
 
@@ -127,6 +142,7 @@ export class DatabaseStorage implements IStorage {
       role: "client" as const,
       phone: insertClient.phone || null,
       notes: insertClient.notes || null,
+      avatarUrl: insertClient.avatarUrl || null,
       createdBy: createdBy,
     };
     
@@ -138,6 +154,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users).where(
       and(eq(users.role, "client"), eq(users.createdBy, createdBy))
     );
+  }
+
+  async getAllClients(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.role, "client"));
   }
 
   async getClientById(id: string, createdBy: string): Promise<User | undefined> {
@@ -176,6 +196,10 @@ export class DatabaseStorage implements IStorage {
     
     if (updates.notes !== undefined) {
       processedUpdates.notes = updates.notes === "" ? null : updates.notes;
+    }
+
+    if ((updates as any).avatarUrl !== undefined) {
+      processedUpdates.avatarUrl = (updates as any).avatarUrl === "" ? null : (updates as any).avatarUrl;
     }
     
     const [client] = await db.update(users).set(processedUpdates).where(
@@ -349,6 +373,12 @@ export class DatabaseStorage implements IStorage {
 
   async createConversation(insertConversation: InsertConversation): Promise<Conversation> {
     const [conversation] = await db.insert(conversations).values(insertConversation).returning();
+    try {
+      // Fire conversation.created webhook
+      await dispatchWebhookEvent("conversation.created", conversation);
+    } catch (err) {
+      console.error("[storage] error dispatching conversation.created", err?.message || err);
+    }
     return conversation;
   }
 
@@ -358,18 +388,33 @@ export class DatabaseStorage implements IStorage {
       .set(updates)
       .where(eq(conversations.id, id))
       .returning();
+    if (conversation) {
+      try {
+        // Dispatch a generic conversation.updated event
+        await dispatchWebhookEvent("conversation.updated", conversation);
+
+        // If status changed to closed, also dispatch conversation.closed
+        if ((updates as any).status === "closed") {
+          await dispatchWebhookEvent("conversation.closed", conversation);
+        }
+      } catch (err) {
+        console.error("[storage] error dispatching conversation events:", err?.message || err);
+      }
+    }
     return conversation || undefined;
   }
 
   async findOrCreateConversation(
     channelId: string,
-    externalContactId: string
+    externalContactId: string,
+    protocol?: string
   ): Promise<{ conversation: Conversation; created: boolean }> {
     interface ConversationRow {
       id: string;
       channel_id: string;
       customer_contact_id: string | null;
       external_contact_id: string | null;
+      protocol: string | null;
       created_by: string | null;
       assigned_to: string | null;
       status: "open" | "pending" | "resolved" | "closed";
@@ -381,8 +426,8 @@ export class DatabaseStorage implements IStorage {
 
     const result = await pool.query<ConversationRow>(
       `
-      INSERT INTO conversations (channel_id, external_contact_id, status)
-      VALUES ($1, $2, 'open')
+      INSERT INTO conversations (channel_id, external_contact_id, status, protocol)
+      VALUES ($1, $2, 'open', $3)
       ON CONFLICT (channel_id, external_contact_id) DO UPDATE
         SET status = CASE 
           WHEN conversations.status IN ('open', 'pending') THEN conversations.status
@@ -391,7 +436,7 @@ export class DatabaseStorage implements IStorage {
         last_message_at = conversations.last_message_at
       RETURNING *, (xmax = 0) AS created
       `,
-      [channelId, externalContactId]
+      [channelId, externalContactId, protocol || null]
     );
 
     if (!result.rows[0]) {
@@ -405,6 +450,7 @@ export class DatabaseStorage implements IStorage {
       channelId: row.channel_id,
       customerContactId: row.customer_contact_id,
       externalContactId: row.external_contact_id,
+      protocol: row.protocol || undefined,
       createdBy: row.created_by,
       assignedTo: row.assigned_to,
       status: row.status,
@@ -412,6 +458,14 @@ export class DatabaseStorage implements IStorage {
       metadata: row.metadata,
       createdAt: row.created_at,
     };
+
+    if (row.created) {
+      try {
+        await dispatchWebhookEvent("conversation.created", conversation);
+      } catch (err) {
+        console.error("[storage] error dispatching conversation.created (findOrCreate):", err?.message || err);
+      }
+    }
 
     return { conversation, created: row.created };
   }
@@ -455,7 +509,13 @@ export class DatabaseStorage implements IStorage {
       .update(conversations)
       .set({ lastMessageAt: message.createdAt })
       .where(eq(conversations.id, insertMessage.conversationId));
-    
+    try {
+      // Fire message.created webhook
+      await dispatchWebhookEvent("message.created", { message, conversationId: insertMessage.conversationId });
+    } catch (err) {
+      console.error("[storage] error dispatching message.created", err?.message || err);
+    }
+
     return message;
   }
 
@@ -521,20 +581,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWebhook(webhook: InsertWebhook, userId: string): Promise<Webhook> {
-    const [created] = await db
-      .insert(webhooks)
-      .values({ 
-        name: webhook.name,
-        targetUrl: webhook.targetUrl,
-        authType: webhook.authType || "none",
-        authPayload: webhook.authPayload as any,
-        events: webhook.events as any,
-        headers: webhook.headers as any,
-        isActive: webhook.isActive ?? true,
-        createdBy: userId,
-      })
-      .returning();
-    return created;
+    try {
+      const [created] = await db
+        .insert(webhooks)
+        .values({ 
+          name: webhook.name,
+          targetUrl: webhook.targetUrl,
+          authType: webhook.authType || "none",
+          authPayload: webhook.authPayload as any,
+          events: webhook.events as any,
+          headers: webhook.headers as any,
+          isActive: webhook.isActive ?? true,
+          createdBy: userId,
+        })
+        .returning();
+      return created;
+    } catch (error: any) {
+      console.error("[storage] createWebhook error:", {
+        message: error?.message || error,
+        stack: error?.stack,
+        webhookPayload: webhook,
+        userId,
+      });
+      throw error;
+    }
   }
 
   async updateWebhook(id: string, webhook: InsertWebhook, userId: string): Promise<Webhook | undefined> {

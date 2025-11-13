@@ -76,6 +76,7 @@ export const insertClientSchema = z.object({
   password: z.union([z.string().min(6, "Senha mínima 6 caracteres"), z.literal("")]).optional(),
   phone: z.string().optional(),
   notes: z.string().optional(),
+  avatarUrl: z.string().optional(),
 });
 
 export const updateClientSchema = z.object({
@@ -88,6 +89,7 @@ export const updateClientSchema = z.object({
   ]).optional(),
   phone: z.string().optional(),
   notes: z.string().optional(),
+  avatarUrl: z.string().optional(),
 });
 
 export type InsertClient = z.infer<typeof insertClientSchema>;
@@ -100,6 +102,7 @@ export const insertAttendantSchema = z.object({
   password: z.string().min(6, "Senha mínima 6 caracteres"),
   phone: z.string().optional(),
   notes: z.string().optional(),
+  avatarUrl: z.string().optional(),
 });
 
 export const updateAttendantSchema = z.object({
@@ -112,6 +115,7 @@ export const updateAttendantSchema = z.object({
   ]).optional(),
   phone: z.string().optional(),
   notes: z.string().optional(),
+  avatarUrl: z.string().optional(),
 });
 
 export type InsertAttendant = z.infer<typeof insertAttendantSchema>;
@@ -178,6 +182,7 @@ export const conversations = pgTable("conversations", {
   channelId: varchar("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
   customerContactId: varchar("customer_contact_id").references(() => users.id, { onDelete: "set null" }),
   externalContactId: text("external_contact_id"),
+  protocol: text("protocol"),
   createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
   assignedTo: varchar("assigned_to").references(() => users.id, { onDelete: "set null" }),
   status: text("status", { enum: ["open", "pending", "resolved", "closed"] }).notNull().default("open"),
@@ -326,6 +331,7 @@ export const insertWebhookSchema = createInsertSchema(webhooks).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  createdBy: true,
 });
 
 export type Webhook = typeof webhooks.$inferSelect;

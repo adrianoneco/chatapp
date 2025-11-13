@@ -25,7 +25,19 @@ router.post("/webhooks", requireAuth, requireRole("admin"), async (req, res) => 
     const webhook = await storage.createWebhook(parsed.data, req.user!.id);
     res.status(201).json(webhook);
   } catch (error) {
-    res.status(500).json({ error: "Failed to create webhook" });
+    console.error("[routes] POST /api/webhooks error:", error);
+    const err: any = error;
+    const payload: any = { error: "Failed to create webhook" };
+    // Provide additional debug details when not in production
+    if (process.env.NODE_ENV !== "production") {
+      payload.details = err.message || String(err);
+      if (err.code) payload.code = err.code;
+      if (err.constraint) payload.constraint = err.constraint;
+      if (err.detail) payload.detail = err.detail;
+      // include stack for local debugging
+      payload.stack = err.stack;
+    }
+    res.status(500).json(payload);
   }
 });
 

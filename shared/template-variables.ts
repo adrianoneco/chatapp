@@ -15,11 +15,11 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     example: "abc-123-xyz"
   },
   {
-    key: "{{hashreduced(conversationId)}}",
-    label: "ID Reduzido",
-    description: "Versão reduzida do ID da conversa",
+    key: "{{protocol}}",
+    label: "Protocol",
+    description: "Protocolo/ETag associado à conversa (usado pelo assistente)",
     category: "conversa",
-    example: "abc123"
+    example: "W/\"1234567890abcdef\""
   },
   {
     key: "{{conversationStatus}}",
