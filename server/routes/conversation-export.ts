@@ -29,7 +29,7 @@ router.post("/conversations/:id/export", requireAuth, requireRole("attendant", "
       orderBy: (messages, { asc }) => [asc(messages.createdAt)],
     });
 
-    const senderIds = [...new Set(conversationMessages.map(m => m.senderId).filter(Boolean))];
+    const senderIds = Array.from(new Set(conversationMessages.map(m => m.senderId).filter(Boolean)));
     const senders = senderIds.length > 0 
       ? await db.query.users.findMany({
           where: (users, { inArray }) => inArray(users.id, senderIds as string[]),
