@@ -1,7 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { seedDevAdmin, seedTestUsers } from "./utils/seed";
+import { seedDefaultChannel, seedDevAdmin, seedTestUsers } from "./utils/seed";
 import { WebSocketManager } from "./websocket";
 
 const app = express();
@@ -56,6 +56,7 @@ app.use((req, res, next) => {
   wsManager = new WebSocketManager(server);
   log("WebSocket server initialized on /ws");
 
+  await seedDefaultChannel();
   await seedDevAdmin();
   await seedTestUsers();
 

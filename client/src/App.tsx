@@ -104,6 +104,7 @@ function Router() {
       <Route path="/error/403" component={Error403} />
       <Route path="/error/404" component={Error404} />
       <Route path="/error/500" component={Error500} />
+      <ProtectedRoute path="/conversations/:channelId/:conversationId" component={ConversationsWithLayout} />
       <ProtectedRoute path="/conversations" component={ConversationsWithLayout} />
       <ProtectedRoute path="/contacts" component={ContactsWithLayout} />
       <ProtectedRoute path="/attendants" component={AttendantsWithLayout} />

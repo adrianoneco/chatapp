@@ -230,12 +230,16 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   createdAt: true,
   deliveredAt: true,
   readAt: true,
+  reactions: true,
 }).extend({
   content: z.object({
     text: z.string().optional(),
     mediaUrl: z.string().url().optional(),
     caption: z.string().optional(),
   }),
+  replyToId: z.string().uuid().optional(),
+  forwardedFromId: z.string().uuid().optional(),
+  isPrivate: z.boolean().optional().default(false),
 });
 
 export const insertChannelConnectionSchema = createInsertSchema(channelConnections).omit({

@@ -39,6 +39,31 @@ export async function seedDevAdmin() {
   }
 }
 
+export async function seedDefaultChannel() {
+  try {
+    const channels = await storage.getChannels();
+    const webChannel = channels.find(c => c.slug === "web");
+    
+    if (webChannel) {
+      console.log(`[seed] Default web channel already exists: ${webChannel.id}`);
+      return webChannel;
+    }
+
+    const channel = await storage.createChannel({
+      slug: "web",
+      provider: "web",
+      name: "Canal Web",
+      isActive: true,
+    });
+
+    console.log(`[seed] ✅ Created default web channel: ${channel.id}`);
+    return channel;
+  } catch (error) {
+    console.error("[seed] ❌ Failed to seed default channel:", error);
+    return null;
+  }
+}
+
 export async function seedTestUsers() {
   if (process.env.NODE_ENV !== "development") {
     console.log("[seed] Skipping test users seed (not in development mode)");
