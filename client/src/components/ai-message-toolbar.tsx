@@ -37,21 +37,16 @@ export function AIMessageToolbar({
       const response = await apiRequest("POST", "/api/ai/correct-text", { 
         text: textToCorrect 
       });
-
       const data = await response.json();
 
-      if (data.success) {
-        onMessageUpdate(data.correctedText);
-        toast({
-          title: "Texto corrigido",
-          description: "O texto foi corrigido com IA",
-        });
-      } else {
-        throw new Error(data.error);
-      }
+      onMessageUpdate(data.correctedText);
+      toast({
+        title: "Texto corrigido",
+        description: "O texto foi corrigido com IA",
+      });
     } catch (error) {
       toast({
-        title: "Erro",
+        title: "Erro ao corrigir texto",
         description: error instanceof Error ? error.message : "Falha ao corrigir texto",
         variant: "destructive",
       });
@@ -73,21 +68,16 @@ export function AIMessageToolbar({
           ...(attendantName && { attendantName }),
         },
       });
-
       const data = await response.json();
 
-      if (data.success) {
-        onMessageUpdate(data.response);
-        toast({
-          title: "Resposta gerada",
-          description: "Assistente IA gerou uma resposta",
-        });
-      } else {
-        throw new Error(data.error);
-      }
+      onMessageUpdate(data.response);
+      toast({
+        title: "Resposta gerada",
+        description: "Assistente IA gerou uma resposta",
+      });
     } catch (error) {
       toast({
-        title: "Erro",
+        title: "Erro ao gerar resposta",
         description: error instanceof Error ? error.message : "Falha ao gerar resposta",
         variant: "destructive",
       });
@@ -113,21 +103,16 @@ export function AIMessageToolbar({
         query: queryText,
         templates,
       });
-
       const data = await response.json();
 
-      if (data.success) {
-        onMessageUpdate(data.result);
-        toast({
-          title: "Template encontrado",
-          description: "IA encontrou a melhor resposta pronta",
-        });
-      } else {
-        throw new Error(data.error);
-      }
+      onMessageUpdate(data.result);
+      toast({
+        title: "Template encontrado",
+        description: "IA encontrou a melhor resposta pronta",
+      });
     } catch (error) {
       toast({
-        title: "Erro",
+        title: "Erro ao buscar template",
         description: error instanceof Error ? error.message : "Falha ao buscar template",
         variant: "destructive",
       });
