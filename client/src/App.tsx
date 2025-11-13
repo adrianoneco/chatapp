@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ThemeProvider } from "@/hooks/use-theme";
+import { PresenceProvider } from "@/contexts/PresenceContext";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppHeader } from "@/components/app-header";
@@ -122,8 +123,10 @@ export default function App() {
       <ThemeProvider>
         <TooltipProvider>
           <AuthProvider>
-            <Router />
-            <Toaster />
+            <PresenceProvider>
+              <Router />
+              <Toaster />
+            </PresenceProvider>
           </AuthProvider>
         </TooltipProvider>
       </ThemeProvider>

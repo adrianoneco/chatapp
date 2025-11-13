@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, Mail, Phone, FileText } from "lucide-react";
+import { useLocation } from "wouter";
+import { Plus, Edit, Trash2, Mail, Phone, FileText, MessageCircle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -10,18 +11,81 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertClientSchema, updateClientSchema, type PublicUser, type InsertClient, type UpdateClient } from "@shared/schema";
+import { insertClientSchema, updateClientSchema, type PublicUser, type InsertClient, type UpdateClient, type Channel, type InsertConversation } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { UserAvatar } from "@/components/user-avatar";
+import { usePresence } from "@/contexts/PresenceContext";
 
 export default function ContactsPage() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const { isUserOnline } = usePresence();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<PublicUser | null>(null);
   const [deletingContact, setDeletingContact] = useState<PublicUser | null>(null);
 
   const { data: contacts = [], isLoading } = useQuery<PublicUser[]>({
     queryKey: ["/api/contacts"],
+  });
+
+  const { data: channels = [], isLoading: channelsLoading } = useQuery<Channel[]>({
+    queryKey: ["/api/channels"],
+  });
+
+  const startConversationMutation = useMutation({
+    mutationFn: async (clientId: string) => {
+      let webChannel = channels.find(c => c.slug === "web");
+      
+      if (!webChannel) {
+        const channelsResponse = await apiRequest("GET", "/api/channels");
+        if (!channelsResponse.ok) {
+          throw new Error("Falha ao carregar canais");
+        }
+        const fetchedChannels: Channel[] = await channelsResponse.json();
+        webChannel = fetchedChannels.find((c) => c.slug === "web");
+        
+        if (!webChannel) {
+          throw new Error("Canal web não encontrado");
+        }
+      }
+
+      const data: InsertConversation = {
+        channelId: webChannel.id,
+        customerContactId: clientId,
+        status: "open",
+      };
+      
+      const response = await apiRequest("POST", "/api/conversations", data);
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: "Falha ao criar conversa" }));
+        throw new Error(error.message || "Falha ao criar conversa");
+      }
+      
+      const conversation = await response.json();
+      
+      if (!conversation?.id || !conversation?.channelId) {
+        throw new Error("Resposta inválida do servidor");
+      }
+      
+      return conversation as { id: string; channelId: string };
+    },
+    onSuccess: (conversation) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      setLocation(`/conversations/${conversation.channelId}/${conversation.id}`);
+      toast({
+        title: "Sucesso",
+        description: "Conversa iniciada com sucesso!",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Falha ao iniciar conversa",
+        variant: "destructive",
+      });
+    },
   });
 
   const createMutation = useMutation({
@@ -129,8 +193,16 @@ export default function ContactsPage() {
         <div className="grid gap-4 md:grid-cols-2" data-testid="list-contacts">
           {contacts.map((contact) => (
             <Card key={contact.id} data-testid={`card-contact-${contact.id}`}>
-              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-                <CardTitle className="text-lg">{contact.name}</CardTitle>
+              <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-3">
+                <div className="flex items-center gap-3">
+                  <UserAvatar 
+                    name={contact.name} 
+                    avatarUrl={contact.avatarUrl}
+                    isOnline={isUserOnline(contact.id)}
+                    size="md" 
+                  />
+                  <CardTitle className="text-lg">{contact.name}</CardTitle>
+                </div>
                 <div className="flex gap-1">
                   <Button
                     size="icon"
@@ -150,7 +222,7 @@ export default function ContactsPage() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-3">
                 {contact.email && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid={`text-email-${contact.id}`}>
                     <Mail className="h-4 w-4" />
@@ -169,6 +241,16 @@ export default function ContactsPage() {
                     <span className="line-clamp-2">{contact.notes}</span>
                   </div>
                 )}
+                <Button 
+                  className="w-full mt-2" 
+                  variant="default"
+                  onClick={() => startConversationMutation.mutate(contact.id)}
+                  disabled={startConversationMutation.isPending || channelsLoading}
+                  data-testid={`button-start-conversation-${contact.id}`}
+                >
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  {startConversationMutation.isPending ? "Iniciando..." : "Iniciar Conversa"}
+                </Button>
               </CardContent>
             </Card>
           ))}

@@ -21,9 +21,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertAttendantSchema, updateAttendantSchema, type PublicUser, type InsertAttendant, type UpdateAttendant } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { UserAvatar } from "@/components/user-avatar";
+import { usePresence } from "@/contexts/PresenceContext";
 
 export default function AttendantsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const { isUserOnline } = usePresence();
   const [editingAttendant, setEditingAttendant] = useState<PublicUser | null>(null);
   const [deletingAttendant, setDeletingAttendant] = useState<PublicUser | null>(null);
   const { toast } = useToast();
@@ -151,9 +154,17 @@ export default function AttendantsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {attendants.map((attendant) => (
             <Card key={attendant.id} data-testid={`card-attendant-${attendant.id}`}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-lg font-medium">{attendant.name}</CardTitle>
-                <div className="flex gap-2">
+              <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-3">
+                <div className="flex items-center gap-3">
+                  <UserAvatar 
+                    name={attendant.name}
+                    avatarUrl={attendant.avatarUrl}
+                    isOnline={isUserOnline(attendant.id)}
+                    size="md" 
+                  />
+                  <CardTitle className="text-lg font-medium">{attendant.name}</CardTitle>
+                </div>
+                <div className="flex gap-1">
                   <Button
                     variant="ghost"
                     size="icon"
