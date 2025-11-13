@@ -119,17 +119,29 @@ Preferred communication style: Simple, everyday language.
 
 ### Data Schema
 
-**Users Table:**
+**Users Table (Unified):**
 - `id`: UUID primary key (auto-generated)
 - `name`: Full name (required)
-- `email`: Unique email address (required)
-- `username`: Unique username (required)
-- `password`: Scrypt-hashed password (required)
+- `email`: Unique email address (nullable for clients, required for attendants/admins)
+- `username`: Unique username (nullable for clients, required for attendants/admins)
+- `password`: Scrypt-hashed password (nullable for clients, required for attendants/admins)
 - `role`: Enum (client, admin, attendant) - defaults to client
+- `phone`: Phone number (nullable, added for clients)
+- `notes`: Internal notes (nullable, added for clients)
+- `createdBy`: Foreign key to users table (nullable, tracks who created client records)
 - `createdAt`: Timestamp (auto-generated)
 
+**Key Architecture Decision (Nov 2025):**
+- **Problem:** Separate `contacts` table duplicated user management logic
+- **Solution:** Consolidated into `users` table using role-based differentiation (role=client for contacts)
+- **Implementation:** Email/username/password nullable for clients to preserve "contact without credentials" semantics; empty strings ("") normalized to NULL on both create and update paths to prevent unique constraint violations
+- **Rationale:** Single source of truth for all user entities, consistent CRUD patterns, prevents data duplication
+
 **Validation Schemas:**
-- insertUserSchema: User creation validation
+- insertClientSchema: Client/contact creation (credentials optional, normalized "" → null)
+- updateClientSchema: Client/contact updates (partial fields, normalized "" → null)
+- insertAttendantSchema: Attendant creation (credentials required via Zod validation)
+- insertUserSchema: General user creation validation
 - loginSchema: Login credentials validation
 - registerSchema: Registration with password confirmation
 - Shared between client and server via @shared directory
