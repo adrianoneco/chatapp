@@ -155,7 +155,7 @@ export function ConversationList({ selectedId, onNewConversation }: Conversation
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-border border-b border-border">
             {filteredConversations.map((conversation) => {
               const contact = getUserById(conversation.customerContactId);
               const isOnline = contact ? onlineUsers.has(contact.id) : false;

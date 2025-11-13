@@ -12,7 +12,10 @@ import templatesRoutes from "./routes/templates";
 import settingsRoutes from "./routes/settings";
 import webhooksRoutes from "./routes/webhooks";
 import conversationExportRoutes from "./routes/conversation-export";
+import uploadsRoutes from "./routes/uploads";
 import { createConversationsRouter } from "./routes/conversations";
+import express from "express";
+import path from "path";
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
@@ -26,8 +29,11 @@ export function registerRoutes(app: Express): Server {
   app.use("/api", templatesRoutes);
   app.use("/api", settingsRoutes);
   app.use("/api", conversationExportRoutes);
+  app.use("/api/uploads", uploadsRoutes);
   app.use("/webhooks", webhooksRoutes);
   app.use("/api", createConversationsRouter(storage));
+
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
   const httpServer = createServer(app);
 

@@ -14,6 +14,10 @@ import { UserAvatar } from "@/components/user-avatar";
 import { AIMessageToolbar } from "@/components/ai-message-toolbar";
 import { CallDialog } from "@/components/call-dialog";
 import { IncomingCallToast } from "@/components/incoming-call-toast";
+import { AudioRecorderDialog } from "@/components/audio-recorder-dialog";
+import { VideoRecorderDialog } from "@/components/video-recorder-dialog";
+import { FileUploadDialog } from "@/components/file-upload-dialog";
+import { AIAssistantDialog } from "@/components/ai-assistant-dialog";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useWebRTC } from "@/hooks/use-webrtc";
 import {
@@ -62,6 +66,11 @@ export default function ConversationDetailPage() {
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [selectedAttendant, setSelectedAttendant] = useState("");
   const [isCorrectingText, setIsCorrectingText] = useState(false);
+  const [showAudioRecorder, setShowAudioRecorder] = useState(false);
+  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
+  const [showAttachmentUpload, setShowAttachmentUpload] = useState(false);
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
   const {
     localStream,
     remoteStream,
@@ -154,23 +163,137 @@ export default function ConversationDetailPage() {
   };
 
   const handleAIAssistant = () => {
-    toast({ title: "Assistente IA", description: "Funcionalidade em desenvolvimento" });
+    setShowAIAssistant(true);
   };
 
   const handleRecordAudio = () => {
-    toast({ title: "Gravar áudio", description: "Funcionalidade em desenvolvimento" });
+    setShowAudioRecorder(true);
   };
 
   const handleRecordVideo = () => {
-    toast({ title: "Gravar vídeo", description: "Funcionalidade em desenvolvimento" });
+    setShowVideoRecorder(true);
   };
 
   const handleSendPhoto = () => {
-    toast({ title: "Enviar foto", description: "Funcionalidade em desenvolvimento" });
+    setShowPhotoUpload(true);
   };
 
   const handleSendAttachment = () => {
-    toast({ title: "Enviar anexo", description: "Funcionalidade em desenvolvimento" });
+    setShowAttachmentUpload(true);
+  };
+
+  const uploadFile = async (file: Blob | File, type: string, name?: string): Promise<string> => {
+    const fileName = name || (file instanceof File ? file.name : "recording");
+    const response = await fetch(`/api/uploads?type=${type}&name=${encodeURIComponent(fileName)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": file.type,
+      },
+      credentials: "include",
+      body: file,
+    });
+
+    if (!response.ok) {
+      throw new Error("Erro ao fazer upload");
+    }
+
+    const data = await response.json();
+    return data.mediaUrl;
+  };
+
+  const handleSendAudio = async (audioBlob: Blob) => {
+    if (!user) return;
+
+    try {
+      toast({
+        title: "Enviando áudio",
+        description: "Fazendo upload do áudio...",
+      });
+
+      const mediaUrl = await uploadFile(audioBlob, "audio", "audio.webm");
+
+      sendMessageMutation.mutate({
+        conversationId,
+        senderType: "user" as const,
+        senderId: user.id,
+        direction: "outbound" as const,
+        content: { mediaUrl },
+        messageType: "audio",
+        externalId: null,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Erro ao enviar áudio",
+      });
+    }
+  };
+
+  const handleSendVideo = async (videoBlob: Blob) => {
+    if (!user) return;
+
+    try {
+      toast({
+        title: "Enviando vídeo",
+        description: "Fazendo upload do vídeo...",
+      });
+
+      const mediaUrl = await uploadFile(videoBlob, "video", "video.webm");
+
+      sendMessageMutation.mutate({
+        conversationId,
+        senderType: "user" as const,
+        senderId: user.id,
+        direction: "outbound" as const,
+        content: { mediaUrl },
+        messageType: "video",
+        externalId: null,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Erro ao enviar vídeo",
+      });
+    }
+  };
+
+  const handleSendFiles = async (files: File[]) => {
+    if (!user) return;
+    
+    const fileType = files[0].type.startsWith("image/") ? "image" : "file";
+    
+    toast({
+      title: `Enviando ${fileType === "image" ? "imagem(ns)" : "arquivo(s)"}`,
+      description: `${files.length} ${files.length === 1 ? "arquivo" : "arquivos"} sendo enviado(s)...`,
+    });
+
+    for (const file of files) {
+      try {
+        const mediaUrl = await uploadFile(file, fileType, file.name);
+
+        sendMessageMutation.mutate({
+          conversationId,
+          senderType: "user" as const,
+          senderId: user.id,
+          direction: "outbound" as const,
+          content: { mediaUrl, caption: file.name },
+          messageType: fileType,
+          externalId: null,
+        });
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: `Erro ao enviar ${file.name}`,
+        });
+      }
+    }
+  };
+
+  const handleUseTemplate = (content: string) => {
+    setMessageText(content);
   };
 
   const handleStartAudioCall = async () => {
@@ -572,6 +695,47 @@ export default function ConversationDetailPage() {
           />
         </div>
       )}
+
+      {/* Audio Recorder Dialog */}
+      <AudioRecorderDialog
+        open={showAudioRecorder}
+        onClose={() => setShowAudioRecorder(false)}
+        onSend={handleSendAudio}
+      />
+
+      {/* Video Recorder Dialog */}
+      <VideoRecorderDialog
+        open={showVideoRecorder}
+        onClose={() => setShowVideoRecorder(false)}
+        onSend={handleSendVideo}
+      />
+
+      {/* Photo Upload Dialog */}
+      <FileUploadDialog
+        open={showPhotoUpload}
+        onClose={() => setShowPhotoUpload(false)}
+        onSend={handleSendFiles}
+        mode="image"
+      />
+
+      {/* Attachment Upload Dialog */}
+      <FileUploadDialog
+        open={showAttachmentUpload}
+        onClose={() => setShowAttachmentUpload(false)}
+        onSend={handleSendFiles}
+        mode="attachment"
+      />
+
+      {/* AI Assistant Dialog */}
+      <AIAssistantDialog
+        open={showAIAssistant}
+        onClose={() => setShowAIAssistant(false)}
+        onSelectTemplate={handleUseTemplate}
+        conversationContext={{
+          clientName: contactName,
+          attendantName: user?.name || "",
+        }}
+      />
 
       {/* Transfer Dialog */}
       <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
