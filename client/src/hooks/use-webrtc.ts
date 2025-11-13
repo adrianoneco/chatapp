@@ -15,8 +15,17 @@ const defaultConfig: WebRTCConfig = {
 export interface Call {
   id: string;
   recipientId: string;
+  recipientName?: string;
   isVideo: boolean;
   status: "initiating" | "ringing" | "active" | "ended";
+}
+
+export interface IncomingCall {
+  callId: string;
+  callerId: string;
+  callerName?: string;
+  isVideo: boolean;
+  offer: RTCSessionDescriptionInit;
 }
 
 export function useWebRTC() {
@@ -24,8 +33,64 @@ export function useWebRTC() {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [currentCall, setCurrentCall] = useState<Call | null>(null);
+  const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const pendingSignalsRef = useRef<Array<{ type: string; data: any }>>([]);
+  const outgoingRingtoneRef = useRef<HTMLAudioElement | null>(null);
+  const incomingRingtoneRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // TODO: Add ringtone files to public/ folder
+    // outgoingRingtoneRef.current = new Audio("/ringtone-outgoing.mp3");
+    // outgoingRingtoneRef.current.loop = true;
+    // incomingRingtoneRef.current = new Audio("/ringtone-incoming.mp3");
+    // incomingRingtoneRef.current.loop = true;
+
+    return () => {
+      outgoingRingtoneRef.current?.pause();
+      incomingRingtoneRef.current?.pause();
+    };
+  }, []);
+
+  const playOutgoingRingtone = useCallback(() => {
+    outgoingRingtoneRef.current?.play().catch(err => 
+      console.error("Failed to play outgoing ringtone:", err)
+    );
+  }, []);
+
+  const stopOutgoingRingtone = useCallback(() => {
+    if (outgoingRingtoneRef.current) {
+      outgoingRingtoneRef.current.pause();
+      outgoingRingtoneRef.current.currentTime = 0;
+    }
+  }, []);
+
+  const playIncomingRingtone = useCallback(() => {
+    incomingRingtoneRef.current?.play().catch(err =>
+      console.error("Failed to play incoming ringtone:", err)
+    );
+  }, []);
+
+  const stopIncomingRingtone = useCallback(() => {
+    if (incomingRingtoneRef.current) {
+      incomingRingtoneRef.current.pause();
+      incomingRingtoneRef.current.currentTime = 0;
+    }
+  }, []);
+
+  const checkMediaPermissions = useCallback(async (isVideo: boolean) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: isVideo,
+      });
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (error) {
+      console.error("Media permissions denied:", error);
+      return false;
+    }
+  }, []);
 
   const cleanup = useCallback(() => {
     if (localStream) {
@@ -38,7 +103,10 @@ export function useWebRTC() {
     }
     setRemoteStream(null);
     setCurrentCall(null);
-  }, [localStream]);
+    setIncomingCall(null);
+    stopOutgoingRingtone();
+    stopIncomingRingtone();
+  }, [localStream, stopOutgoingRingtone, stopIncomingRingtone]);
 
   const createPeerConnection = useCallback((callId: string) => {
     const pc = new RTCPeerConnection(defaultConfig);
@@ -68,8 +136,13 @@ export function useWebRTC() {
     return pc;
   }, [sendWebRTCSignal, cleanup]);
 
-  const startCall = useCallback(async (recipientId: string, isVideo: boolean) => {
+  const startCall = useCallback(async (recipientId: string, recipientName: string, isVideo: boolean) => {
     try {
+      const hasPermissions = await checkMediaPermissions(isVideo);
+      if (!hasPermissions) {
+        throw new Error("Permissões de mídia negadas");
+      }
+
       const callId = `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -81,6 +154,7 @@ export function useWebRTC() {
       setCurrentCall({
         id: callId,
         recipientId,
+        recipientName,
         isVideo,
         status: "initiating",
       });
@@ -106,65 +180,103 @@ export function useWebRTC() {
         action: "ring",
       });
 
-      setCurrentCall(prev => prev ? { ...prev, status: "ringing" } : null);
+      setCurrentCall({
+        id: callId,
+        recipientId,
+        recipientName,
+        isVideo,
+        status: "ringing",
+      });
+      playOutgoingRingtone();
     } catch (error) {
       console.error("Failed to start call:", error);
       cleanup();
       throw error;
     }
-  }, [createPeerConnection, sendWebRTCSignal, sendCallAction, cleanup]);
+  }, [createPeerConnection, sendWebRTCSignal, sendCallAction, checkMediaPermissions, playOutgoingRingtone, cleanup]);
 
-  const answerCall = useCallback(async (callId: string, offer: RTCSessionDescriptionInit, isVideo: boolean, recipientId: string) => {
+  const acceptCall = useCallback(async () => {
+    if (!incomingCall) return;
+
     try {
+      stopIncomingRingtone();
+
+      const hasPermissions = await checkMediaPermissions(incomingCall.isVideo);
+      if (!hasPermissions) {
+        throw new Error("Permissões de mídia negadas");
+      }
+
       setCurrentCall({
-        id: callId,
-        recipientId,
-        isVideo,
+        id: incomingCall.callId,
+        recipientId: incomingCall.callerId,
+        recipientName: incomingCall.callerName,
+        isVideo: incomingCall.isVideo,
         status: "initiating",
       });
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
-        video: isVideo,
+        video: incomingCall.isVideo,
       });
 
       setLocalStream(stream);
 
-      const pc = createPeerConnection(callId);
+      const pc = createPeerConnection(incomingCall.callId);
       peerConnectionRef.current = pc;
 
       stream.getTracks().forEach(track => {
         pc.addTrack(track, stream);
       });
 
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      await pc.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
       sendWebRTCSignal({
-        callId,
+        callId: incomingCall.callId,
         type: "answer",
         data: answer,
       });
 
       sendCallAction({
-        callId,
+        callId: incomingCall.callId,
         action: "answer",
       });
 
       setCurrentCall({
-        id: callId,
-        recipientId,
-        isVideo,
+        id: incomingCall.callId,
+        recipientId: incomingCall.callerId,
+        recipientName: incomingCall.callerName,
+        isVideo: incomingCall.isVideo,
         status: "active",
       });
+
+      setIncomingCall(null);
     } catch (error) {
-      console.error("Failed to answer call:", error);
+      console.error("Failed to accept call:", error);
+      
+      sendCallAction({
+        callId: incomingCall.callId,
+        action: "reject",
+      });
+      
       cleanup();
       throw error;
     }
-  }, [createPeerConnection, sendWebRTCSignal, sendCallAction, cleanup]);
+  }, [incomingCall, createPeerConnection, sendWebRTCSignal, sendCallAction, checkMediaPermissions, stopIncomingRingtone, cleanup]);
+
+  const rejectCall = useCallback(() => {
+    if (!incomingCall) return;
+
+    sendCallAction({
+      callId: incomingCall.callId,
+      action: "reject",
+    });
+
+    stopIncomingRingtone();
+    setIncomingCall(null);
+  }, [incomingCall, sendCallAction, stopIncomingRingtone]);
 
   const endCall = useCallback(() => {
     if (currentCall) {
@@ -175,13 +287,6 @@ export function useWebRTC() {
     }
     cleanup();
   }, [currentCall, sendCallAction, cleanup]);
-
-  const rejectCall = useCallback((callId: string) => {
-    sendCallAction({
-      callId,
-      action: "reject",
-    });
-  }, [sendCallAction]);
 
   const toggleVideo = useCallback(() => {
     if (localStream) {
@@ -211,12 +316,27 @@ export function useWebRTC() {
         if (message.type === "webrtc-signal") {
           const { payload } = message;
           
-          if (peerConnectionRef.current) {
+          if (payload.type === "offer") {
+            // Ignore if already in a call
+            if (currentCall || incomingCall) return;
+
+            setIncomingCall({
+              callId: payload.callId,
+              callerId: payload.from,
+              callerName: payload.callerName,
+              isVideo: payload.isVideo || false,
+              offer: payload.data,
+            });
+            playIncomingRingtone();
+          } else if (peerConnectionRef.current) {
             if (payload.type === "answer") {
               peerConnectionRef.current.setRemoteDescription(
                 new RTCSessionDescription(payload.data)
               );
-              setCurrentCall(prev => prev ? { ...prev, status: "active" } : null);
+              if (currentCall) {
+                setCurrentCall({ ...currentCall, status: "active" });
+              }
+              stopOutgoingRingtone();
             } else if (payload.type === "ice-candidate") {
               peerConnectionRef.current.addIceCandidate(
                 new RTCIceCandidate(payload.data)
@@ -229,8 +349,12 @@ export function useWebRTC() {
           const { payload } = message;
           
           if (payload.action === "answer") {
-            setCurrentCall(prev => prev ? { ...prev, status: "active" } : null);
+            if (currentCall) {
+              setCurrentCall({ ...currentCall, status: "active" });
+            }
+            stopOutgoingRingtone();
           } else if (payload.action === "reject") {
+            stopOutgoingRingtone();
             cleanup();
           } else if (payload.action === "end") {
             cleanup();
@@ -246,7 +370,7 @@ export function useWebRTC() {
     return () => {
       ws.removeEventListener("message", handleMessage);
     };
-  }, [ws, cleanup]);
+  }, [ws, currentCall, incomingCall, playIncomingRingtone, stopOutgoingRingtone, cleanup]);
 
   useEffect(() => {
     if (peerConnectionRef.current && pendingSignalsRef.current.length > 0) {
@@ -273,10 +397,11 @@ export function useWebRTC() {
     localStream,
     remoteStream,
     currentCall,
+    incomingCall,
     startCall,
-    answerCall,
-    endCall,
+    acceptCall,
     rejectCall,
+    endCall,
     toggleVideo,
     toggleAudio,
   };
