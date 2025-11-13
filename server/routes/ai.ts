@@ -123,9 +123,15 @@ router.post("/ai/suggest-template", requireAuth, async (req, res) => {
   try {
     const data = suggestTemplateSchema.parse(req.body);
     
-    const variables = data.detectedVariables && data.detectedVariables.length > 0 
-      ? data.detectedVariables 
-      : getAllVariableKeys();
+    const searchText = `${data.title} ${data.description || ""}`.toLowerCase();
+    const allVariables = getAllVariableKeys();
+    
+    const detectedVariables = allVariables.filter(variable => {
+      const cleanedVar = variable.replace(/[{}()]/g, '').toLowerCase();
+      return searchText.includes(cleanedVar);
+    });
+    
+    const variables = detectedVariables.length > 0 ? detectedVariables : allVariables;
     
     const result = await groqService.generateTemplateSuggestion({
       title: data.title,
@@ -138,6 +144,7 @@ router.post("/ai/suggest-template", requireAuth, async (req, res) => {
       success: true, 
       suggestedContent: result.suggestedContent,
       promptUsed: result.promptUsed,
+      variablesUsed: variables,
     });
   } catch (error) {
     console.error("Error suggesting template:", error);

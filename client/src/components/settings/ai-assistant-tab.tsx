@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -12,8 +12,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Plus, Trash2, Edit, Search } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Plus, Trash2, Edit, Search, Sparkles, Copy, Check } from "lucide-react";
 import { insertResponseTemplateSchema, type ResponseTemplate } from "@shared/schema";
+import { TEMPLATE_VARIABLES, getVariablesByCategory } from "@shared/template-variables";
 
 const templateFormSchema = insertResponseTemplateSchema.extend({
   title: z.string().min(1, "Título é obrigatório"),
@@ -30,6 +33,9 @@ export function AIAssistantTab() {
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<ResponseTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [lastPrompt, setLastPrompt] = useState<string>("");
+  const [copied, setCopied] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const form = useForm<TemplateFormData>({
     resolver: zodResolver(templateFormSchema),
@@ -134,6 +140,77 @@ export function AIAssistantTab() {
     }
   };
 
+  const suggestMutation = useMutation({
+    mutationFn: async (data: { title: string; category: string; description?: string }) => {
+      const response = await apiRequest("POST", "/api/ai/suggest-template", data);
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      form.setValue("content", data.suggestedContent);
+      setLastPrompt(data.promptUsed);
+      toast({ 
+        title: "Sugestão gerada", 
+        description: "Template sugerido pela IA inserido no campo" 
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao gerar sugestão",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSuggestTemplate = () => {
+    const title = form.getValues("title");
+    const category = form.getValues("category");
+    const content = form.getValues("content");
+    
+    if (!title || !category) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Preencha o título e categoria antes de pedir uma sugestão",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    suggestMutation.mutate({ 
+      title, 
+      category, 
+      description: content || undefined 
+    });
+  };
+
+  const insertVariable = (variableKey: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart || 0;
+    const end = textarea.selectionEnd || 0;
+    const currentValue = form.getValues("content") || "";
+    
+    const newValue = currentValue.substring(0, start) + variableKey + currentValue.substring(end);
+    
+    form.setValue("content", newValue);
+    
+    setTimeout(() => {
+      textarea.focus();
+      const newPosition = start + variableKey.length;
+      textarea.setSelectionRange(newPosition, newPosition);
+    }, 0);
+  };
+
+  const copyPrompt = () => {
+    if (lastPrompt) {
+      navigator.clipboard.writeText(lastPrompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({ title: "Copiado!", description: "Prompt copiado para a área de transferência" });
+    }
+  };
+
   const filteredTemplates = templates.filter((template) =>
     template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     template.content.toLowerCase().includes(searchQuery.toLowerCase())
@@ -161,70 +238,135 @@ export function AIAssistantTab() {
               Novo Template
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-5xl max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>
                 {editingTemplate ? "Editar Template" : "Novo Template"}
               </DialogTitle>
               <DialogDescription>
-                Use variáveis: {"{{clientName}}"}, {"{{attendantName}}"}, {"{{hashreduced(conversationId)}}"}
+                Clique nas variáveis da barra lateral para inserir no texto
               </DialogDescription>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Título</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          data-testid="input-template-title"
-                          placeholder="Ex: Saudação inicial"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Categoria</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          data-testid="input-template-category"
-                          placeholder="Ex: saudações, suporte, vendas"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="content"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Conteúdo</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          {...field}
-                          data-testid="textarea-template-content"
-                          placeholder="Olá {{clientName}}! Sou {{attendantName}}, como posso ajudar?"
-                          className="min-h-32"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
+                <div className="grid lg:grid-cols-[1fr_18rem] gap-4">
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Título</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              data-testid="input-template-title"
+                              placeholder="Ex: Saudação inicial"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="category"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Categoria</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              data-testid="input-template-category"
+                              placeholder="Ex: saudações, suporte, vendas"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="content"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Conteúdo</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              ref={textareaRef}
+                              data-testid="textarea-template-content"
+                              placeholder="Olá {{clientName}}! Sou {{attendantName}}, como posso ajudar?"
+                              className="min-h-32"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    {lastPrompt && (
+                      <Card className="p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs font-medium text-muted-foreground">Prompt enviado:</p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={copyPrompt}
+                            data-testid="button-copy-prompt"
+                          >
+                            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{lastPrompt}</p>
+                      </Card>
+                    )}
+                  </div>
+
+                  <div className="hidden lg:block">
+                    <Card className="p-3">
+                      <h3 className="text-sm font-semibold mb-2">Variáveis Disponíveis</h3>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Clique para inserir no texto
+                      </p>
+                      <ScrollArea className="h-[400px]">
+                        <div className="space-y-3">
+                          {["conversa", "atendente", "cliente"].map((category) => (
+                            <div key={category}>
+                              <h4 className="text-xs font-medium mb-2 capitalize text-primary">
+                                {category}
+                              </h4>
+                              <div className="space-y-1">
+                                {getVariablesByCategory(category as any).map((variable) => (
+                                  <Button
+                                    key={variable.key}
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="w-full justify-start text-xs hover-elevate active-elevate-2 h-auto py-1.5"
+                                    onClick={() => insertVariable(variable.key)}
+                                    data-testid={`button-insert-${variable.key}`}
+                                  >
+                                    <div className="text-left w-full">
+                                      <div className="font-mono text-xs">{variable.key}</div>
+                                      <div className="text-muted-foreground text-xs">
+                                        {variable.label}
+                                      </div>
+                                    </div>
+                                  </Button>
+                                ))}
+                              </div>
+                              {category !== "cliente" && <Separator className="mt-2" />}
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </Card>
+                  </div>
+                </div>
+                
+                <DialogFooter className="gap-2">
                   <Button
                     type="button"
                     variant="outline"
@@ -232,10 +374,27 @@ export function AIAssistantTab() {
                       setIsDialogOpen(false);
                       form.reset();
                       setEditingTemplate(null);
+                      setLastPrompt("");
                     }}
                     data-testid="button-cancel-template"
                   >
                     Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleSuggestTemplate}
+                    disabled={suggestMutation.isPending}
+                    data-testid="button-suggest-template"
+                  >
+                    {suggestMutation.isPending ? (
+                      <>Gerando...</>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Sugestão IA
+                      </>
+                    )}
                   </Button>
                   <Button
                     type="submit"
