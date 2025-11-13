@@ -75,21 +75,27 @@ export function AppSidebar() {
             <SidebarMenu className="space-y-1">
               {menuItems
                 .filter((item) => !item.requiresAdmin || isAdmin)
-                .map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location === item.url}
-                      className="h-10"
-                      data-testid={`link-${item.title.toLowerCase()}`}
-                    >
-                      <Link href={item.url}>
-                        <item.icon className="h-5 w-5" />
-                        <span className="text-base">{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                .map((item) => {
+                  const isActive = location === item.url;
+                  return (
+                    <SidebarMenuItem key={item.title} className="relative">
+                      {isActive && (
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r pointer-events-none z-10" />
+                      )}
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        className={`h-10 ${isActive ? "bg-primary/10" : ""}`}
+                        data-testid={`link-${item.title.toLowerCase()}`}
+                      >
+                        <Link href={item.url}>
+                          <item.icon className="h-5 w-5" />
+                          <span className="text-base">{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

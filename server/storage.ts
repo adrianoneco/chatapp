@@ -66,6 +66,7 @@ export interface IStorage {
   getWebhooks(userId: string): Promise<Webhook[]>;
   getWebhookById(id: string, userId: string): Promise<Webhook | undefined>;
   createWebhook(webhook: InsertWebhook, userId: string): Promise<Webhook>;
+  updateWebhook(id: string, webhook: InsertWebhook, userId: string): Promise<Webhook | undefined>;
   deleteWebhook(id: string, userId: string): Promise<boolean>;
   
   getEvolutionInstances(): Promise<EvolutionInstance[]>;
@@ -73,11 +74,11 @@ export interface IStorage {
   createEvolutionInstance(instance: InsertEvolutionInstance): Promise<EvolutionInstance>;
   deleteEvolutionInstance(id: string): Promise<boolean>;
   
-  sessionStore: session.SessionStore;
+  sessionStore: any;
 }
 
 export class DatabaseStorage implements IStorage {
-  sessionStore: session.SessionStore;
+  sessionStore: any;
 
   constructor() {
     this.sessionStore = new PostgresSessionStore({ 
@@ -233,13 +234,17 @@ export class DatabaseStorage implements IStorage {
 
     while (attempts < maxAttempts) {
       try {
+        const meetingData: any = {
+          ...insertMeeting,
+          linkId,
+          createdBy: userId,
+        };
+        if (insertMeeting.scheduledAt) {
+          meetingData.scheduledAt = new Date(insertMeeting.scheduledAt);
+        }
         const [meeting] = await db
           .insert(meetings)
-          .values({
-            ...insertMeeting,
-            linkId,
-            createdBy: userId,
-          })
+          .values(meetingData)
           .returning();
         return meeting;
       } catch (error: any) {
@@ -275,9 +280,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateMeeting(id: string, userId: string, updates: UpdateMeeting): Promise<Meeting | undefined> {
+    const updateData: any = updates;
+    if (updates.scheduledAt) {
+      updateData.scheduledAt = new Date(updates.scheduledAt);
+    }
     const [meeting] = await db
       .update(meetings)
-      .set(updates)
+      .set(updateData)
       .where(and(eq(meetings.id, id), eq(meetings.createdBy, userId)))
       .returning();
     return meeting || undefined;
@@ -514,9 +523,36 @@ export class DatabaseStorage implements IStorage {
   async createWebhook(webhook: InsertWebhook, userId: string): Promise<Webhook> {
     const [created] = await db
       .insert(webhooks)
-      .values({ ...webhook, createdBy: userId })
+      .values({ 
+        name: webhook.name,
+        targetUrl: webhook.targetUrl,
+        authType: webhook.authType || "none",
+        authPayload: webhook.authPayload as any,
+        events: webhook.events as any,
+        headers: webhook.headers as any,
+        isActive: webhook.isActive ?? true,
+        createdBy: userId,
+      })
       .returning();
     return created;
+  }
+
+  async updateWebhook(id: string, webhook: InsertWebhook, userId: string): Promise<Webhook | undefined> {
+    const [updated] = await db
+      .update(webhooks)
+      .set({ 
+        name: webhook.name,
+        targetUrl: webhook.targetUrl,
+        authType: webhook.authType || "none",
+        authPayload: webhook.authPayload as any,
+        events: webhook.events as any,
+        headers: webhook.headers as any,
+        isActive: webhook.isActive ?? true,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(webhooks.id, id), eq(webhooks.createdBy, userId)))
+      .returning();
+    return updated || undefined;
   }
 
   async deleteWebhook(id: string, userId: string): Promise<boolean> {
