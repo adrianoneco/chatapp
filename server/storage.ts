@@ -1,10 +1,12 @@
-import { users, type User, type InsertUser, contacts, type Contact, type InsertContact, meetings, type Meeting, type InsertMeeting, type UpdateMeeting } from "@shared/schema";
+import { users, type User, type InsertUser, type InsertClient, type UpdateClient, meetings, type Meeting, type InsertMeeting, type UpdateMeeting } from "@shared/schema";
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
 import { generateNanoid } from "./utils/nanoid";
+import { hashPassword } from "./utils/auth";
+import { randomBytes } from "crypto";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -14,11 +16,11 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
-  createContact(contact: InsertContact): Promise<Contact>;
-  getContacts(userId: string): Promise<Contact[]>;
-  getContactById(id: string, userId: string): Promise<Contact | undefined>;
-  updateContact(id: string, userId: string, updates: Partial<InsertContact>): Promise<Contact | undefined>;
-  deleteContact(id: string, userId: string): Promise<boolean>;
+  createClient(client: InsertClient, createdBy: string): Promise<User>;
+  getClients(createdBy: string): Promise<User[]>;
+  getClientById(id: string, createdBy: string): Promise<User | undefined>;
+  updateClient(id: string, createdBy: string, updates: UpdateClient): Promise<User | undefined>;
+  deleteClient(id: string, createdBy: string): Promise<boolean>;
   createAttendant(attendant: InsertUser): Promise<User>;
   getAttendants(): Promise<User[]>;
   getAttendantById(id: string): Promise<User | undefined>;
@@ -70,39 +72,80 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users);
   }
 
-  async createContact(insertContact: InsertContact): Promise<Contact> {
-    const [contact] = await db
-      .insert(contacts)
-      .values(insertContact)
-      .returning();
-    return contact;
+  async createClient(insertClient: InsertClient, createdBy: string): Promise<User> {
+    const cleanEmail = insertClient.email === "" ? null : insertClient.email;
+    const cleanUsername = insertClient.username === "" ? null : insertClient.username;
+    const cleanPassword = insertClient.password === "" ? null : insertClient.password;
+    
+    const clientData = {
+      name: insertClient.name,
+      email: cleanEmail || null,
+      username: cleanUsername || null,
+      password: cleanPassword ? await hashPassword(cleanPassword) : null,
+      role: "client" as const,
+      phone: insertClient.phone || null,
+      notes: insertClient.notes || null,
+      createdBy: createdBy,
+    };
+    
+    const [client] = await db.insert(users).values(clientData).returning();
+    return client;
   }
 
-  async getContacts(userId: string): Promise<Contact[]> {
-    return await db.select().from(contacts).where(eq(contacts.userId, userId));
+  async getClients(createdBy: string): Promise<User[]> {
+    return await db.select().from(users).where(
+      and(eq(users.role, "client"), eq(users.createdBy, createdBy))
+    );
   }
 
-  async getContactById(id: string, userId: string): Promise<Contact | undefined> {
-    const [contact] = await db
-      .select()
-      .from(contacts)
-      .where(and(eq(contacts.id, id), eq(contacts.userId, userId)));
-    return contact || undefined;
+  async getClientById(id: string, createdBy: string): Promise<User | undefined> {
+    const [client] = await db.select().from(users).where(
+      and(eq(users.id, id), eq(users.role, "client"), eq(users.createdBy, createdBy))
+    );
+    return client || undefined;
   }
 
-  async updateContact(id: string, userId: string, updates: Partial<InsertContact>): Promise<Contact | undefined> {
-    const [contact] = await db
-      .update(contacts)
-      .set(updates)
-      .where(and(eq(contacts.id, id), eq(contacts.userId, userId)))
-      .returning();
-    return contact || undefined;
+  async updateClient(id: string, createdBy: string, updates: UpdateClient): Promise<User | undefined> {
+    const processedUpdates: any = {};
+    
+    if (updates.name !== undefined) {
+      processedUpdates.name = updates.name;
+    }
+    
+    if (updates.email !== undefined) {
+      processedUpdates.email = updates.email === "" ? null : updates.email;
+    }
+    
+    if (updates.username !== undefined) {
+      processedUpdates.username = updates.username === "" ? null : updates.username;
+    }
+    
+    if (updates.password !== undefined) {
+      if (updates.password === "") {
+        processedUpdates.password = null;
+      } else {
+        processedUpdates.password = await hashPassword(updates.password);
+      }
+    }
+    
+    if (updates.phone !== undefined) {
+      processedUpdates.phone = updates.phone === "" ? null : updates.phone;
+    }
+    
+    if (updates.notes !== undefined) {
+      processedUpdates.notes = updates.notes === "" ? null : updates.notes;
+    }
+    
+    const [client] = await db.update(users).set(processedUpdates).where(
+      and(eq(users.id, id), eq(users.role, "client"), eq(users.createdBy, createdBy))
+    ).returning();
+    return client || undefined;
   }
 
-  async deleteContact(id: string, userId: string): Promise<boolean> {
-    const result = await db
-      .delete(contacts)
-      .where(and(eq(contacts.id, id), eq(contacts.userId, userId)));
+  async deleteClient(id: string, createdBy: string): Promise<boolean> {
+    const result = await db.delete(users).where(
+      and(eq(users.id, id), eq(users.role, "client"), eq(users.createdBy, createdBy))
+    );
     return result.rowCount !== null && result.rowCount > 0;
   }
 

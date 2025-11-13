@@ -1,20 +1,25 @@
 import { Router } from "express";
 import { storage } from "../storage";
 import { requireAuth } from "../utils/validation";
-import { insertContactSchema } from "@shared/schema";
+import { insertClientSchema, updateClientSchema, type User } from "@shared/schema";
 
 const router = Router();
 
+function sanitizeUser(user: User) {
+  const { password, ...publicUser } = user;
+  return publicUser;
+}
+
 router.post("/contacts", requireAuth, async (req, res, next) => {
   try {
-    const result = insertContactSchema.safeParse({ ...req.body, userId: req.user!.id });
+    const result = insertClientSchema.safeParse(req.body);
     
     if (!result.success) {
       return res.status(400).json({ message: "Dados inválidos", errors: result.error.errors });
     }
     
-    const contact = await storage.createContact(result.data);
-    res.status(201).json(contact);
+    const client = await storage.createClient(result.data, req.user!.id);
+    res.status(201).json(sanitizeUser(client));
   } catch (error) {
     next(error);
   }
@@ -22,8 +27,8 @@ router.post("/contacts", requireAuth, async (req, res, next) => {
 
 router.get("/contacts", requireAuth, async (req, res, next) => {
   try {
-    const contacts = await storage.getContacts(req.user!.id);
-    res.json(contacts);
+    const clients = await storage.getClients(req.user!.id);
+    res.json(clients.map(sanitizeUser));
   } catch (error) {
     next(error);
   }
@@ -31,13 +36,13 @@ router.get("/contacts", requireAuth, async (req, res, next) => {
 
 router.get("/contacts/:id", requireAuth, async (req, res, next) => {
   try {
-    const contact = await storage.getContactById(req.params.id, req.user!.id);
+    const client = await storage.getClientById(req.params.id, req.user!.id);
     
-    if (!contact) {
+    if (!client) {
       return res.status(404).json({ message: "Contato não encontrado" });
     }
     
-    res.json(contact);
+    res.json(sanitizeUser(client));
   } catch (error) {
     next(error);
   }
@@ -45,19 +50,19 @@ router.get("/contacts/:id", requireAuth, async (req, res, next) => {
 
 router.patch("/contacts/:id", requireAuth, async (req, res, next) => {
   try {
-    const updates = insertContactSchema.partial().omit({ userId: true }).safeParse(req.body);
+    const updates = updateClientSchema.safeParse(req.body);
     
     if (!updates.success) {
       return res.status(400).json({ message: "Dados inválidos", errors: updates.error.errors });
     }
     
-    const contact = await storage.updateContact(req.params.id, req.user!.id, updates.data);
+    const client = await storage.updateClient(req.params.id, req.user!.id, updates.data);
     
-    if (!contact) {
+    if (!client) {
       return res.status(404).json({ message: "Contato não encontrado" });
     }
     
-    res.json(contact);
+    res.json(sanitizeUser(client));
   } catch (error) {
     next(error);
   }
@@ -65,7 +70,7 @@ router.patch("/contacts/:id", requireAuth, async (req, res, next) => {
 
 router.delete("/contacts/:id", requireAuth, async (req, res, next) => {
   try {
-    const deleted = await storage.deleteContact(req.params.id, req.user!.id);
+    const deleted = await storage.deleteClient(req.params.id, req.user!.id);
     
     if (!deleted) {
       return res.status(404).json({ message: "Contato não encontrado" });

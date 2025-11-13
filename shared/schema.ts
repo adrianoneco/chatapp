@@ -8,9 +8,9 @@ export const users = pgTable(
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     name: text("name").notNull(),
-    email: text("email").notNull().unique(),
-    username: text("username").notNull().unique(),
-    password: text("password").notNull(),
+    email: text("email").unique(),
+    username: text("username").unique(),
+    password: text("password"),
     role: text("role", { enum: ["client", "admin", "attendant"] }).notNull().default("client"),
     phone: text("phone"),
     notes: text("notes"),
@@ -68,16 +68,21 @@ export type Contact = typeof contacts.$inferSelect;
 
 export const insertClientSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
-  email: z.string().email("Email inválido").optional(),
-  username: z.string().min(3, "Username mínimo 3 caracteres").optional(),
-  password: z.string().min(6, "Senha mínima 6 caracteres").optional(),
+  email: z.union([z.string().email("Email inválido"), z.literal("")]).optional(),
+  username: z.union([z.string().min(3, "Username mínimo 3 caracteres"), z.literal("")]).optional(),
+  password: z.union([z.string().min(6, "Senha mínima 6 caracteres"), z.literal("")]).optional(),
   phone: z.string().optional(),
   notes: z.string().optional(),
 });
 
 export const updateClientSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").optional(),
-  email: z.string().email("Email inválido").optional(),
+  email: z.union([z.string().email("Email inválido"), z.literal("")]).optional(),
+  username: z.union([z.string().min(3, "Username mínimo 3 caracteres"), z.literal("")]).optional(),
+  password: z.union([
+    z.string().min(6, "Senha mínima 6 caracteres"),
+    z.literal(""),
+  ]).optional(),
   phone: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -85,7 +90,14 @@ export const updateClientSchema = z.object({
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type UpdateClient = z.infer<typeof updateClientSchema>;
 
-export const insertAttendantSchema = insertUserSchema.omit({ role: true });
+export const insertAttendantSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório"),
+  email: z.string().email("Email inválido"),
+  username: z.string().min(3, "Username mínimo 3 caracteres"),
+  password: z.string().min(6, "Senha mínima 6 caracteres"),
+  phone: z.string().optional(),
+  notes: z.string().optional(),
+});
 
 export const updateAttendantSchema = z.object({
   name: z.string().min(1, "Name is required").optional(),

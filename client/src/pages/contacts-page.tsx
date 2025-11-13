@@ -10,22 +10,22 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertContactSchema, type Contact, type InsertContact } from "@shared/schema";
+import { insertClientSchema, updateClientSchema, type PublicUser, type InsertClient, type UpdateClient } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ContactsPage() {
   const { toast } = useToast();
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
+  const [editingContact, setEditingContact] = useState<PublicUser | null>(null);
+  const [deletingContact, setDeletingContact] = useState<PublicUser | null>(null);
 
-  const { data: contacts = [], isLoading } = useQuery<Contact[]>({
+  const { data: contacts = [], isLoading } = useQuery<PublicUser[]>({
     queryKey: ["/api/contacts"],
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: Omit<InsertContact, "userId">) =>
+    mutationFn: (data: InsertClient) =>
       apiRequest("POST", "/api/contacts", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
@@ -45,7 +45,7 @@ export default function ContactsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<InsertContact, "userId">> }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdateClient }) =>
       apiRequest("PATCH", `/api/contacts/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
@@ -84,7 +84,7 @@ export default function ContactsPage() {
     },
   });
 
-  const handleOpenForm = (contact?: Contact) => {
+  const handleOpenForm = (contact?: PublicUser) => {
     setEditingContact(contact || null);
     setIsFormOpen(true);
   };
@@ -94,7 +94,7 @@ export default function ContactsPage() {
     setEditingContact(null);
   };
 
-  const handleDelete = (contact: Contact) => {
+  const handleDelete = (contact: PublicUser) => {
     setDeletingContact(contact);
   };
 
@@ -216,13 +216,13 @@ export default function ContactsPage() {
 interface ContactFormDialogProps {
   open: boolean;
   onClose: () => void;
-  contact: Contact | null;
-  onSubmit: (data: Omit<InsertContact, "userId">) => void;
+  contact: PublicUser | null;
+  onSubmit: (data: InsertClient) => void;
   isPending: boolean;
 }
 
 function ContactFormDialog({ open, onClose, contact, onSubmit, isPending }: ContactFormDialogProps) {
-  const formSchema = insertContactSchema.omit({ userId: true });
+  const formSchema = insertClientSchema;
 
   const form = useForm({
     resolver: zodResolver(formSchema),
