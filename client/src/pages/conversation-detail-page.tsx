@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "wouter";
+import { formatTime } from "@/lib/datetime";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -292,14 +293,6 @@ export default function ConversationDetailPage() {
     },
   });
 
-  const formatMessageTime = (date: string | Date) => {
-    const d = new Date(date);
-    return d.toLocaleTimeString("pt-BR", {
-      timeZone: "America/Sao_Paulo",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
 
   const isAttendant = user?.role === "attendant" || user?.role === "admin";
 
@@ -421,7 +414,7 @@ export default function ConversationDetailPage() {
                   >
                     <p className="text-sm">{message.content.text}</p>
                     <div className="flex items-center justify-end gap-1 mt-1">
-                      <span className="text-xs opacity-70">{formatMessageTime(message.createdAt)}</span>
+                      <span className="text-xs opacity-70">{formatTime(message.createdAt)}</span>
                       {message.direction === "outbound" && (
                         <Check className="h-3 w-3 opacity-70" />
                       )}
