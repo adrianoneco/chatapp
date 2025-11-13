@@ -37,6 +37,14 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function DashboardWithLayout() {
+  return (
+    <AuthenticatedLayout>
+      <DashboardPage />
+    </AuthenticatedLayout>
+  );
+}
+
 function Router() {
   return (
     <Switch>
@@ -46,14 +54,7 @@ function Router() {
       <Route path="/error/403" component={Error403} />
       <Route path="/error/404" component={Error404} />
       <Route path="/error/500" component={Error500} />
-      <ProtectedRoute 
-        path="/" 
-        component={() => (
-          <AuthenticatedLayout>
-            <DashboardPage />
-          </AuthenticatedLayout>
-        )} 
-      />
+      <ProtectedRoute path="/" component={DashboardWithLayout} />
       <Route component={Error404} />
     </Switch>
   );
