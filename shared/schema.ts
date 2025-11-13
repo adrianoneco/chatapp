@@ -1,17 +1,29 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, foreignKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  role: text("role", { enum: ["client", "admin", "attendant"] }).notNull().default("client"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const users = pgTable(
+  "users",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    email: text("email").notNull().unique(),
+    username: text("username").notNull().unique(),
+    password: text("password").notNull(),
+    role: text("role", { enum: ["client", "admin", "attendant"] }).notNull().default("client"),
+    phone: text("phone"),
+    notes: text("notes"),
+    createdBy: varchar("created_by"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    createdByFk: foreignKey({
+      columns: [table.createdBy],
+      foreignColumns: [table.id],
+    }).onDelete("set null"),
+  })
+);
 
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -54,6 +66,25 @@ export const insertContactSchema = createInsertSchema(contacts).omit({
 export type InsertContact = z.infer<typeof insertContactSchema>;
 export type Contact = typeof contacts.$inferSelect;
 
+export const insertClientSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório"),
+  email: z.string().email("Email inválido").optional(),
+  username: z.string().min(3, "Username mínimo 3 caracteres").optional(),
+  password: z.string().min(6, "Senha mínima 6 caracteres").optional(),
+  phone: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const updateClientSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório").optional(),
+  email: z.string().email("Email inválido").optional(),
+  phone: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export type InsertClient = z.infer<typeof insertClientSchema>;
+export type UpdateClient = z.infer<typeof updateClientSchema>;
+
 export const insertAttendantSchema = insertUserSchema.omit({ role: true });
 
 export const updateAttendantSchema = z.object({
@@ -64,6 +95,8 @@ export const updateAttendantSchema = z.object({
     z.string().min(6, "Password must be at least 6 characters"),
     z.literal(""),
   ]).optional(),
+  phone: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 export type InsertAttendant = z.infer<typeof insertAttendantSchema>;
