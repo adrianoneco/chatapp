@@ -286,6 +286,72 @@ export type ResponseTemplate = typeof responseTemplates.$inferSelect;
 export type InsertResponseTemplate = z.infer<typeof insertResponseTemplateSchema>;
 export type UpdateResponseTemplate = z.infer<typeof updateResponseTemplateSchema>;
 
+// AI Templates
+export const aiTemplates = pgTable("ai_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  content: text("content").notNull(),
+  parameters: jsonb("parameters").$type<string[]>().default(sql`'[]'::jsonb`),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+});
+
+export const insertAITemplateSchema = createInsertSchema(aiTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AITemplate = typeof aiTemplates.$inferSelect;
+export type InsertAITemplate = z.infer<typeof insertAITemplateSchema>;
+
+// Webhooks
+export const webhooks = pgTable("webhooks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  targetUrl: text("target_url").notNull(),
+  authType: text("auth_type", { enum: ["none", "bearer", "api_key", "basic"] }).notNull().default("none"),
+  authPayload: jsonb("auth_payload").$type<{ token?: string; key?: string; username?: string; password?: string }>(),
+  events: jsonb("events").$type<string[]>().default(sql`'[]'::jsonb`),
+  headers: jsonb("headers").$type<Record<string, string>>().default(sql`'{}'::jsonb`),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+});
+
+export const insertWebhookSchema = createInsertSchema(webhooks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Webhook = typeof webhooks.$inferSelect;
+export type InsertWebhook = z.infer<typeof insertWebhookSchema>;
+
+// Evolution API Instances
+export const evolutionInstances = pgTable("evolution_instances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  label: text("label").notNull(),
+  baseUrl: text("base_url").notNull(),
+  apiKey: text("api_key").notNull(),
+  instanceId: text("instance_id").notNull(),
+  channelId: varchar("channel_id").references(() => channels.id, { onDelete: "set null" }),
+  status: text("status", { enum: ["connected", "disconnected", "pending"] }).notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertEvolutionInstanceSchema = createInsertSchema(evolutionInstances).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type EvolutionInstance = typeof evolutionInstances.$inferSelect;
+export type InsertEvolutionInstance = z.infer<typeof insertEvolutionInstanceSchema>;
+
 export const calls = pgTable("calls", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   conversationId: varchar("conversation_id").references(() => conversations.id, { onDelete: "cascade" }),

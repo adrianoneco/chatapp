@@ -40,11 +40,15 @@ export function useWebRTC() {
   const incomingRingtoneRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    // TODO: Add ringtone files to public/ folder
-    // outgoingRingtoneRef.current = new Audio("/ringtone-outgoing.mp3");
-    // outgoingRingtoneRef.current.loop = true;
-    // incomingRingtoneRef.current = new Audio("/ringtone-incoming.mp3");
-    // incomingRingtoneRef.current.loop = true;
+    // Initialize ringtones
+    import("@/assets/audio/calling_1763047253528.mp3").then(module => {
+      outgoingRingtoneRef.current = new Audio(module.default);
+      outgoingRingtoneRef.current.loop = true;
+    });
+    import("@/assets/audio/incoming-call_1763047253529.mp3").then(module => {
+      incomingRingtoneRef.current = new Audio(module.default);
+      incomingRingtoneRef.current.loop = true;
+    });
 
     return () => {
       outgoingRingtoneRef.current?.pause();
