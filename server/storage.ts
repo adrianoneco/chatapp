@@ -3,7 +3,8 @@ import {
   meetings, type Meeting, type InsertMeeting, type UpdateMeeting,
   channels, type Channel, type InsertChannel,
   conversations, type Conversation, type InsertConversation, type UpdateConversation,
-  messages, type Message, type InsertMessage
+  messages, type Message, type InsertMessage,
+  responseTemplates, type ResponseTemplate, type InsertResponseTemplate, type UpdateResponseTemplate
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, isNull, or, sql } from "drizzle-orm";
@@ -53,6 +54,12 @@ export interface IStorage {
   getMessages(conversationId: string, limit?: number): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   findMessageByExternalId(externalId: string): Promise<Message | undefined>;
+  
+  getResponseTemplates(userId: string): Promise<ResponseTemplate[]>;
+  getResponseTemplateById(id: string, userId: string): Promise<ResponseTemplate | undefined>;
+  createResponseTemplate(template: InsertResponseTemplate, userId: string): Promise<ResponseTemplate>;
+  updateResponseTemplate(id: string, userId: string, updates: UpdateResponseTemplate): Promise<ResponseTemplate | undefined>;
+  deleteResponseTemplate(id: string, userId: string): Promise<boolean>;
   
   sessionStore: session.SessionStore;
 }
@@ -438,6 +445,46 @@ export class DatabaseStorage implements IStorage {
       .where(eq(messages.externalId, externalId))
       .limit(1);
     return message || undefined;
+  }
+
+  async getResponseTemplates(userId: string): Promise<ResponseTemplate[]> {
+    return await db
+      .select()
+      .from(responseTemplates)
+      .where(eq(responseTemplates.createdBy, userId))
+      .orderBy(desc(responseTemplates.createdAt));
+  }
+
+  async getResponseTemplateById(id: string, userId: string): Promise<ResponseTemplate | undefined> {
+    const [template] = await db
+      .select()
+      .from(responseTemplates)
+      .where(and(eq(responseTemplates.id, id), eq(responseTemplates.createdBy, userId)));
+    return template || undefined;
+  }
+
+  async createResponseTemplate(insertTemplate: InsertResponseTemplate, userId: string): Promise<ResponseTemplate> {
+    const [template] = await db
+      .insert(responseTemplates)
+      .values({ ...insertTemplate, createdBy: userId })
+      .returning();
+    return template;
+  }
+
+  async updateResponseTemplate(id: string, userId: string, updates: UpdateResponseTemplate): Promise<ResponseTemplate | undefined> {
+    const [template] = await db
+      .update(responseTemplates)
+      .set(updates)
+      .where(and(eq(responseTemplates.id, id), eq(responseTemplates.createdBy, userId)))
+      .returning();
+    return template || undefined;
+  }
+
+  async deleteResponseTemplate(id: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(responseTemplates)
+      .where(and(eq(responseTemplates.id, id), eq(responseTemplates.createdBy, userId)));
+    return result.rowCount !== null && result.rowCount > 0;
   }
 }
 

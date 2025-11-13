@@ -245,3 +245,28 @@ export type UpdateConversation = z.infer<typeof updateConversationSchema>;
 
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
+export const responseTemplates = pgTable("response_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  category: text("category").default("geral"),
+  createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertResponseTemplateSchema = createInsertSchema(responseTemplates).omit({
+  id: true,
+  createdBy: true,
+  createdAt: true,
+});
+
+export const updateResponseTemplateSchema = z.object({
+  title: z.string().min(1, "Título é obrigatório").optional(),
+  content: z.string().min(1, "Conteúdo é obrigatório").optional(),
+  category: z.string().optional(),
+});
+
+export type ResponseTemplate = typeof responseTemplates.$inferSelect;
+export type InsertResponseTemplate = z.infer<typeof insertResponseTemplateSchema>;
+export type UpdateResponseTemplate = z.infer<typeof updateResponseTemplateSchema>;

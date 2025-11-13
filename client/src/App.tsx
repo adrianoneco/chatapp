@@ -15,6 +15,7 @@ import AttendantsPage from "@/pages/attendants-page";
 import MeetingsPage from "@/pages/meetings-page";
 import MeetingViewPage from "@/pages/meeting-view-page";
 import ConversationsPage from "@/pages/conversations-page";
+import SettingsPage from "@/pages/settings-page";
 import AuthPage from "@/pages/auth-page";
 import Error400 from "@/pages/error-400";
 import Error401 from "@/pages/error-401";
@@ -85,6 +86,14 @@ function ConversationsWithLayout() {
   );
 }
 
+function SettingsWithLayout() {
+  return (
+    <AuthenticatedLayout>
+      <SettingsPage />
+    </AuthenticatedLayout>
+  );
+}
+
 function Router() {
   return (
     <Switch>
@@ -99,6 +108,7 @@ function Router() {
       <ProtectedRoute path="/contacts" component={ContactsWithLayout} />
       <ProtectedRoute path="/attendants" component={AttendantsWithLayout} />
       <ProtectedRoute path="/meetings" component={MeetingsWithLayout} />
+      <ProtectedRoute path="/settings" component={SettingsWithLayout} />
       <ProtectedRoute path="/" component={DashboardWithLayout} />
       <Route component={Error404} />
     </Switch>
