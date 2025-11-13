@@ -142,5 +142,52 @@ export function createConversationsRouter(storage: IStorage): Router {
     }
   });
 
+  router.post("/conversations/:id/transcribe", requireAuth, async (req, res, next) => {
+    try {
+      const conversation = await storage.getConversationById(req.params.id);
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      const messages = await storage.getMessages(req.params.id);
+
+      const transcript = await Promise.all(messages.map(async (msg) => {
+        let name = "Sistema";
+        if (msg.senderId) {
+          const sender = await storage.getUser(msg.senderId);
+          name = sender?.name || "Desconhecido";
+        }
+        const time = new Date(msg.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        return `[${time}] ${name}: ${msg.content.text || ''}`;
+      }));
+
+      const transcriptText = transcript.join('\n');
+
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="conversa-${req.params.id}.txt"`);
+      res.send(transcriptText);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch("/conversations/:id/transfer", requireAuth, async (req, res, next) => {
+    try {
+      const { attendantId } = req.body;
+      if (!attendantId) {
+        return res.status(400).json({ message: "ID do atendente é obrigatório" });
+      }
+
+      const conversation = await storage.updateConversation(req.params.id, { assignedTo: attendantId });
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      res.json(conversation);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   return router;
 }

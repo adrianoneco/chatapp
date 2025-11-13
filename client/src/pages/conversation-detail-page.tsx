@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import type { Conversation, Message, InsertMessage, User } from "@shared/schema";
+import type { Conversation, Message, User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -34,6 +34,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function ConversationDetailPage() {
   const params = useParams();
@@ -42,6 +57,9 @@ export default function ConversationDetailPage() {
   const { user } = useAuth();
   const { onlineUsers } = useWebSocket();
   const [messageText, setMessageText] = useState("");
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [selectedAttendant, setSelectedAttendant] = useState("");
+  const [isCorrectingText, setIsCorrectingText] = useState(false);
   const {
     localStream,
     remoteStream,
@@ -69,6 +87,10 @@ export default function ConversationDetailPage() {
     queryKey: ["/api/users"],
   });
 
+  const { data: attendants = [] } = useQuery<User[]>({
+    queryKey: ["/api/attendants"],
+  });
+
   const getUserById = (id: string | null) => {
     if (!id) return null;
     return users.find((u) => u.id === id);
@@ -79,7 +101,7 @@ export default function ConversationDetailPage() {
   const contactName = contact?.name || conversation?.externalContactId || "Contato Desconhecido";
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (data: InsertMessage) => {
+    mutationFn: async (data: any) => {
       return await apiRequest("POST", `/api/conversations/${conversationId}/messages`, data);
     },
     onSuccess: () => {
@@ -118,12 +140,12 @@ export default function ConversationDetailPage() {
   });
 
   const handleSendMessage = () => {
-    if (!messageText.trim() || !conversationId) return;
+    if (!messageText.trim() || !conversationId || !user) return;
 
     sendMessageMutation.mutate({
       conversationId,
       senderType: "user" as const,
-      senderId: null,
+      senderId: user.id,
       direction: "outbound" as const,
       content: { text: messageText },
       messageType: "text" as const,
@@ -184,6 +206,93 @@ export default function ConversationDetailPage() {
       description: "Conversa exportada com sucesso",
     });
   };
+
+  const handleTranscribe = async () => {
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/transcribe`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error("Falha ao transcrever conversa");
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `conversa-${conversationId}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Sucesso",
+        description: "Transcrição baixada com sucesso",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: error.message || "Erro ao transcrever conversa",
+      });
+    }
+  };
+
+  const handleCorrectText = async () => {
+    if (!messageText.trim()) return;
+
+    setIsCorrectingText(true);
+    try {
+      const response = await apiRequest("POST", "/api/ai/correct-text", {
+        text: messageText,
+        language: "pt",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMessageText(data.correctedText);
+        toast({
+          title: "Texto corrigido",
+          description: "O texto foi corrigido com sucesso",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: error.message || "Erro ao corrigir texto",
+      });
+    } finally {
+      setIsCorrectingText(false);
+    }
+  };
+
+  const transferMutation = useMutation({
+    mutationFn: async (attendantId: string) => {
+      return await apiRequest("PATCH", `/api/conversations/${conversationId}/transfer`, {
+        attendantId,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      setShowTransferDialog(false);
+      toast({
+        title: "Sucesso",
+        description: "Conversa transferida com sucesso",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: error.message || "Erro ao transferir conversa",
+      });
+    },
+  });
 
   const formatMessageTime = (date: string | Date) => {
     const d = new Date(date);
@@ -268,10 +377,13 @@ export default function ConversationDetailPage() {
                     <DropdownMenuItem onClick={handleExportJSON} data-testid="menu-export-json">
                       Exportar (JSON)
                     </DropdownMenuItem>
-                    <DropdownMenuItem data-testid="menu-transcribe-pdf">
-                      Transcrever (PDF)
+                    <DropdownMenuItem onClick={handleTranscribe} data-testid="menu-transcribe">
+                      Transcrever (TXT)
                     </DropdownMenuItem>
-                    <DropdownMenuItem data-testid="menu-transfer">
+                    <DropdownMenuItem
+                      onClick={() => setShowTransferDialog(true)}
+                      data-testid="menu-transfer"
+                    >
                       Transferir atendente
                     </DropdownMenuItem>
                   </>
@@ -326,7 +438,13 @@ export default function ConversationDetailPage() {
         {/* Input de Mensagem */}
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-2 mb-2">
-            <Button size="icon" variant="ghost" data-testid="button-ai-correct">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={handleCorrectText}
+              disabled={!messageText.trim() || isCorrectingText}
+              data-testid="button-ai-correct"
+            >
               <Sparkles className="h-4 w-4" />
             </Button>
             <Button size="icon" variant="ghost" data-testid="button-ai-assistant">
@@ -396,6 +514,46 @@ export default function ConversationDetailPage() {
           />
         </div>
       )}
+
+      {/* Transfer Dialog */}
+      <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transferir Conversa</DialogTitle>
+            <DialogDescription>
+              Selecione o atendente para quem deseja transferir esta conversa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Select value={selectedAttendant} onValueChange={setSelectedAttendant}>
+              <SelectTrigger data-testid="select-attendant">
+                <SelectValue placeholder="Selecione um atendente" />
+              </SelectTrigger>
+              <SelectContent>
+                {attendants.map((attendant) => (
+                  <SelectItem key={attendant.id} value={attendant.id}>
+                    {attendant.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTransferDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => selectedAttendant && transferMutation.mutate(selectedAttendant)}
+              disabled={!selectedAttendant || transferMutation.isPending}
+              data-testid="button-confirm-transfer"
+            >
+              Transferir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
