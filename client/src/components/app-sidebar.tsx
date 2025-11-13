@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Users, Settings, LayoutDashboard, UserCog } from "lucide-react";
+import { Home, MessageSquare, Users, Settings, LayoutDashboard, UserCog, Calendar } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -31,6 +31,12 @@ const menuItems = [
     title: "Contatos",
     url: "/contacts",
     icon: Users,
+    requiresAdmin: false,
+  },
+  {
+    title: "Reuniões",
+    url: "/meetings",
+    icon: Calendar,
     requiresAdmin: false,
   },
   {

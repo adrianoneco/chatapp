@@ -12,6 +12,8 @@ import { AppHeader } from "@/components/app-header";
 import DashboardPage from "@/pages/dashboard-page";
 import ContactsPage from "@/pages/contacts-page";
 import AttendantsPage from "@/pages/attendants-page";
+import MeetingsPage from "@/pages/meetings-page";
+import MeetingViewPage from "@/pages/meeting-view-page";
 import AuthPage from "@/pages/auth-page";
 import Error400 from "@/pages/error-400";
 import Error401 from "@/pages/error-401";
@@ -66,10 +68,19 @@ function AttendantsWithLayout() {
   );
 }
 
+function MeetingsWithLayout() {
+  return (
+    <AuthenticatedLayout>
+      <MeetingsPage />
+    </AuthenticatedLayout>
+  );
+}
+
 function Router() {
   return (
     <Switch>
       <Route path="/auth" component={AuthPage} />
+      <Route path="/m/:linkId" component={MeetingViewPage} />
       <Route path="/error/400" component={Error400} />
       <Route path="/error/401" component={Error401} />
       <Route path="/error/403" component={Error403} />
@@ -77,6 +88,7 @@ function Router() {
       <Route path="/error/500" component={Error500} />
       <ProtectedRoute path="/contacts" component={ContactsWithLayout} />
       <ProtectedRoute path="/attendants" component={AttendantsWithLayout} />
+      <ProtectedRoute path="/meetings" component={MeetingsWithLayout} />
       <ProtectedRoute path="/" component={DashboardWithLayout} />
       <Route component={Error404} />
     </Switch>

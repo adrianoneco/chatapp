@@ -1,9 +1,10 @@
-import { users, type User, type InsertUser, contacts, type Contact, type InsertContact } from "@shared/schema";
+import { users, type User, type InsertUser, contacts, type Contact, type InsertContact, meetings, type Meeting, type InsertMeeting, type UpdateMeeting } from "@shared/schema";
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
+import { generateNanoid } from "./utils/nanoid";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -23,6 +24,12 @@ export interface IStorage {
   getAttendantById(id: string): Promise<User | undefined>;
   updateAttendant(id: string, updates: Partial<Omit<InsertUser, "role">>): Promise<User | undefined>;
   deleteAttendant(id: string): Promise<boolean>;
+  createMeeting(meeting: InsertMeeting, userId: string): Promise<Meeting>;
+  getMeetings(userId: string): Promise<Meeting[]>;
+  getMeetingById(id: string, userId: string): Promise<Meeting | undefined>;
+  getMeetingByLinkId(linkId: string): Promise<Meeting | undefined>;
+  updateMeeting(id: string, userId: string, updates: UpdateMeeting): Promise<Meeting | undefined>;
+  deleteMeeting(id: string, userId: string): Promise<boolean>;
   sessionStore: session.SessionStore;
 }
 
@@ -132,6 +139,70 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .delete(users)
       .where(and(eq(users.id, id), eq(users.role, "attendant")));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async createMeeting(insertMeeting: InsertMeeting, userId: string): Promise<Meeting> {
+    let linkId = generateNanoid();
+    let attempts = 0;
+    const maxAttempts = 5;
+
+    while (attempts < maxAttempts) {
+      try {
+        const [meeting] = await db
+          .insert(meetings)
+          .values({
+            ...insertMeeting,
+            linkId,
+            createdBy: userId,
+          })
+          .returning();
+        return meeting;
+      } catch (error: any) {
+        if (error.code === '23505' && error.constraint === 'meetings_link_id_unique') {
+          linkId = generateNanoid();
+          attempts++;
+        } else {
+          throw error;
+        }
+      }
+    }
+    throw new Error('Failed to generate unique linkId after maximum attempts');
+  }
+
+  async getMeetings(userId: string): Promise<Meeting[]> {
+    return await db.select().from(meetings).where(eq(meetings.createdBy, userId));
+  }
+
+  async getMeetingById(id: string, userId: string): Promise<Meeting | undefined> {
+    const [meeting] = await db
+      .select()
+      .from(meetings)
+      .where(and(eq(meetings.id, id), eq(meetings.createdBy, userId)));
+    return meeting || undefined;
+  }
+
+  async getMeetingByLinkId(linkId: string): Promise<Meeting | undefined> {
+    const [meeting] = await db
+      .select()
+      .from(meetings)
+      .where(eq(meetings.linkId, linkId));
+    return meeting || undefined;
+  }
+
+  async updateMeeting(id: string, userId: string, updates: UpdateMeeting): Promise<Meeting | undefined> {
+    const [meeting] = await db
+      .update(meetings)
+      .set(updates)
+      .where(and(eq(meetings.id, id), eq(meetings.createdBy, userId)))
+      .returning();
+    return meeting || undefined;
+  }
+
+  async deleteMeeting(id: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(meetings)
+      .where(and(eq(meetings.id, id), eq(meetings.createdBy, userId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 }

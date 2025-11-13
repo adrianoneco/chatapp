@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -68,3 +68,32 @@ export const updateAttendantSchema = z.object({
 
 export type InsertAttendant = z.infer<typeof insertAttendantSchema>;
 export type UpdateAttendant = z.infer<typeof updateAttendantSchema>;
+
+export const meetings = pgTable("meetings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  isPublic: boolean("is_public").notNull().default(false),
+  linkId: varchar("link_id", { length: 21 }).notNull().unique(),
+  createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMeetingSchema = createInsertSchema(meetings).omit({
+  id: true,
+  linkId: true,
+  createdBy: true,
+  createdAt: true,
+}).extend({
+  scheduledAt: z.string().min(1, "Data e hora são obrigatórias"),
+});
+
+export const updateMeetingSchema = z.object({
+  title: z.string().min(1, "Título é obrigatório").optional(),
+  scheduledAt: z.string().min(1, "Data e hora são obrigatórias").optional(),
+  isPublic: z.boolean().optional(),
+});
+
+export type InsertMeeting = z.infer<typeof insertMeetingSchema>;
+export type UpdateMeeting = z.infer<typeof updateMeetingSchema>;
+export type Meeting = typeof meetings.$inferSelect;
