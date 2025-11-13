@@ -172,6 +172,44 @@ Preferred communication style: Simple, everyday language.
 - registerSchema: Registration with password confirmation
 - Shared between client and server via @shared directory
 
+## Recent Changes (Nov 13, 2025)
+
+### WebRTC Audio/Video Calls (Flagship Feature)
+- **useWebRTC hook** (`client/src/hooks/use-webrtc.ts`):
+  - Multiple critical fixes: call state handling, permission checks, signal buffering, cleanup on error
+  - Features: incomingCall state, checkMediaPermissions, currentCall for callee, pending signals buffer with callId scoping
+  - Ringtones commented out (audio files not added yet)
+- **CallDialog** component: Full-screen video/audio UI with mute/unmute, camera toggle, hang-up
+- **IncomingCallToast** component: Toast notification for incoming calls with accept/reject
+- **ConversationDetail integration**: Audio/Video call buttons in header
+
+### Conversation Management Features
+- **3-dot menu** in ConversationDetail:
+  - Close/Reopen conversation (status toggle)
+  - Export JSON (client-side download)
+  - Transcribe to TXT (endpoint: `POST /api/conversations/:id/transcribe` - timezone-aware export)
+  - Transfer attendant (endpoint: `PATCH /api/conversations/:id/transfer` + Dialog UI with attendant selection)
+
+### AI Integration
+- **Text correction button** in message box: Groq AI grammar/spelling correction (`/api/ai/correct-text`)
+- Placeholder buttons: AI assistant, record audio/video, send photo/attachment
+
+### Schema Fixes
+- **messages table**: Removed circular references from `replyToId` and `forwardedFromId` (nullable varchar without foreign key constraints)
+- **Message sending**: Fixed senderId validation - now uses authenticated `user.id` instead of null
+
+### Presence System
+- **UserAvatar** component already integrated in ConversationList with online indicators
+- WebSocket presence tracking via `useWebSocket` hook (onlineUsers state)
+- Note: Presence is real-time but not persisted to database (no `isOnline`/`lastSeenAt` columns)
+
+### Technical Debt
+- Ringtone audio files not added (commented out in useWebRTC)
+- Reply/Forward/Reactions not implemented
+- Private messages (isPrivate) field exists but no visual differentiation
+- Meetings feature not implemented
+- AI assistant modal not implemented
+
 ## External Dependencies
 
 ### Core Framework Dependencies

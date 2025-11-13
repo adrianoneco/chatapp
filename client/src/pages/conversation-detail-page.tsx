@@ -87,9 +87,7 @@ export default function ConversationDetailPage() {
     queryKey: ["/api/users"],
   });
 
-  const { data: attendants = [] } = useQuery<User[]>({
-    queryKey: ["/api/attendants"],
-  });
+  const attendants = users.filter(u => u.role === "attendant" || u.role === "admin");
 
   const getUserById = (id: string | null) => {
     if (!id) return null;
