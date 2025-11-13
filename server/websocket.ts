@@ -1,12 +1,15 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { Server } from "http";
+import { IncomingMessage } from "http";
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { isValidGlobalApiKey } from "./middleware/auth";
 
 interface WebSocketClient extends WebSocket {
   userId?: string;
   isAlive?: boolean;
+  isApiKeyAuth?: boolean;
 }
 
 interface WebRTCSignal {
@@ -28,13 +31,55 @@ export class WebSocketManager {
   private heartbeatInterval: NodeJS.Timeout | null = null;
 
   constructor(server: Server) {
-    this.wss = new WebSocketServer({ server, path: "/ws" });
+    this.wss = new WebSocketServer({ 
+      server, 
+      path: "/ws",
+      verifyClient: this.verifyClient.bind(this)
+    });
     this.initialize();
   }
 
+  private verifyClient(info: { origin: string; secure: boolean; req: IncomingMessage }): boolean {
+    const authHeader = info.req.headers.authorization;
+    
+    if (authHeader?.startsWith("Bearer ")) {
+      const apiKey = authHeader.substring(7);
+      const isValid = isValidGlobalApiKey(apiKey);
+      
+      if (isValid) {
+        console.log("[WS_SECURITY] API key authenticated WebSocket connection");
+        return true;
+      } else {
+        console.warn("[WS_SECURITY] Invalid API key attempted WebSocket connection");
+        return false;
+      }
+    }
+    
+    const sessionCookie = info.req.headers.cookie;
+    if (sessionCookie) {
+      console.log("[WS_SECURITY] Session-based WebSocket connection allowed (will require auth message)");
+      return true;
+    }
+    
+    console.warn("[WS_SECURITY] WebSocket connection rejected: no valid authentication");
+    return false;
+  }
+
   private initialize() {
-    this.wss.on("connection", (ws: WebSocketClient) => {
+    this.wss.on("connection", (ws: WebSocketClient, req: IncomingMessage) => {
       console.log("New WebSocket connection");
+
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith("Bearer ")) {
+        const apiKey = authHeader.substring(7);
+        if (isValidGlobalApiKey(apiKey)) {
+          ws.isApiKeyAuth = true;
+          ws.userId = "api-service";
+          this.clients.set("api-service", ws);
+          console.log("[WS] API key authenticated connection established");
+          ws.send(JSON.stringify({ type: "auth-success", userId: "api-service", isApiKey: true }));
+        }
+      }
 
       ws.isAlive = true;
 
@@ -109,6 +154,11 @@ export class WebSocketManager {
   }
 
   private async handleAuth(ws: WebSocketClient, userId: string) {
+    if (ws.isApiKeyAuth) {
+      ws.send(JSON.stringify({ type: "error", message: "API key connections cannot authenticate as users" }));
+      return;
+    }
+
     if (!userId) {
       ws.send(JSON.stringify({ type: "error", message: "User ID required" }));
       return;
