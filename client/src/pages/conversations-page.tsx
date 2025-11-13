@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Send, User } from "lucide-react";
+import { AIMessageToolbar } from "@/components/ai-message-toolbar";
 
 export default function ConversationsPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -213,6 +214,15 @@ export default function ConversationsPage() {
                 </div>
               )}
             </ScrollArea>
+
+            {/* Barra de ferramentas IA - só renderiza se conversa selecionada */}
+            {selectedConversation && (
+              <AIMessageToolbar
+                messageText={messageText}
+                onMessageUpdate={setMessageText}
+                conversationId={selectedConversation}
+              />
+            )}
 
             {/* Input de Mensagem */}
             <div className="p-4 border-t border-border">
