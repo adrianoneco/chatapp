@@ -77,6 +77,8 @@ Preferred communication style: Simple, everyday language.
 ### API Architecture
 
 **RESTful Endpoints:**
+
+*Authentication & Users:*
 - `/api/register` - User registration with role assignment
 - `/api/login` - User authentication
 - `/api/logout` - Session termination
@@ -84,10 +86,23 @@ Preferred communication style: Simple, everyday language.
 - `/api/users` - User listing (admin-only)
 - `/api/users/:id` - Individual user access (auth-required)
 
+*Conversations (Nov 2025):*
+- `GET /api/channels` - List active communication channels
+- `GET /api/channels/:id` - Get specific channel
+- `GET /api/conversations` - List conversations (filters: channelId, status, assignedTo)
+- `GET /api/conversations/:id` - Get specific conversation
+- `POST /api/conversations` - Create or find conversation (idempotent via xmax)
+  - Returns 201 Created + Location header when new
+  - Returns 200 OK when existing conversation found
+  - Uses PostgreSQL xmax system column to detect INSERT vs UPDATE atomically
+- `PATCH /api/conversations/:id` - Update conversation (status, assignment)
+- `GET /api/conversations/:id/messages` - List messages (with pagination)
+- `POST /api/conversations/:id/messages` - Create message (idempotent via externalId)
+
 **Middleware Stack:**
 - JSON body parsing with raw body preservation
 - Request logging with performance tracking
-- Authentication middleware (requireAuth)
+- Authentication middleware (requireAuth) - server/middleware/auth.ts
 - Role-based authorization (requireRole)
 - Zod-based request validation
 

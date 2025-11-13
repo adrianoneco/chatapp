@@ -22,8 +22,8 @@ const menuItems = [
     requiresAdmin: false,
   },
   {
-    title: "Mensagens",
-    url: "/messages",
+    title: "Conversas",
+    url: "/conversations",
     icon: MessageSquare,
     requiresAdmin: false,
   },
