@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Users, Settings, LayoutDashboard } from "lucide-react";
+import { Home, MessageSquare, Users, Settings, LayoutDashboard, UserCog } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -12,32 +12,45 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 
 const menuItems = [
   {
     title: "Painel",
     url: "/",
     icon: LayoutDashboard,
+    requiresAdmin: false,
   },
   {
     title: "Mensagens",
     url: "/messages",
     icon: MessageSquare,
+    requiresAdmin: false,
   },
   {
     title: "Contatos",
     url: "/contacts",
     icon: Users,
+    requiresAdmin: false,
+  },
+  {
+    title: "Atendentes",
+    url: "/attendants",
+    icon: UserCog,
+    requiresAdmin: true,
   },
   {
     title: "Configurações",
     url: "/settings",
     icon: Settings,
+    requiresAdmin: false,
   },
 ];
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   return (
     <Sidebar collapsible="icon">
@@ -54,21 +67,23 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === item.url}
-                    className="h-10"
-                    data-testid={`link-${item.title.toLowerCase()}`}
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="h-5 w-5" />
-                      <span className="text-base">{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {menuItems
+                .filter((item) => !item.requiresAdmin || isAdmin)
+                .map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location === item.url}
+                      className="h-10"
+                      data-testid={`link-${item.title.toLowerCase()}`}
+                    >
+                      <Link href={item.url}>
+                        <item.icon className="h-5 w-5" />
+                        <span className="text-base">{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

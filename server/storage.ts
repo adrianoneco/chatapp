@@ -18,6 +18,11 @@ export interface IStorage {
   getContactById(id: string, userId: string): Promise<Contact | undefined>;
   updateContact(id: string, userId: string, updates: Partial<InsertContact>): Promise<Contact | undefined>;
   deleteContact(id: string, userId: string): Promise<boolean>;
+  createAttendant(attendant: InsertUser): Promise<User>;
+  getAttendants(): Promise<User[]>;
+  getAttendantById(id: string): Promise<User | undefined>;
+  updateAttendant(id: string, updates: Partial<Omit<InsertUser, "role">>): Promise<User | undefined>;
+  deleteAttendant(id: string): Promise<boolean>;
   sessionStore: session.SessionStore;
 }
 
@@ -91,6 +96,42 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .delete(contacts)
       .where(and(eq(contacts.id, id), eq(contacts.userId, userId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async createAttendant(insertAttendant: InsertUser): Promise<User> {
+    const [attendant] = await db
+      .insert(users)
+      .values({ ...insertAttendant, role: "attendant" })
+      .returning();
+    return attendant;
+  }
+
+  async getAttendants(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.role, "attendant"));
+  }
+
+  async getAttendantById(id: string): Promise<User | undefined> {
+    const [attendant] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, id), eq(users.role, "attendant")));
+    return attendant || undefined;
+  }
+
+  async updateAttendant(id: string, updates: Partial<Omit<InsertUser, "role">>): Promise<User | undefined> {
+    const [attendant] = await db
+      .update(users)
+      .set(updates)
+      .where(and(eq(users.id, id), eq(users.role, "attendant")))
+      .returning();
+    return attendant || undefined;
+  }
+
+  async deleteAttendant(id: string): Promise<boolean> {
+    const result = await db
+      .delete(users)
+      .where(and(eq(users.id, id), eq(users.role, "attendant")));
     return result.rowCount !== null && result.rowCount > 0;
   }
 }

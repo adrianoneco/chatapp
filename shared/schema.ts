@@ -53,3 +53,18 @@ export const insertContactSchema = createInsertSchema(contacts).omit({
 
 export type InsertContact = z.infer<typeof insertContactSchema>;
 export type Contact = typeof contacts.$inferSelect;
+
+export const insertAttendantSchema = insertUserSchema.omit({ role: true });
+
+export const updateAttendantSchema = z.object({
+  name: z.string().min(1, "Name is required").optional(),
+  email: z.string().email("Invalid email").optional(),
+  username: z.string().min(3, "Username must be at least 3 characters").optional(),
+  password: z.union([
+    z.string().min(6, "Password must be at least 6 characters"),
+    z.literal(""),
+  ]).optional(),
+});
+
+export type InsertAttendant = z.infer<typeof insertAttendantSchema>;
+export type UpdateAttendant = z.infer<typeof updateAttendantSchema>;

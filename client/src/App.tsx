@@ -11,6 +11,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AppHeader } from "@/components/app-header";
 import DashboardPage from "@/pages/dashboard-page";
 import ContactsPage from "@/pages/contacts-page";
+import AttendantsPage from "@/pages/attendants-page";
 import AuthPage from "@/pages/auth-page";
 import Error400 from "@/pages/error-400";
 import Error401 from "@/pages/error-401";
@@ -57,6 +58,14 @@ function ContactsWithLayout() {
   );
 }
 
+function AttendantsWithLayout() {
+  return (
+    <AuthenticatedLayout>
+      <AttendantsPage />
+    </AuthenticatedLayout>
+  );
+}
+
 function Router() {
   return (
     <Switch>
@@ -67,6 +76,7 @@ function Router() {
       <Route path="/error/404" component={Error404} />
       <Route path="/error/500" component={Error500} />
       <ProtectedRoute path="/contacts" component={ContactsWithLayout} />
+      <ProtectedRoute path="/attendants" component={AttendantsWithLayout} />
       <ProtectedRoute path="/" component={DashboardWithLayout} />
       <Route component={Error404} />
     </Switch>
