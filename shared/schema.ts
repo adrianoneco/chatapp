@@ -37,3 +37,19 @@ export type User = typeof users.$inferSelect;
 export type PublicUser = Omit<User, 'password'>;
 export type LoginData = z.infer<typeof loginSchema>;
 export type RegisterData = z.infer<typeof registerSchema>;
+
+export const contacts = pgTable("contacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  notes: text("notes"),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+});
+
+export const insertContactSchema = createInsertSchema(contacts).omit({
+  id: true,
+});
+
+export type InsertContact = z.infer<typeof insertContactSchema>;
+export type Contact = typeof contacts.$inferSelect;
