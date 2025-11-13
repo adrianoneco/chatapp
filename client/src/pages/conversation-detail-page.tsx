@@ -435,50 +435,91 @@ export default function ConversationDetailPage() {
 
         {/* Input de Mensagem */}
         <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-2 mb-2">
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={handleCorrectText}
-              disabled={!messageText.trim() || isCorrectingText}
-              data-testid="button-ai-correct"
-            >
-              <Sparkles className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" data-testid="button-ai-assistant">
-              <MessageSquare className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" data-testid="button-record-audio">
-              <Mic className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" data-testid="button-record-video">
-              <VideoIcon className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" data-testid="button-send-photo">
-              <Image className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" data-testid="button-send-attachment">
-              <Paperclip className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Input
+          <div className="relative flex items-end bg-muted rounded-lg p-2">
+            <Textarea
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
               placeholder="Digite uma mensagem..."
+              className="resize-none min-h-[40px] max-h-32 border-0 bg-transparent focus-visible:ring-0 pr-80"
+              rows={1}
               disabled={sendMessageMutation.isPending}
               data-testid="input-message"
             />
-            <Button
-              onClick={handleSendMessage}
-              disabled={!messageText.trim() || sendMessageMutation.isPending}
-              data-testid="button-send-message"
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Enviar
-            </Button>
+            
+            <div className="absolute right-2 bottom-2 flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleCorrectText}
+                disabled={!messageText.trim() || isCorrectingText}
+                data-testid="button-ai-correct"
+                className="h-8 w-8"
+                title="Corrigir texto com IA"
+              >
+                <Sparkles className="h-4 w-4" />
+              </Button>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                data-testid="button-ai-assistant"
+                className="h-8 w-8"
+                title="Assistente IA"
+              >
+                <MessageSquare className="h-4 w-4" />
+              </Button>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                data-testid="button-record-audio"
+                className="h-8 w-8"
+                title="Gravar áudio"
+              >
+                <Mic className="h-4 w-4" />
+              </Button>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                data-testid="button-record-video"
+                className="h-8 w-8"
+                title="Gravar vídeo"
+              >
+                <VideoIcon className="h-4 w-4" />
+              </Button>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                data-testid="button-send-photo"
+                className="h-8 w-8"
+                title="Enviar foto"
+              >
+                <Image className="h-4 w-4" />
+              </Button>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                data-testid="button-send-attachment"
+                className="h-8 w-8"
+                title="Enviar anexo"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={handleSendMessage}
+                disabled={!messageText.trim() || sendMessageMutation.isPending}
+                data-testid="button-send-message"
+                className="h-8 w-8 bg-primary text-primary-foreground hover:bg-primary/90"
+                size="icon"
+                title="Enviar mensagem"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
