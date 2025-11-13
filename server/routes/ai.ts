@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z, ZodError } from "zod";
 import { groqService } from "../services/groq";
 import { requireAuth } from "../middleware/auth";
+import { getAllVariableKeys } from "@shared/template-variables";
 
 const router = Router();
 
@@ -27,6 +28,13 @@ const assistantResponseSchema = z.object({
 const searchTemplatesSchema = z.object({
   query: z.string().min(1),
   templates: z.array(z.string()),
+});
+
+const suggestTemplateSchema = z.object({
+  title: z.string().min(1),
+  category: z.string().min(1),
+  description: z.string().optional(),
+  detectedVariables: z.array(z.string()).optional(),
 });
 
 router.post("/ai/correct-text", requireAuth, async (req, res) => {
@@ -107,6 +115,44 @@ router.post("/ai/search-templates", requireAuth, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : "Failed to search templates" 
+    });
+  }
+});
+
+router.post("/ai/suggest-template", requireAuth, async (req, res) => {
+  try {
+    const data = suggestTemplateSchema.parse(req.body);
+    
+    const variables = data.detectedVariables && data.detectedVariables.length > 0 
+      ? data.detectedVariables 
+      : getAllVariableKeys();
+    
+    const result = await groqService.generateTemplateSuggestion({
+      title: data.title,
+      category: data.category,
+      description: data.description,
+      variables,
+    });
+    
+    res.json({ 
+      success: true, 
+      suggestedContent: result.suggestedContent,
+      promptUsed: result.promptUsed,
+    });
+  } catch (error) {
+    console.error("Error suggesting template:", error);
+    
+    if (error instanceof ZodError) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Validation error",
+        details: error.errors,
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : "Failed to generate suggestion" 
     });
   }
 });

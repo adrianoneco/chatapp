@@ -41,6 +41,18 @@ export interface GroqAssistantParams {
   systemPrompt?: string;
 }
 
+export interface GroqTemplateSuggestionParams {
+  title: string;
+  category: string;
+  description?: string;
+  variables: string[];
+}
+
+export interface GroqTemplateSuggestionResult {
+  suggestedContent: string;
+  promptUsed: string;
+}
+
 async function callGroqAPI(request: GroqChatCompletionRequest): Promise<GroqChatCompletionResponse> {
   const response = await fetch(GROQ_API_URL, {
     method: "POST",
@@ -154,6 +166,53 @@ Se nenhum template for adequado, retorne uma resposta genérica profissional.`;
     });
 
     return response.choices[0]?.message?.content?.trim() || "";
+  }
+
+  async generateTemplateSuggestion(params: GroqTemplateSuggestionParams): Promise<GroqTemplateSuggestionResult> {
+    const { title, category, description, variables } = params;
+
+    const systemPrompt = `Você é um especialista em criar templates de mensagens profissionais para atendimento ao cliente em português brasileiro.
+
+Sua tarefa é criar um template de mensagem baseado nas informações fornecidas.
+
+VARIÁVEIS DISPONÍVEIS para usar no template:
+${variables.map(v => `- ${v}`).join("\n")}
+
+REGRAS IMPORTANTES:
+1. Use as variáveis disponíveis onde fizer sentido (ex: {{clientName}}, {{attendantName}}, etc)
+2. Seja profissional, cordial e natural
+3. Adapte o tom à categoria do template
+4. Mantenha o texto conciso mas completo
+5. Use linguagem brasileira (evite estrangeirismos)
+6. NÃO inclua saudações genéricas se não fizer sentido para a categoria
+7. Retorne APENAS o conteúdo do template, sem explicações ou formatação markdown
+
+FORMATO DE SAÍDA:
+Retorne apenas o texto do template usando as variáveis quando apropriado.`;
+
+    const userPrompt = `Criar template:
+Título: ${title}
+Categoria: ${category}
+${description ? `Descrição/Objetivo: ${description}` : ""}
+
+Crie um template profissional e adequado para esta situação.`;
+
+    const response = await callGroqAPI({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
+    });
+
+    const suggestedContent = response.choices[0]?.message?.content?.trim() || "";
+
+    return {
+      suggestedContent,
+      promptUsed: userPrompt,
+    };
   }
 }
 
