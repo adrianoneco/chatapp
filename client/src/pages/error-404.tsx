@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { SearchX } from "lucide-react";
 import { Link } from "wouter";
 
-export default function NotFound() {
+export default function Error404() {
   return (
     <div className="flex items-center justify-center min-h-screen p-6 bg-background">
       <div className="text-center max-w-md">
