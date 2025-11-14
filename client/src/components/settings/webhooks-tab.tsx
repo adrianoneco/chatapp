@@ -25,16 +25,7 @@ const webhookFormSchema = insertWebhookSchema.extend({
 
 type WebhookFormData = z.infer<typeof webhookFormSchema>;
 
-const AVAILABLE_EVENTS = [
-  { id: "message.created", label: "Mensagem Criada", route: "/api/messages" },
-  { id: "message.updated", label: "Mensagem Atualizada", route: "/api/messages" },
-  { id: "conversation.created", label: "Conversa Criada", route: "/api/conversations" },
-  { id: "conversation.updated", label: "Conversa Atualizada", route: "/api/conversations" },
-  { id: "conversation.closed", label: "Conversa Fechada", route: "/api/conversations" },
-  { id: "conversation.transferred", label: "Conversa Transferida", route: "/api/conversations" },
-  { id: "call.started", label: "Chamada Iniciada", route: "/api/calls" },
-  { id: "call.ended", label: "Chamada Finalizada", route: "/api/calls" },
-];
+// AVAILABLE_EVENTS will be loaded from the server triggers table
 
 export function WebHooksTab() {
   const { toast } = useToast();
@@ -62,6 +53,14 @@ export function WebHooksTab() {
 
   const { data: webhooks = [], isLoading } = useQuery<Webhook[]>({
     queryKey: ["/api/webhooks"],
+  });
+
+  const { data: availableEvents = [] } = useQuery<any[]>({
+    queryKey: ["/api/triggers"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/triggers");
+      return await res.json();
+    },
   });
 
   const createMutation = useMutation({
@@ -126,8 +125,8 @@ export function WebHooksTab() {
     },
     onSuccess: (data) => {
       setTestResult(data);
-      toast({ 
-        title: data.success ? "Teste bem-sucedido" : "Teste falhou", 
+      toast({
+        title: data.success ? "Teste bem-sucedido" : "Teste falhou",
         description: `Status: ${data.status} - Tempo: ${data.duration}ms`,
         variant: data.success ? "default" : "destructive",
       });
@@ -147,13 +146,13 @@ export function WebHooksTab() {
       const endpoint = type === "key" ? "/api/webhooks/generate-key" : "/api/webhooks/generate-jwt";
       const response = await apiRequest("POST", endpoint);
       const data = await response.json();
-      
+
       const token = type === "key" ? data.key : data.token;
       form.setValue("authPayload", { token });
-      
-      toast({ 
-        title: `${type === "key" ? "API Key" : "JWT"} gerado`, 
-        description: "Token copiado para o campo de autenticação" 
+
+      toast({
+        title: `${type === "key" ? "API Key" : "JWT"} gerado`,
+        description: "Token copiado para o campo de autenticação"
       });
     } catch (error) {
       toast({
@@ -217,7 +216,7 @@ export function WebHooksTab() {
         headers: webhook.headers || {},
         isActive: webhook.isActive,
       });
-      
+
       const headersArray = Object.entries(webhook.headers || {}).map(([key, value]) => ({ key, value }));
       setHeaders(headersArray.length > 0 ? headersArray : [{ key: "", value: "" }]);
       setSelectedEvents(webhook.events || []);
@@ -293,7 +292,7 @@ export function WebHooksTab() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="targetUrl"
@@ -392,7 +391,15 @@ export function WebHooksTab() {
                               <FormLabel>Bearer Token</FormLabel>
                               <div className="flex gap-2">
                                 <FormControl>
-                                  <Input {...field} placeholder="Token" data-testid="input-bearer-token" />
+                                  <Input
+                                    name={field.name}
+                                    onChange={field.onChange}
+                                    onBlur={field.onBlur}
+                                    ref={field.ref}
+                                    value={String(field.value ?? '')}
+                                    placeholder="Token"
+                                    data-testid="input-bearer-token"
+                                  />
                                 </FormControl>
                                 <Button
                                   type="button"
@@ -423,7 +430,15 @@ export function WebHooksTab() {
                               <FormLabel>API Key</FormLabel>
                               <div className="flex gap-2">
                                 <FormControl>
-                                  <Input {...field} placeholder="Chave da API" data-testid="input-api-key" />
+                                  <Input
+                                    name={field.name}
+                                    onChange={field.onChange}
+                                    onBlur={field.onBlur}
+                                    ref={field.ref}
+                                    value={String(field.value ?? '')}
+                                    placeholder="Chave da API"
+                                    data-testid="input-api-key"
+                                  />
                                 </FormControl>
                                 <Button
                                   type="button"
@@ -453,7 +468,15 @@ export function WebHooksTab() {
                             <FormItem>
                               <FormLabel>Username</FormLabel>
                               <FormControl>
-                                <Input {...field} placeholder="Usuário" data-testid="input-basic-username" />
+                                <Input
+                                  name={field.name}
+                                  onChange={field.onChange}
+                                  onBlur={field.onBlur}
+                                  ref={field.ref}
+                                  value={String(field.value ?? '')}
+                                  placeholder="Usuário"
+                                  data-testid="input-basic-username"
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -466,7 +489,16 @@ export function WebHooksTab() {
                             <FormItem>
                               <FormLabel>Password</FormLabel>
                               <FormControl>
-                                <Input {...field} type="password" placeholder="Senha" data-testid="input-basic-password" />
+                                <Input
+                                  name={field.name}
+                                  onChange={field.onChange}
+                                  onBlur={field.onBlur}
+                                  ref={field.ref}
+                                  value={String(field.value ?? '')}
+                                  type="password"
+                                  placeholder="Senha"
+                                  data-testid="input-basic-password"
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -480,26 +512,72 @@ export function WebHooksTab() {
 
                   <div className="space-y-4">
                     <h4 className="text-sm font-medium">Eventos</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      {AVAILABLE_EVENTS.map((event) => (
-                        <div key={event.id} className="flex items-start space-x-2">
-                          <Checkbox
-                            id={event.id}
-                            checked={selectedEvents.includes(event.id)}
-                            onCheckedChange={(checked) => handleEventToggle(event.id, !!checked)}
-                            data-testid={`checkbox-event-${event.id}`}
-                          />
-                          <div className="grid gap-0.5">
-                            <label
-                              htmlFor={event.id}
-                              className="text-sm font-medium leading-none cursor-pointer"
-                            >
-                              {event.label}
-                            </label>
-                            <p className="text-xs text-muted-foreground">{event.route}</p>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="space-y-4">
+                      {(() => {
+                        // group events by groupName
+                        const groups: Record<string, any[]> = {};
+                        for (const ev of availableEvents) {
+                          const g = ev.groupName || ev.group || 'Default';
+                          groups[g] = groups[g] || [];
+                          groups[g].push(ev);
+                        }
+
+                        return Object.entries(groups).map(([groupName, events]) => {
+                          const allSelected = events.every((e: any) => selectedEvents.includes(e.event || e.id));
+                          const anySelected = events.some((e: any) => selectedEvents.includes(e.event || e.id));
+                          const toggleGroup = (checked: boolean) => {
+                            const ids = events.map((e: any) => e.event || e.id);
+                            let next = [...selectedEvents];
+                            if (checked) {
+                              for (const id of ids) if (!next.includes(id)) next.push(id);
+                            } else {
+                              next = next.filter((i) => !ids.includes(i));
+                            }
+                            setSelectedEvents(next);
+                            form.setValue('events', next);
+                          };
+
+                          return (
+                            <div key={groupName} className="border rounded p-2">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <Checkbox checked={allSelected} {...({ indeterminate: !allSelected && anySelected } as any)} onCheckedChange={(c) => toggleGroup(!!c)} />
+                                  <div className="font-medium">{groupName}</div>
+                                  <Button type="button" variant="ghost" size="sm" className="ml-2 text-xs" onClick={() => toggleGroup(!allSelected)}>
+                                    (Marcar ou Desmarcar) Todos
+                                  </Button>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                {events.map((ev: any) => {
+                                  const id = ev.event || ev.id;
+                                  const label = ev.description || ev.event || ev.id;
+                                  const route = ev.route || "";
+                                  return (
+                                    <div key={id} className="flex items-start space-x-2">
+                                      <Checkbox
+                                        id={id}
+                                        checked={selectedEvents.includes(id)}
+                                        onCheckedChange={(checked) => handleEventToggle(id, !!checked)}
+                                        data-testid={`checkbox-event-${id}`}
+                                      />
+                                      <div className="grid gap-0.5">
+                                        <label
+                                          htmlFor={id}
+                                          className="text-sm font-medium leading-none cursor-pointer"
+                                        >
+                                          {label}
+                                        </label>
+                                        <p className="text-xs text-muted-foreground">{route}</p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
 
@@ -561,10 +639,10 @@ export function WebHooksTab() {
               <Button type="button" variant="outline" onClick={handleCloseDialog}>
                 Cancelar
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 onClick={handleSubmit}
-                disabled={createMutation.isPending || updateMutation.isPending} 
+                disabled={createMutation.isPending || updateMutation.isPending}
                 data-testid="button-save-webhook"
               >
                 {editingWebhook ? "Atualizar" : "Criar"}

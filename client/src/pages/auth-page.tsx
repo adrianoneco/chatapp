@@ -100,7 +100,11 @@ export default function AuthPage() {
                               <div className="relative">
                                 <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
-                                  {...field}
+                                  name={field.name}
+                                  onChange={field.onChange}
+                                  onBlur={field.onBlur}
+                                  ref={field.ref}
+                                  value={String(field.value ?? '')}
                                   placeholder="Digite seu usuário"
                                   className="h-12 pl-10"
                                   data-testid="input-username"
@@ -122,7 +126,11 @@ export default function AuthPage() {
                               <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
-                                  {...field}
+                                  name={field.name}
+                                  onChange={field.onChange}
+                                  onBlur={field.onBlur}
+                                  ref={field.ref}
+                                  value={String(field.value ?? '')}
                                   type="password"
                                   placeholder="Digite sua senha"
                                   className="h-12 pl-10"
@@ -175,7 +183,11 @@ export default function AuthPage() {
                             <FormLabel>Nome Completo</FormLabel>
                             <FormControl>
                               <Input
-                                {...field}
+                                name={field.name}
+                                onChange={field.onChange}
+                                onBlur={field.onBlur}
+                                ref={field.ref}
+                                value={String(field.value ?? '')}
                                 placeholder="Digite seu nome"
                                 className="h-12"
                                 data-testid="input-name"
@@ -196,7 +208,11 @@ export default function AuthPage() {
                               <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
-                                  {...field}
+                                  name={field.name}
+                                  onChange={field.onChange}
+                                  onBlur={field.onBlur}
+                                  ref={field.ref}
+                                  value={String(field.value ?? '')}
                                   type="email"
                                   placeholder="Digite seu e-mail"
                                   className="h-12 pl-10"
@@ -219,7 +235,11 @@ export default function AuthPage() {
                               <div className="relative">
                                 <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
-                                  {...field}
+                                  name={field.name}
+                                  onChange={field.onChange}
+                                  onBlur={field.onBlur}
+                                  ref={field.ref}
+                                  value={String(field.value ?? '')}
                                   placeholder="Escolha um usuário"
                                   className="h-12 pl-10"
                                   data-testid="input-register-username"
@@ -241,7 +261,11 @@ export default function AuthPage() {
                               <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
-                                  {...field}
+                                  name={field.name}
+                                  onChange={field.onChange}
+                                  onBlur={field.onBlur}
+                                  ref={field.ref}
+                                  value={String(field.value ?? '')}
                                   type="password"
                                   placeholder="Crie uma senha"
                                   className="h-12 pl-10"
@@ -264,7 +288,11 @@ export default function AuthPage() {
                               <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
-                                  {...field}
+                                  name={field.name}
+                                  onChange={field.onChange}
+                                  onBlur={field.onBlur}
+                                  ref={field.ref}
+                                  value={String(field.value ?? '')}
                                   type="password"
                                   placeholder="Confirme sua senha"
                                   className="h-12 pl-10"

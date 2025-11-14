@@ -261,9 +261,9 @@ export default function ConversationDetailPage() {
 
   const handleSendFiles = async (files: File[]) => {
     if (!user) return;
-    
+
     const fileType = files[0].type.startsWith("image/") ? "image" : "file";
-    
+
     toast({
       title: `Enviando ${fileType === "image" ? "imagem(ns)" : "arquivo(s)"}`,
       description: `${files.length} ${files.length === 1 ? "arquivo" : "arquivos"} sendo enviado(s)...`,
@@ -543,29 +543,72 @@ export default function ConversationDetailPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}
-                  data-testid={`message-${message.id}`}
-                >
+              {messages.map((message) => {
+                const isDeleted = message.status === 'deleted' || false;
+                const hasReply = !!message.replyToId;
+                const isForwarded = !!message.forwardedFromId;
+                const reactions = Array.isArray(message.reactions) ? message.reactions : [];
+                const hasReactions = reactions.length > 0;
+
+                return (
                   <div
-                    className={`max-w-xs lg:max-w-md xl:max-w-lg px-4 py-2 rounded-lg ${
-                      message.direction === "outbound"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted"
-                    }`}
+                    key={message.id}
+                    className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}
+                    data-testid={`message-${message.id}`}
                   >
-                    <p className="text-sm">{message.content.text}</p>
-                    <div className="flex items-center justify-end gap-1 mt-1">
-                      <span className="text-xs opacity-70">{formatTime(message.createdAt)}</span>
-                      {message.direction === "outbound" && (
-                        <Check className="h-3 w-3 opacity-70" />
-                      )}
+                    <div className="flex items-start gap-2">
+                      <div className="flex flex-col items-center mt-1">
+                        {isDeleted && <span className="w-2 h-2 rounded-full bg-red-600" title="Mensagem apagada" />}
+                        {!isDeleted && hasReply && <span className="w-2 h-2 rounded-full bg-green-600 mt-1" title="Mensagem respondida" />}
+                        {!isDeleted && isForwarded && <span className="w-2 h-2 rounded-full bg-yellow-400 mt-1" title="Mensagem encaminhada" />}
+                        {!isDeleted && hasReactions && <span className="w-2 h-2 rounded-full bg-violet-600 mt-1" title="Reações" />}
+                      </div>
+
+                      <div
+                        className={`max-w-xs lg:max-w-md xl:max-w-lg px-4 py-2 rounded-lg ${message.direction === "outbound"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted"
+                          } ${isDeleted ? 'border border-red-600/60' : ''}`}
+                      >
+                        {isDeleted ? (
+                          isAttendant ? (
+                            <>
+                              <div className="mb-2 p-2 rounded flex items-start gap-3 bg-red-50 border border-red-100">
+                                <div className="w-1 rounded-full bg-red-600 mt-1" />
+                                <div className="flex-1 text-sm text-red-700"><strong>Esta mensagem foi apagada</strong></div>
+                              </div>
+                              <p className="text-sm">{message.content?.text || (message.content?.caption ?? '')}</p>
+                            </>
+                          ) : (
+                            <div className={`p-3 rounded bg-muted/70 text-muted-foreground`}>
+                              <em>Mensagem apagada</em>
+                              <div className="text-xs mt-1 opacity-80">{formatTime(message.createdAt)}</div>
+                            </div>
+                          )
+                        ) : (
+                          <>
+                            <p className="text-sm">{message.content?.text || (message.content?.caption ?? '')}</p>
+                            {hasReactions && (
+                              <div className="mt-2 flex items-center gap-2 text-sm">
+                                {reactions.map((r: any, idx: number) => (
+                                  <span key={idx} className="text-sm text-violet-600">{r.emoji}</span>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        <div className="flex items-center justify-end gap-1 mt-1">
+                          <span className="text-xs opacity-70">{formatTime(message.createdAt)}</span>
+                          {message.direction === "outbound" && (
+                            <Check className="h-3 w-3 opacity-70" />
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </ScrollArea>
@@ -588,7 +631,7 @@ export default function ConversationDetailPage() {
               disabled={sendMessageMutation.isPending}
               data-testid="input-message"
             />
-            
+
             <div className="absolute right-2 bottom-2 flex items-center gap-1">
               <Button
                 size="icon"
@@ -601,9 +644,9 @@ export default function ConversationDetailPage() {
               >
                 <Sparkles className="h-4 w-4" />
               </Button>
-              <Button 
-                size="icon" 
-                variant="ghost" 
+              <Button
+                size="icon"
+                variant="ghost"
                 onClick={handleAIAssistant}
                 data-testid="button-ai-assistant"
                 className="h-8 w-8"
@@ -611,9 +654,9 @@ export default function ConversationDetailPage() {
               >
                 <MessageSquare className="h-4 w-4" />
               </Button>
-              <Button 
-                size="icon" 
-                variant="ghost" 
+              <Button
+                size="icon"
+                variant="ghost"
                 onClick={handleRecordAudio}
                 data-testid="button-record-audio"
                 className="h-8 w-8"
@@ -621,9 +664,9 @@ export default function ConversationDetailPage() {
               >
                 <Mic className="h-4 w-4" />
               </Button>
-              <Button 
-                size="icon" 
-                variant="ghost" 
+              <Button
+                size="icon"
+                variant="ghost"
                 onClick={handleRecordVideo}
                 data-testid="button-record-video"
                 className="h-8 w-8"
@@ -631,9 +674,9 @@ export default function ConversationDetailPage() {
               >
                 <VideoIcon className="h-4 w-4" />
               </Button>
-              <Button 
-                size="icon" 
-                variant="ghost" 
+              <Button
+                size="icon"
+                variant="ghost"
                 onClick={handleSendPhoto}
                 data-testid="button-send-photo"
                 className="h-8 w-8"
@@ -641,9 +684,9 @@ export default function ConversationDetailPage() {
               >
                 <Image className="h-4 w-4" />
               </Button>
-              <Button 
-                size="icon" 
-                variant="ghost" 
+              <Button
+                size="icon"
+                variant="ghost"
                 onClick={handleSendAttachment}
                 data-testid="button-send-attachment"
                 className="h-8 w-8"

@@ -3,11 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import type { Conversation, User } from "@shared/schema";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { getDate, getTime } from "@shared/datetime";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/user-avatar";
-import { MessageSquare, Plus, Search } from "lucide-react";
+import { MessageSquare, Plus, Search, MoreVertical } from "lucide-react";
+import ConversationActionsMenu from "@/components/conversation-actions-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/use-websocket";
 
@@ -37,44 +39,24 @@ export function ConversationList({ selectedId, onNewConversation }: Conversation
 
   const formatConversationTime = (date: string | Date | null) => {
     if (!date) return "";
-    
-    const messageDate = new Date(date);
-    const now = new Date();
-    
-    const spFormatter = new Intl.DateTimeFormat('pt-BR', {
-      timeZone: 'America/Sao_Paulo',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-    
-    const messageDateStr = spFormatter.format(messageDate).split(',')[0];
-    const todayStr = spFormatter.format(now).split(',')[0];
-    
-    if (messageDateStr === todayStr) {
-      return new Date(date).toLocaleTimeString('pt-BR', { 
-        timeZone: 'America/Sao_Paulo',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+    try {
+      const d = typeof date === 'string' ? new Date(date) : date;
+      const now = new Date();
+      const dDate = getDate(d);
+      const nowDate = getDate(now);
+      if (dDate === nowDate) return getTime(d);
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (dDate === getDate(yesterday)) return "Ontem";
+      return dDate;
+    } catch (e) {
+      return "";
     }
-    
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = spFormatter.format(yesterday).split(',')[0];
-    
-    if (messageDateStr === yesterdayStr) {
-      return "Ontem";
-    }
-    
-    return messageDateStr;
   };
 
   const filteredConversations = conversations.filter((conv) => {
     // Filter by status tab
-    const statusMatch = 
+    const statusMatch =
       (activeTab === "pending" && conv.status === "pending") ||
       (activeTab === "attending" && (conv.status === "open" || conv.status === "pending")) ||
       (activeTab === "closed" && (conv.status === "resolved" || conv.status === "closed"));
@@ -83,11 +65,11 @@ export function ConversationList({ selectedId, onNewConversation }: Conversation
 
     // Filter by search query
     if (!searchQuery.trim()) return true;
-    
+
     const query = searchQuery.toLowerCase();
     const contactName = getUserById(conv.customerContactId)?.name?.toLowerCase() || "";
     const externalId = conv.externalContactId?.toLowerCase() || "";
-    
+
     return contactName.includes(query) || externalId.includes(query);
   });
 
@@ -155,7 +137,7 @@ export function ConversationList({ selectedId, onNewConversation }: Conversation
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-border border-b border-border">
+          <div>
             {filteredConversations.map((conversation) => {
               const contact = getUserById(conversation.customerContactId);
               const isOnline = contact ? onlineUsers.has(contact.id) : false;
@@ -167,11 +149,10 @@ export function ConversationList({ selectedId, onNewConversation }: Conversation
                   href={`/conversations/${conversation.channelId}/${conversation.id}`}
                 >
                   <button
-                    className={`w-full p-4 text-left transition-colors hover-elevate active-elevate-2 ${
-                      selectedId === conversation.id
-                        ? "bg-accent"
+                    className={`w-full p-4 text-left transition-colors hover-elevate active-elevate-2 flex items-center ${selectedId === conversation.id
+                        ? "bg-accent border-l-4 border-primary"
                         : ""
-                    }`}
+                      }`}
                     data-testid={`conversation-item-${conversation.id}`}
                   >
                     <div className="flex items-start gap-3">
@@ -196,6 +177,16 @@ export function ConversationList({ selectedId, onNewConversation }: Conversation
                           {conversation.status === "resolved" && "Resolvida"}
                           {conversation.status === "closed" && "Encerrada"}
                         </p>
+                      </div>
+                    </div>
+                    <div className="ml-2 flex items-center gap-1">
+                      <div className="ml-2 flex items-center gap-1">
+                        {/* conversation actions menu (replicated from header) */}
+                        <ConversationActionsMenu
+                          conversationId={conversation.id}
+                          conversationStatus={conversation.status}
+                          isAttendant={user?.role === 'attendant' || user?.role === 'admin'}
+                        />
                       </div>
                     </div>
                   </button>

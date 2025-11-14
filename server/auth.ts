@@ -3,12 +3,13 @@ import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
 import session from "express-session";
 import { storage } from "./storage";
-import { User } from "@shared/schema";
+import type { User as SharedUser } from "@shared/schema";
 import { hashPassword, comparePasswords } from "./utils/auth";
 
 declare global {
   namespace Express {
-    interface User extends User {}
+    // extend Express.User with our shared User type
+    interface User extends SharedUser {}
   }
 }
 
@@ -41,7 +42,7 @@ export function setupAuth(app: Express) {
     new LocalStrategy(async (username, password, done) => {
       try {
         const user = await storage.getUserByUsername(username);
-        if (!user || !(await comparePasswords(password, user.password))) {
+        if (!user || !user.password || !(await comparePasswords(password, user.password))) {
           return done(null, false, { message: "Invalid username or password" });
         }
         return done(null, user);

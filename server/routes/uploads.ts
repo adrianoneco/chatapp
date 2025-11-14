@@ -1,3 +1,6 @@
+// @triggers.group: Uploads
+// @triggers.event: upload.created | Upload criado
+// @triggers.event: upload.updated | Upload atualizado
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../middleware/auth";
 import { writeFile, mkdir } from "fs/promises";
@@ -30,14 +33,17 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
     // If multipart/form-data, parse with Busboy. Otherwise, fallback to raw-body handling.
     if (contentType.startsWith("multipart/form-data")) {
       let BusboyModule: any;
-      try {
-        BusboyModule = (await import("busboy")).default || (await import("busboy"));
-      } catch (err) {
-        console.error("Busboy not available:", err);
-        return res.status(500).json({ error: "Server missing 'busboy' dependency. Run 'npm install busboy' to enable multipart uploads." });
-      }
+          try {
+            // dynamic import casted to any to avoid missing types in some environments
+            // @ts-ignore - busboy may be optional in some environments
+            BusboyModule = (await import("busboy") as any).default || (await import("busboy") as any);
+          } catch (err) {
+            const e = err as any;
+            console.error("Busboy not available:", e?.message || e);
+            return res.status(500).json({ error: "Server missing 'busboy' dependency. Run 'npm install busboy' to enable multipart uploads." });
+          }
 
-      const bb = new BusboyModule({ headers: req.headers });
+  const bb = new BusboyModule({ headers: req.headers });
       let responded = false;
 
       bb.on("file", async (fieldname: string, file: NodeJS.ReadableStream, filename: string, encoding: string, mimetype: string) => {
@@ -118,7 +124,8 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
         }
       });
 
-      req.pipe(bb as unknown as NodeJS.ReadableStream);
+  // pipe into busboy; cast to any to avoid runtime typing issues across environments
+  req.pipe(bb as any);
       return;
     }
 

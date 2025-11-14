@@ -22,7 +22,8 @@ router.post("/webhooks", requireAuth, requireRole("admin"), async (req, res) => 
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.message });
     }
-    const webhook = await storage.createWebhook(parsed.data, req.user!.id);
+  const userId = (req.user as any)?.id || null;
+  const webhook = await storage.createWebhook(parsed.data, userId);
     res.status(201).json(webhook);
   } catch (error) {
     console.error("[routes] POST /api/webhooks error:", error);

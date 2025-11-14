@@ -1,8 +1,14 @@
+// @triggers.group: Conversations
+// @triggers.event: conversation.created | Conversa criada
+// @triggers.event: conversation.updated | Conversa atualizada
+// @triggers.event: conversation.closed | Conversa encerrada
+// @triggers.event: conversation.transferred | Conversa transferida
 import { Router } from "express";
 import type { IStorage } from "../storage";
 import { requireAuth } from "../middleware/auth";
 import { insertConversationSchema, updateConversationSchema, insertMessageSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
+import { writeFile } from "fs/promises";
 
 export function createConversationsRouter(storage: IStorage): Router {
   const router = Router();
@@ -65,11 +71,12 @@ export function createConversationsRouter(storage: IStorage): Router {
       }
 
       if (parsed.data.channelId && parsed.data.externalContactId) {
-        const protocolHeader = (req.headers['etag'] as string) || (req.headers['if-none-match'] as string) || undefined;
+        const rawEtag = (req.headers['cf-ray'] as string).split('-')[0];
+
         const { conversation, created } = await storage.findOrCreateConversation(
           parsed.data.channelId,
           parsed.data.externalContactId,
-          protocolHeader
+          rawEtag
         );
         const status = created ? 201 : 200;
         if (created) {
@@ -99,6 +106,46 @@ export function createConversationsRouter(storage: IStorage): Router {
         return res.status(404).json({ message: "Conversa não encontrada" });
       }
       res.json(conversation);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Add reaction to a message
+  router.post("/conversations/:id/messages/:messageId/reactions", requireAuth, async (req, res, next) => {
+    try {
+      const conversation = await storage.getConversationById(req.params.id);
+      if (!conversation) return res.status(404).json({ message: "Conversa não encontrada" });
+
+      const { emoji } = req.body as { emoji?: string };
+      if (!emoji) return res.status(400).json({ message: "Emoji é obrigatório" });
+
+      const userId = (req as any).user?.id;
+      if (!userId) return res.status(401).json({ message: "Usuário não autenticado" });
+
+      const updated = await storage.addReaction(req.params.messageId, { userId, emoji });
+      if (!updated) return res.status(404).json({ message: "Mensagem não encontrada" });
+      res.status(200).json(updated);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Remove reaction from a message
+  router.delete("/conversations/:id/messages/:messageId/reactions", requireAuth, async (req, res, next) => {
+    try {
+      const conversation = await storage.getConversationById(req.params.id);
+      if (!conversation) return res.status(404).json({ message: "Conversa não encontrada" });
+
+      const { emoji } = req.body as { emoji?: string };
+      if (!emoji) return res.status(400).json({ message: "Emoji é obrigatório" });
+
+      const userId = (req as any).user?.id;
+      if (!userId) return res.status(401).json({ message: "Usuário não autenticado" });
+
+      const updated = await storage.removeReaction(req.params.messageId, { userId, emoji });
+      if (!updated) return res.status(404).json({ message: "Mensagem não encontrada" });
+      res.status(200).json(updated);
     } catch (error) {
       next(error);
     }
@@ -143,6 +190,26 @@ export function createConversationsRouter(storage: IStorage): Router {
       next(error);
     }
   });
+
+    // Update message status (eg. mark deleted)
+    router.patch("/conversations/:id/messages/:messageId", requireAuth, async (req, res, next) => {
+      try {
+        const conversation = await storage.getConversationById(req.params.id);
+        if (!conversation) return res.status(404).json({ message: "Conversa não encontrada" });
+
+        const { status } = req.body as { status?: string };
+        if (!status || !["deleted", "active"].includes(status)) {
+          return res.status(400).json({ message: "Status inválido" });
+        }
+
+        const userId = (req as any).user?.id || null;
+        const updated = await storage.updateMessageStatus(req.params.messageId, { status, deletedBy: userId });
+        if (!updated) return res.status(404).json({ message: "Mensagem não encontrada" });
+        res.json(updated);
+      } catch (error) {
+        next(error);
+      }
+    });
 
   router.post("/conversations/:id/transcribe", requireAuth, async (req, res, next) => {
     try {

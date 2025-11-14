@@ -204,6 +204,8 @@ export const messages = pgTable("messages", {
   externalId: text("external_id"),
   replyToId: varchar("reply_to_id"),
   forwardedFromId: varchar("forwarded_from_id"),
+  status: text("status", { enum: ["active", "deleted"] }).notNull().default("active"),
+  deletedBy: varchar("deleted_by").references(() => users.id, { onDelete: "set null" }),
   reactions: jsonb("reactions").$type<Array<{ userId: string; emoji: string }>>().default(sql`'[]'::jsonb`),
   isPrivate: boolean("is_private").notNull().default(false),
   deliveredAt: timestamp("delivered_at"),
@@ -240,7 +242,18 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
 }).extend({
   content: z.object({
     text: z.string().optional(),
-    mediaUrl: z.string().url().optional(),
+    mediaUrl: z.string().optional().refine((v) => {
+      if (!v) return true;
+      try {
+        // accept absolute http/https urls
+        // new URL will throw for relative paths like '/uploads/..'
+        // so treat those as valid as well (server returns /uploads/...)
+        new URL(v);
+        return true;
+      } catch (_) {
+        return typeof v === 'string' && (v.startsWith('/') || v.startsWith('blob:'));
+      }
+    }, { message: 'Invalid url at "content.mediaUrl"' }),
     caption: z.string().optional(),
   }),
   replyToId: z.string().uuid().optional(),
@@ -379,3 +392,18 @@ export const insertCallSchema = createInsertSchema(calls).omit({
 
 export type Call = typeof calls.$inferSelect;
 export type InsertCall = z.infer<typeof insertCallSchema>;
+
+// Triggers / Events registry
+export const triggersEvents = pgTable("triggers_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  route: text("route").notNull(),
+  event: text("event").notNull(),
+  description: text("description"),
+  groupName: text("group_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTriggerEventSchema = createInsertSchema(triggersEvents).omit({ id: true, createdAt: true });
+
+export type TriggerEvent = typeof triggersEvents.$inferSelect;
+export type InsertTriggerEvent = z.infer<typeof insertTriggerEventSchema>;

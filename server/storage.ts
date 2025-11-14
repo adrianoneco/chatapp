@@ -56,7 +56,10 @@ export interface IStorage {
   
   getMessages(conversationId: string, limit?: number): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
+  updateMessageStatus(id: string, updates: { status?: string; deletedBy?: string | null }): Promise<Message | undefined>;
   findMessageByExternalId(externalId: string): Promise<Message | undefined>;
+  addReaction(messageId: string, reaction: { userId: string; emoji: string }): Promise<Message | undefined>;
+  removeReaction(messageId: string, reaction: { userId: string; emoji: string }): Promise<Message | undefined>;
   
   getResponseTemplates(userId: string): Promise<ResponseTemplate[]>;
   getResponseTemplateById(id: string, userId: string): Promise<ResponseTemplate | undefined>;
@@ -377,7 +380,8 @@ export class DatabaseStorage implements IStorage {
       // Fire conversation.created webhook
       await dispatchWebhookEvent("conversation.created", conversation);
     } catch (err) {
-      console.error("[storage] error dispatching conversation.created", err?.message || err);
+      const e = err as any;
+      console.error("[storage] error dispatching conversation.created", e?.message || e);
     }
     return conversation;
   }
@@ -398,7 +402,8 @@ export class DatabaseStorage implements IStorage {
           await dispatchWebhookEvent("conversation.closed", conversation);
         }
       } catch (err) {
-        console.error("[storage] error dispatching conversation events:", err?.message || err);
+        const e = err as any;
+        console.error("[storage] error dispatching conversation events:", e?.message || e);
       }
     }
     return conversation || undefined;
@@ -450,7 +455,7 @@ export class DatabaseStorage implements IStorage {
       channelId: row.channel_id,
       customerContactId: row.customer_contact_id,
       externalContactId: row.external_contact_id,
-      protocol: row.protocol || undefined,
+      protocol: row.protocol || null,
       createdBy: row.created_by,
       assignedTo: row.assigned_to,
       status: row.status,
@@ -463,7 +468,8 @@ export class DatabaseStorage implements IStorage {
       try {
         await dispatchWebhookEvent("conversation.created", conversation);
       } catch (err) {
-        console.error("[storage] error dispatching conversation.created (findOrCreate):", err?.message || err);
+        const e = err as any;
+        console.error("[storage] error dispatching conversation.created (findOrCreate):", e?.message || e);
       }
     }
 
@@ -513,10 +519,94 @@ export class DatabaseStorage implements IStorage {
       // Fire message.created webhook
       await dispatchWebhookEvent("message.created", { message, conversationId: insertMessage.conversationId });
     } catch (err) {
-      console.error("[storage] error dispatching message.created", err?.message || err);
+      const e = err as any;
+      console.error("[storage] error dispatching message.created", e?.message || e);
     }
 
     return message;
+  }
+
+  async updateMessageStatus(id: string, updates: { status?: string; deletedBy?: string | null }): Promise<Message | undefined> {
+    try {
+      const [updated] = await db
+        .update(messages)
+        .set({ status: updates.status as any, deletedBy: updates.deletedBy ?? null })
+        .where(eq(messages.id, id))
+        .returning();
+
+      if (!updated) return undefined;
+
+      try {
+        await dispatchWebhookEvent("message.updated", { message: updated, conversationId: updated.conversationId });
+      } catch (err) {
+        const e = err as any;
+        console.error("[storage] error dispatching message.updated", e?.message || e);
+      }
+
+      return updated;
+    } catch (err) {
+      const e = err as any;
+      console.error("[storage] updateMessageStatus error:", e?.message || e);
+      throw err;
+    }
+  }
+
+  async addReaction(messageId: string, reaction: { userId: string; emoji: string }): Promise<Message | undefined> {
+    try {
+      // push reaction into reactions jsonb array
+      const [updated] = await db
+        .update(messages)
+        .set({ reactions: sql`(COALESCE(${messages.reactions}, '[]'::jsonb) || ${JSON.stringify([reaction])}::jsonb)` as any })
+        .where(eq(messages.id, messageId))
+        .returning();
+
+      if (!updated) return undefined;
+
+      try {
+        await dispatchWebhookEvent("message.updated", { message: updated, conversationId: updated.conversationId });
+      } catch (err) {
+        const e = err as any;
+        console.error("[storage] error dispatching message.updated (reactions):", e?.message || e);
+      }
+
+      return updated;
+    } catch (err) {
+      const e = err as any;
+      console.error("[storage] addReaction error:", e?.message || e);
+      throw err;
+    }
+  }
+
+  async removeReaction(messageId: string, reaction: { userId: string; emoji: string }): Promise<Message | undefined> {
+    try {
+      // remove one matching reaction from array
+      // fetch current reactions
+      const [msg] = await db.select().from(messages).where(eq(messages.id, messageId)).limit(1);
+      if (!msg) return undefined;
+      const current = (msg.reactions || []) as Array<{ userId: string; emoji: string }>;
+      const idx = current.findIndex((r) => r.userId === reaction.userId && r.emoji === reaction.emoji);
+      if (idx === -1) return msg;
+      current.splice(idx, 1);
+
+      const [updated] = await db
+        .update(messages)
+        .set({ reactions: current as any })
+        .where(eq(messages.id, messageId))
+        .returning();
+
+      try {
+        await dispatchWebhookEvent("message.updated", { message: updated, conversationId: updated.conversationId });
+      } catch (err) {
+        const e = err as any;
+        console.error("[storage] error dispatching message.updated (remove reaction):", e?.message || e);
+      }
+
+      return updated;
+    } catch (err) {
+      const e = err as any;
+      console.error("[storage] removeReaction error:", e?.message || e);
+      throw err;
+    }
   }
 
   async findMessageByExternalId(externalId: string): Promise<Message | undefined> {
