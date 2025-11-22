@@ -64,6 +64,41 @@ const attachmentUpload = multer({
     },
   }),
   limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = [
+      // Images
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+      // Videos
+      'video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo', 'video/webm',
+      // Audio
+      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/aac',
+      // Documents
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/plain',
+      'text/csv',
+      // Archives
+      'application/zip',
+      'application/x-rar-compressed',
+      'application/x-7z-compressed',
+    ];
+    
+    const allowedExtensions = /\.(jpe?g|png|gif|webp|svg|mp4|mpeg|mov|avi|webm|mp3|wav|ogg|aac|pdf|docx?|xlsx?|pptx?|txt|csv|zip|rar|7z)$/i;
+    
+    const mimetypeValid = allowedMimeTypes.includes(file.mimetype);
+    const extnameValid = allowedExtensions.test(path.extname(file.originalname).toLowerCase());
+    
+    if (mimetypeValid && extnameValid) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Tipo de arquivo não permitido. Apenas imagens, vídeos, áudios, documentos e arquivos compactados são aceitos.`));
+    }
+  },
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {

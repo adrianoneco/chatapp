@@ -63,6 +63,7 @@ import {
   Forward,
   Smile,
   ChevronDown,
+  File as FileIcon,
 } from "lucide-react";
 import * as Icons from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -76,6 +77,16 @@ import { getRelativeDate, getTime, getDateDivider, isSameDay } from "@/lib/date-
 import { NewConversationDialog } from "@/components/new-conversation-dialog";
 import { useRoute, useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
+import { AudioPlayer } from "@/components/ui/audio-player";
+import { VideoPlayer } from "@/components/ui/video-player";
+import { MediaViewer, AttachmentThumbnail } from "@/components/ui/media-viewer";
+import { AttachmentUpload } from "@/components/attachment-upload";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Online Status Indicator Component
 function OnlineStatusIndicator({ isOnline }: { isOnline: boolean }) {
@@ -172,6 +183,10 @@ export default function Conversations() {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [hoveredMessageId, setHoveredMessageId] = useState<number | null>(null);
   const [sidebarSize, setSidebarSize] = useState(25);
+  const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
+  const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [mediaViewerOpen, setMediaViewerOpen] = useState(false);
+  const [viewerMedia, setViewerMedia] = useState<{ src: string; type: "image" | "pdf"; filename?: string } | null>(null);
   
   const selectedConversationId = params?.conversationId || null;
   
@@ -465,6 +480,41 @@ export default function Conversations() {
   const getIconComponent = (iconName: string) => {
     const IconComponent = (Icons as any)[iconName];
     return IconComponent || Icons.MessageCircle;
+  };
+
+  const handleAttachmentUpload = async (fileInfo: { url: string; filename: string; size: number; mimetype: string }) => {
+    try {
+      await apiRequest("POST", `/api/conversations/${selectedConversationId}/messages`, {
+        content: fileInfo.url,
+        type: fileInfo.mimetype.startsWith("image/") ? "image" : 
+              fileInfo.mimetype.startsWith("video/") ? "video" :
+              fileInfo.mimetype.startsWith("audio/") ? "audio" :
+              fileInfo.mimetype === "application/pdf" ? "document" : "file",
+        quotedMessageId: replyingTo?.id,
+      });
+      
+      setAttachmentDialogOpen(false);
+      setImageDialogOpen(false);
+      setReplyingTo(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedConversationId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      
+      toast({
+        title: "Anexo enviado!",
+        description: "O arquivo foi enviado com sucesso",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao enviar anexo",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMediaView = (src: string, type: "image" | "pdf", filename?: string) => {
+    setViewerMedia({ src, type, filename });
+    setMediaViewerOpen(true);
   };
 
   const filteredConversations = conversations?.filter(c => c.status === activeTab && !c.deleted) || [];
@@ -903,9 +953,50 @@ export default function Conversations() {
                                     </div>
                                   )}
                                   
-                                  <p className="text-sm whitespace-pre-wrap break-words pr-12">
-                                    {message.content}
-                                  </p>
+                                  {/* Message content based on type */}
+                                  {message.type === "image" ? (
+                                    <div className="space-y-2">
+                                      <img 
+                                        src={message.content} 
+                                        alt="Imagem" 
+                                        className="rounded max-w-sm cursor-pointer hover:opacity-90 transition-opacity"
+                                        onClick={() => handleMediaView(message.content, "image", "Imagem")}
+                                      />
+                                    </div>
+                                  ) : message.type === "video" ? (
+                                    <div className="space-y-2">
+                                      <VideoPlayer src={message.content} />
+                                    </div>
+                                  ) : message.type === "audio" ? (
+                                    <div className="space-y-2">
+                                      <AudioPlayer src={message.content} />
+                                    </div>
+                                  ) : message.type === "document" || message.type === "file" ? (
+                                    <div 
+                                      className="flex items-center gap-3 p-3 bg-card/50 rounded cursor-pointer hover:bg-card/70"
+                                      onClick={() => {
+                                        if (message.content.endsWith(".pdf")) {
+                                          handleMediaView(message.content, "pdf", "Documento");
+                                        } else {
+                                          window.open(message.content, "_blank");
+                                        }
+                                      }}
+                                    >
+                                      <FileIcon className="h-8 w-8 text-blue-500" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">
+                                          {message.content.split("/").pop()}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                          Clique para {message.content.endsWith(".pdf") ? "visualizar" : "baixar"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm whitespace-pre-wrap break-words pr-12">
+                                      {message.content}
+                                    </p>
+                                  )}
                                   
                                   {/* Time */}
                                   <span className={cn(
@@ -1066,7 +1157,13 @@ export default function Conversations() {
                     
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="button-send-image">
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-8 w-8" 
+                          data-testid="button-send-image"
+                          onClick={() => setImageDialogOpen(true)}
+                        >
                           <ImageIcon className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
@@ -1077,7 +1174,13 @@ export default function Conversations() {
                     
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="button-send-attachment">
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-8 w-8" 
+                          data-testid="button-send-attachment"
+                          onClick={() => setAttachmentDialogOpen(true)}
+                        >
                           <Paperclip className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
@@ -1219,6 +1322,43 @@ export default function Conversations() {
         open={newConversationOpen}
         onOpenChange={setNewConversationOpen}
       />
+
+      {/* Attachment Upload Dialog */}
+      <Dialog open={attachmentDialogOpen} onOpenChange={setAttachmentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar Anexo</DialogTitle>
+          </DialogHeader>
+          <AttachmentUpload
+            onUploadComplete={handleAttachmentUpload}
+            onCancel={() => setAttachmentDialogOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Upload Dialog */}
+      <Dialog open={imageDialogOpen} onOpenChange={setImageDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar Imagem</DialogTitle>
+          </DialogHeader>
+          <AttachmentUpload
+            onUploadComplete={handleAttachmentUpload}
+            onCancel={() => setImageDialogOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Media Viewer */}
+      {viewerMedia && (
+        <MediaViewer
+          src={viewerMedia.src}
+          type={viewerMedia.type}
+          filename={viewerMedia.filename}
+          open={mediaViewerOpen}
+          onOpenChange={setMediaViewerOpen}
+        />
+      )}
     </>
   );
 }
