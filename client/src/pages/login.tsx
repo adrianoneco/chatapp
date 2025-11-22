@@ -17,7 +17,7 @@ export default function Login() {
   const { login } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Get redirect URL from query params
   const getRedirectUrl = () => {
     const params = new URLSearchParams(window.location.search);
@@ -40,15 +40,15 @@ export default function Login() {
     setIsLoading(true);
     try {
       await login(data.email, data.password);
-      
+
       // Wait a bit for auth state to update
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       toast({
         title: "Login realizado com sucesso!",
         description: "Bem-vindo de volta.",
       });
-      
+
       // Priority: redirect param > lastVisitedPage > dashboard
       const redirectUrl = getRedirectUrl();
       if (redirectUrl && redirectUrl !== '/' && !redirectUrl.startsWith('/login') && !redirectUrl.startsWith('/register')) {
@@ -84,7 +84,6 @@ export default function Login() {
             <h1 className="text-3xl font-bold text-white">ChatApp</h1>
           </div>
           <div>
-            <CardTitle className="text-2xl text-white">Entrar na Plataforma</CardTitle>
             <CardDescription className="text-gray-300">Digite suas credenciais para acessar</CardDescription>
           </div>
         </CardHeader>
@@ -117,19 +116,19 @@ export default function Login() {
             </div>
 
             <div className="flex justify-end">
-              <Link 
-                href="/forgot-password" 
-                className="text-sm text-purple-300 hover:text-purple-200 hover:underline" 
+              <Link
+                href="/forgot-password"
+                className="text-sm text-purple-300 hover:text-purple-200 hover:underline"
                 data-testid="link-forgot-password"
               >
                 Esqueceu sua senha?
               </Link>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white" 
-              disabled={isLoading} 
+            <Button
+              type="submit"
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+              disabled={isLoading}
               data-testid="button-login"
             >
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
