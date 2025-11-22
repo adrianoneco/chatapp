@@ -11,7 +11,7 @@ import {
   SidebarHeader,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { MessageSquare, Users, Headphones, Shield, LayoutDashboard, Settings } from "lucide-react";
+import { MessageSquare, Users, Headphones, Shield, LayoutDashboard, Settings, BookOpen } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { PiChatTeardropFill } from "react-icons/pi";
@@ -53,6 +53,12 @@ const menuItems = [
     url: "/dashboard/settings",
     icon: Settings,
     roles: ["admin", "attendant"],
+  },
+  {
+    title: "Documentação API",
+    url: "/api-docs",
+    icon: BookOpen,
+    roles: ["admin"],
   },
 ];
 

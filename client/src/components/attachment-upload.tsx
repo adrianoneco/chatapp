@@ -1,8 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { X, FileIcon, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
+import { AudioPlayer } from "./ui/audio-player";
 import { cn } from "@/lib/utils";
+import { parseBlob } from "music-metadata";
 
 interface AttachmentUploadProps {
   onUploadComplete: (fileInfo: {
@@ -20,6 +22,13 @@ export function AttachmentUpload({ onUploadComplete, onCancel, className }: Atta
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [audioMetadata, setAudioMetadata] = useState<{
+    title?: string;
+    artist?: string;
+    album?: string;
+    artwork?: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,7 +42,43 @@ export function AttachmentUpload({ onUploadComplete, onCancel, className }: Atta
 
     setSelectedFile(file);
     setError(null);
+
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+
+    if (file.type.startsWith('audio/')) {
+      parseBlob(file)
+        .then(metadata => {
+          let artwork = undefined;
+          
+          if (metadata.common.picture && metadata.common.picture.length > 0) {
+            const picture = metadata.common.picture[0];
+            const base64String = btoa(
+              new Uint8Array(picture.data).reduce((data, byte) => data + String.fromCharCode(byte), '')
+            );
+            artwork = `data:${picture.format};base64,${base64String}`;
+          }
+          
+          setAudioMetadata({
+            title: metadata.common.title,
+            artist: metadata.common.artist,
+            album: metadata.common.album,
+            artwork,
+          });
+        })
+        .catch(error => {
+          console.warn("Error reading audio tags:", error);
+        });
+    }
   };
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const handleUpload = async () => {
     if (!selectedFile) return;
@@ -81,9 +126,14 @@ export function AttachmentUpload({ onUploadComplete, onCancel, className }: Atta
   };
 
   const handleCancel = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
     setSelectedFile(null);
     setUploadProgress(0);
     setError(null);
+    setPreviewUrl(null);
+    setAudioMetadata(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -121,12 +171,29 @@ export function AttachmentUpload({ onUploadComplete, onCancel, className }: Atta
         </div>
       ) : (
         <div className="border rounded-lg p-4 space-y-4">
+          {selectedFile.type.startsWith('audio/') && previewUrl && (
+            <div className="mb-4">
+              <AudioPlayer 
+                src={previewUrl} 
+                metadata={audioMetadata || undefined}
+                className="w-full"
+              />
+            </div>
+          )}
+          
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="font-medium truncate">{selectedFile.name}</div>
               <div className="text-sm text-muted-foreground">
                 {formatFileSize(selectedFile.size)}
               </div>
+              {audioMetadata && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  {audioMetadata.title && <div>Título: {audioMetadata.title}</div>}
+                  {audioMetadata.artist && <div>Artista: {audioMetadata.artist}</div>}
+                  {audioMetadata.album && <div>Álbum: {audioMetadata.album}</div>}
+                </div>
+              )}
             </div>
             {!isUploading && (
               <Button

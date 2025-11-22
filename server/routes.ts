@@ -20,10 +20,14 @@ import {
   insertMessageSchema,
   createMessageSchema,
   insertQuickMessageSchema,
+  insertGeneralSettingsSchema,
+  insertWebhookSchema,
   type SafeUser,
   type Conversation,
   type Message,
   type QuickMessage,
+  type GeneralSettings,
+  type Webhook,
 } from "@shared/schema";
 
 const upload = multer({
@@ -1610,6 +1614,293 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Generate message error:", error);
       res.status(500).json({ message: error.message || "Erro ao gerar mensagem" });
+    }
+  });
+
+  // GENERAL SETTINGS ROUTES
+  app.get("/api/settings/general", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const result = await pool.query(
+        "SELECT * FROM general_settings LIMIT 1"
+      );
+
+      if (result.rows.length === 0) {
+        // Create default settings if none exist
+        const defaultSettings = {
+          companyName: "",
+          companyEmail: "",
+          companyPhone: "",
+          welcomeMessage: "",
+          awayMessage: "",
+        };
+        
+        const insertResult = await pool.query(
+          `INSERT INTO general_settings (company_name, company_email, company_phone, welcome_message, away_message)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *`,
+          [defaultSettings.companyName, defaultSettings.companyEmail, defaultSettings.companyPhone, defaultSettings.welcomeMessage, defaultSettings.awayMessage]
+        );
+        
+        const settings = insertResult.rows[0];
+        return res.json({
+          companyName: settings.company_name || "",
+          companyEmail: settings.company_email || "",
+          companyPhone: settings.company_phone,
+          welcomeMessage: settings.welcome_message,
+          awayMessage: settings.away_message,
+        });
+      }
+
+      const settings = result.rows[0];
+      res.json({
+        companyName: settings.company_name || "",
+        companyEmail: settings.company_email || "",
+        companyPhone: settings.company_phone,
+        welcomeMessage: settings.welcome_message,
+        awayMessage: settings.away_message,
+      });
+    } catch (error: any) {
+      console.error("Get general settings error:", error);
+      res.status(500).json({ message: "Erro ao buscar configurações" });
+    }
+  });
+
+  app.post("/api/settings/general", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const data = insertGeneralSettingsSchema.parse(req.body);
+
+      // Check if settings exist
+      const existingResult = await pool.query(
+        "SELECT id FROM general_settings LIMIT 1"
+      );
+
+      let result;
+      if (existingResult.rows.length > 0) {
+        // Update existing settings
+        result = await pool.query(
+          `UPDATE general_settings SET
+             company_name = $1,
+             company_email = $2,
+             company_phone = $3,
+             welcome_message = $4,
+             away_message = $5,
+             updated_at = NOW()
+           WHERE id = $6
+           RETURNING *`,
+          [data.companyName, data.companyEmail, data.companyPhone || null, data.welcomeMessage || null, data.awayMessage || null, existingResult.rows[0].id]
+        );
+      } else {
+        // Create new settings
+        result = await pool.query(
+          `INSERT INTO general_settings (company_name, company_email, company_phone, welcome_message, away_message)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *`,
+          [data.companyName, data.companyEmail, data.companyPhone || null, data.welcomeMessage || null, data.awayMessage || null]
+        );
+      }
+
+      const settings = result.rows[0];
+      res.json({
+        companyName: settings.company_name || "",
+        companyEmail: settings.company_email || "",
+        companyPhone: settings.company_phone,
+        welcomeMessage: settings.welcome_message,
+        awayMessage: settings.away_message,
+      });
+    } catch (error: any) {
+      console.error("Save general settings error:", error);
+      res.status(500).json({ message: "Erro ao salvar configurações" });
+    }
+  });
+
+  // WEBHOOK ROUTES
+  app.get("/api/webhooks", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const result = await pool.query(
+        "SELECT * FROM webhooks ORDER BY created_at DESC"
+      );
+
+      const webhooks = result.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        url: row.url,
+        apiKey: row.api_key,
+        events: row.events,
+        headers: row.headers,
+        active: row.active,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+
+      res.json(webhooks);
+    } catch (error: any) {
+      console.error("Get webhooks error:", error);
+      res.status(500).json({ message: "Erro ao buscar webhooks" });
+    }
+  });
+
+  app.post("/api/webhooks", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const data = insertWebhookSchema.parse(req.body);
+      const apiKey = crypto.randomBytes(32).toString("hex");
+
+      const result = await pool.query(
+        `INSERT INTO webhooks (name, url, api_key, events, headers, active)
+         VALUES ($1, $2, $3, $4::text[], $5::jsonb, $6)
+         RETURNING *`,
+        [data.name, data.url, apiKey, data.events, JSON.stringify(data.headers || {}), true]
+      );
+
+      const row = result.rows[0];
+      res.status(201).json({
+        id: row.id,
+        name: row.name,
+        url: row.url,
+        apiKey: row.api_key,
+        events: row.events,
+        headers: row.headers,
+        active: row.active,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      });
+    } catch (error: any) {
+      console.error("Create webhook error:", error);
+      res.status(500).json({ message: "Erro ao criar webhook" });
+    }
+  });
+
+  app.delete("/api/webhooks/:id", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+
+      const result = await pool.query(
+        "DELETE FROM webhooks WHERE id = $1 RETURNING id",
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Webhook não encontrado" });
+      }
+
+      res.json({ message: "Webhook deletado com sucesso" });
+    } catch (error: any) {
+      console.error("Delete webhook error:", error);
+      res.status(500).json({ message: "Erro ao deletar webhook" });
+    }
+  });
+
+  app.post("/api/webhooks/:id/test", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+
+      const result = await pool.query(
+        "SELECT * FROM webhooks WHERE id = $1",
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Webhook não encontrado" });
+      }
+
+      const webhook = result.rows[0];
+
+      // Send test payload
+      const testPayload = {
+        event: "webhook.test",
+        timestamp: new Date().toISOString(),
+        data: {
+          message: "Este é um teste de webhook",
+        },
+      };
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-Webhook-Signature": webhook.api_key,
+        ...(webhook.headers || {}),
+      };
+
+      try {
+        const response = await fetch(webhook.url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(testPayload),
+        });
+
+        res.json({
+          success: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+        });
+      } catch (fetchError: any) {
+        res.status(500).json({
+          success: false,
+          error: fetchError.message,
+        });
+      }
+    } catch (error: any) {
+      console.error("Test webhook error:", error);
+      res.status(500).json({ message: "Erro ao testar webhook" });
+    }
+  });
+
+  // API KEYS ROUTES
+  app.get("/api/webhooks/keys", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const result = await pool.query(
+        "SELECT * FROM api_keys ORDER BY created_at DESC LIMIT 1"
+      );
+
+      if (result.rows.length === 0) {
+        // Generate initial keys
+        const apiKey = crypto.randomBytes(32).toString("hex");
+        const jwtToken = crypto.randomBytes(64).toString("hex");
+
+        const insertResult = await pool.query(
+          `INSERT INTO api_keys (key, jwt_token)
+           VALUES ($1, $2)
+           RETURNING *`,
+          [apiKey, jwtToken]
+        );
+
+        return res.json({
+          key: insertResult.rows[0].key,
+          jwtToken: insertResult.rows[0].jwt_token,
+        });
+      }
+
+      res.json({
+        key: result.rows[0].key,
+        jwtToken: result.rows[0].jwt_token,
+      });
+    } catch (error: any) {
+      console.error("Get API keys error:", error);
+      res.status(500).json({ message: "Erro ao buscar chaves de API" });
+    }
+  });
+
+  app.post("/api/webhooks/keys/regenerate", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      // Delete old keys
+      await pool.query("DELETE FROM api_keys");
+
+      // Generate new keys
+      const apiKey = crypto.randomBytes(32).toString("hex");
+      const jwtToken = crypto.randomBytes(64).toString("hex");
+
+      const result = await pool.query(
+        `INSERT INTO api_keys (key, jwt_token)
+         VALUES ($1, $2)
+         RETURNING *`,
+        [apiKey, jwtToken]
+      );
+
+      res.json({
+        key: result.rows[0].key,
+        jwtToken: result.rows[0].jwt_token,
+      });
+    } catch (error: any) {
+      console.error("Regenerate API keys error:", error);
+      res.status(500).json({ message: "Erro ao regenerar chaves de API" });
     }
   });
 

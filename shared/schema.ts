@@ -179,13 +179,73 @@ export const insertQuickMessageSchema = createInsertSchema(quickMessages, {
   updatedAt: true,
 });
 
+// General Settings table
+export const generalSettings = pgTable("general_settings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyName: text("company_name").notNull().default(""),
+  companyEmail: text("company_email").notNull().default(""),
+  companyPhone: text("company_phone"),
+  welcomeMessage: text("welcome_message"),
+  awayMessage: text("away_message"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// API Keys table
+export const apiKeys = pgTable("api_keys", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),
+  jwtToken: text("jwt_token").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Webhooks table
+export const webhooks = pgTable("webhooks", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  apiKey: text("api_key").notNull(),
+  events: text("events").array().notNull().default(sql`ARRAY[]::text[]`),
+  headers: jsonb("headers").$type<Record<string, string>>().default(sql`'{}'::jsonb`),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Insert schemas
+export const insertGeneralSettingsSchema = createInsertSchema(generalSettings, {
+  companyName: z.string().min(1, "Nome da empresa é obrigatório"),
+  companyEmail: z.string().email("Email inválido"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertWebhookSchema = createInsertSchema(webhooks, {
+  name: z.string().min(1, "Nome é obrigatório"),
+  url: z.string().url("URL inválida"),
+  events: z.array(z.string()).min(1, "Selecione pelo menos um evento"),
+}).omit({
+  id: true,
+  apiKey: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type Conversation = typeof conversations.$inferSelect;
 export type Protocol = typeof protocols.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type QuickMessage = typeof quickMessages.$inferSelect;
+export type GeneralSettings = typeof generalSettings.$inferSelect;
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type Webhook = typeof webhooks.$inferSelect;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type InsertProtocol = z.infer<typeof insertProtocolSchema>;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type CreateMessage = z.infer<typeof createMessageSchema>;
 export type InsertQuickMessage = z.infer<typeof insertQuickMessageSchema>;
+export type InsertGeneralSettings = z.infer<typeof insertGeneralSettingsSchema>;
+export type InsertWebhook = z.infer<typeof insertWebhookSchema>;

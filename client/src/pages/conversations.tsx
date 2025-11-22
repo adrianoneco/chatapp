@@ -997,8 +997,8 @@ export default function Conversations() {
                                   className={cn(
                                     "absolute top-0 w-0 h-0",
                                     isFromUser
-                                      ? "right-0 border-l-[8px] border-l-transparent border-t-[8px] border-t-primary border-r-0 translate-x-[8px]"
-                                      : "left-0 border-r-[8px] border-r-transparent border-t-[8px] border-t-muted border-l-0 -translate-x-[8px]"
+                                      ? "right-0 border-l-[8px] border-l-primary border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent translate-x-full"
+                                      : "left-0 border-r-[8px] border-r-muted border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent -translate-x-full"
                                   )}
                                 />
                                 

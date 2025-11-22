@@ -3,15 +3,22 @@ import { Play, Pause, Volume2, VolumeX } from "lucide-react";
 import { Button } from "./button";
 import { Slider } from "./slider";
 import { cn } from "@/lib/utils";
+import { parseBlob } from "music-metadata";
 
 interface AudioPlayerProps {
   src: string;
   className?: string;
+  metadata?: {
+    title?: string;
+    artist?: string;
+    album?: string;
+    artwork?: string;
+  };
 }
 
 let currentlyPlayingAudio: HTMLAudioElement | null = null;
 
-export function AudioPlayer({ src, className }: AudioPlayerProps) {
+export function AudioPlayer({ src, className, metadata: initialMetadata }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -22,7 +29,36 @@ export function AudioPlayer({ src, className }: AudioPlayerProps) {
     artist?: string;
     album?: string;
     artwork?: string;
-  }>({});
+  }>(initialMetadata || {});
+
+  useEffect(() => {
+    if (!initialMetadata && src) {
+      fetch(src)
+        .then(response => response.blob())
+        .then(blob => parseBlob(blob))
+        .then(metadata => {
+          let artwork = undefined;
+          
+          if (metadata.common.picture && metadata.common.picture.length > 0) {
+            const picture = metadata.common.picture[0];
+            const base64String = btoa(
+              new Uint8Array(picture.data).reduce((data, byte) => data + String.fromCharCode(byte), '')
+            );
+            artwork = `data:${picture.format};base64,${base64String}`;
+          }
+          
+          setMetadata({
+            title: metadata.common.title,
+            artist: metadata.common.artist,
+            album: metadata.common.album,
+            artwork,
+          });
+        })
+        .catch(error => {
+          console.warn("Error reading audio tags:", error);
+        });
+    }
+  }, [src, initialMetadata]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -93,8 +129,8 @@ export function AudioPlayer({ src, className }: AudioPlayerProps) {
   };
 
   return (
-    <div className={cn("bg-card border rounded-lg p-4 max-w-md", className)}>
-      <audio ref={audioRef} src={src} preload="metadata" />
+    <div className={cn("bg-card border rounded-lg p-4 w-full sm:max-w-[512px]", className)}>
+      <audio ref={audioRef} src={src} preload="metadata" crossOrigin="anonymous" />
       
       <div className="flex gap-4 mb-4">
         <div className="w-20 h-20 bg-muted rounded flex-shrink-0 flex items-center justify-center overflow-hidden">

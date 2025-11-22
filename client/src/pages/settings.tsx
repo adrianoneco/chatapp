@@ -1,13 +1,20 @@
 import { Route, useLocation, Link } from "wouter";
-import { Settings as SettingsIcon, MessageSquare, MessageCircle } from "lucide-react";
+import { Settings as SettingsIcon, MessageSquare, MessageCircle, Cog, Webhook } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Channels from "./settings/channels";
 import QuickMessages from "./settings/quick-messages";
+import GeneralSettings from "./settings/general";
+import WebhooksSettings from "./settings/webhooks";
 
 export default function Settings() {
   const [location] = useLocation();
 
   const settingsMenu = [
+    {
+      title: "Geral",
+      url: "/dashboard/settings/general",
+      icon: Cog,
+    },
     {
       title: "Canais",
       url: "/dashboard/settings/channels",
@@ -17,6 +24,11 @@ export default function Settings() {
       title: "Mensagens Prontas",
       url: "/dashboard/settings/quick-messages",
       icon: MessageCircle,
+    },
+    {
+      title: "Webhooks",
+      url: "/dashboard/settings/webhooks",
+      icon: Webhook,
     },
   ];
 
@@ -53,8 +65,10 @@ export default function Settings() {
       </div>
 
       <div className="flex-1 bg-card border rounded-lg p-6">
+        <Route path="/dashboard/settings/general" component={GeneralSettings} />
         <Route path="/dashboard/settings/channels" component={Channels} />
         <Route path="/dashboard/settings/quick-messages" component={QuickMessages} />
+        <Route path="/dashboard/settings/webhooks" component={WebhooksSettings} />
         <Route path="/dashboard/settings">
           {() => (
             <div className="text-center py-12">
