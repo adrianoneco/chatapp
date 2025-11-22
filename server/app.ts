@@ -67,27 +67,46 @@ app.use(cookieParser());
 import cors from "cors";
 
 // Configure CORS to work with cookies (credentials)
-// If CLIENT_ORIGIN is set to '*', disable CORS entirely (allow all origins without restrictions)
-// Otherwise, mirror the request origin to allow all origins while supporting credentials
-const clientOrigin = process.env.CLIENT_ORIGIN?.trim();
+// If CLIENT_ORIGIN is set, parse as comma-separated list of allowed origins
+// Otherwise, allow all origins to support credentials
+const clientOriginEnv = process.env.CLIENT_ORIGIN?.trim();
+const allowedOrigins = clientOriginEnv 
+  ? clientOriginEnv.split(',').map(o => o.trim()).filter(Boolean)
+  : [];
 
-if (clientOrigin === '*') {
-  // Disable CORS restrictions entirely
-  app.use(cors());
-} else {
-  // Mirror the request origin to allow all origins (equivalent to '*' but works with credentials)
-  // This is required for Replit environment where frontend and backend have different domains
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        // Allow all origins by mirroring the origin header
-        // If no origin header (same-origin requests), allow it
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // If no allowed origins configured, allow all origins
+      if (allowedOrigins.length === 0) {
         return callback(null, origin || true);
-      },
-      credentials: true,
-    }),
-  );
-}
+      }
+      
+      // If no origin header (same-origin requests), allow it
+      if (!origin) {
+        return callback(null, true);
+      }
+      
+      // Check if origin is in allowed list (support both with and without protocol)
+      const originWithoutProtocol = origin.replace(/^https?:\/\//, '');
+      const isAllowed = allowedOrigins.some(allowed => {
+        const allowedWithoutProtocol = allowed.replace(/^https?:\/\//, '');
+        return origin === allowed || 
+               originWithoutProtocol === allowedWithoutProtocol ||
+               originWithoutProtocol === allowed ||
+               origin === `http://${allowed}` ||
+               origin === `https://${allowed}`;
+      });
+      
+      if (isAllowed) {
+        return callback(null, origin);
+      }
+      
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  }),
+);
 
 // Serve uploaded files (legacy)
 app.use("/uploads", express.static(uploadsDir));
