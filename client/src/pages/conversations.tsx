@@ -81,6 +81,8 @@ import { AudioPlayer } from "@/components/ui/audio-player";
 import { VideoPlayer } from "@/components/ui/video-player";
 import { MediaViewer, AttachmentThumbnail } from "@/components/ui/media-viewer";
 import { AttachmentUpload } from "@/components/attachment-upload";
+import { ForwardMessageDialog } from "@/components/forward-message-dialog";
+import { EmojiPicker } from "@/components/emoji-picker";
 import {
   Dialog,
   DialogContent,
@@ -187,6 +189,9 @@ export default function Conversations() {
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [mediaViewerOpen, setMediaViewerOpen] = useState(false);
   const [viewerMedia, setViewerMedia] = useState<{ src: string; type: "image" | "pdf"; filename?: string } | null>(null);
+  const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
+  const [messageToForward, setMessageToForward] = useState<any>(null);
+  const [isForwarding, setIsForwarding] = useState(false);
   
   const selectedConversationId = params?.conversationId || null;
   
@@ -428,6 +433,12 @@ export default function Conversations() {
     queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
   });
 
+  useWebSocketEvent("message_reacted", (data) => {
+    if (data.conversationId === selectedConversationId) {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedConversationId, "messages"] });
+    }
+  });
+
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -515,6 +526,71 @@ export default function Conversations() {
   const handleMediaView = (src: string, type: "image" | "pdf", filename?: string) => {
     setViewerMedia({ src, type, filename });
     setMediaViewerOpen(true);
+  };
+
+  const handleForwardMessage = (message: any) => {
+    setMessageToForward(message);
+    setForwardDialogOpen(true);
+  };
+
+  const handleForwardToConversations = async (conversationIds: string[]) => {
+    if (!messageToForward) return;
+
+    setIsForwarding(true);
+    const successes: string[] = [];
+    const failures: { id: string; error: string }[] = [];
+    
+    try {
+      for (const conversationId of conversationIds) {
+        try {
+          await apiRequest("POST", `/api/conversations/${conversationId}/messages`, {
+            content: messageToForward.content,
+            type: messageToForward.type || "text",
+            forwardedFromMessageId: messageToForward.id,
+          });
+          successes.push(conversationId);
+        } catch (error: any) {
+          failures.push({ id: conversationId, error: error.message || "Erro desconhecido" });
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      
+      if (successes.length > 0) {
+        toast({
+          title: "Mensagem encaminhada!",
+          description: `Enviada com sucesso para ${successes.length} de ${conversationIds.length} conversa(s)`,
+        });
+      }
+      
+      if (failures.length > 0) {
+        toast({
+          title: "Algumas mensagens falharam",
+          description: `${failures.length} encaminhamento(s) falharam`,
+          variant: "destructive",
+        });
+      }
+      
+      if (failures.length === 0) {
+        setForwardDialogOpen(false);
+        setMessageToForward(null);
+      }
+    } finally {
+      setIsForwarding(false);
+    }
+  };
+
+  const handleReaction = async (messageId: number, emoji: string) => {
+    try {
+      await apiRequest("POST", `/api/conversations/${selectedConversationId}/messages/${messageId}/react`, { emoji });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedConversationId, "messages"] });
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao adicionar reação",
+        variant: "destructive",
+      });
+    }
   };
 
   const filteredConversations = conversations?.filter(c => c.status === activeTab && !c.deleted) || [];
@@ -856,6 +932,7 @@ export default function Conversations() {
                                         size="icon" 
                                         variant="ghost" 
                                         className="h-7 w-7"
+                                        onClick={() => handleForwardMessage(message)}
                                         data-testid={`button-forward-${message.id}`}
                                       >
                                         <Forward className="h-3.5 w-3.5" />
@@ -864,19 +941,21 @@ export default function Conversations() {
                                     <TooltipContent>Encaminhar</TooltipContent>
                                   </Tooltip>
                                   
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button 
-                                        size="icon" 
-                                        variant="ghost" 
-                                        className="h-7 w-7"
-                                        data-testid={`button-react-${message.id}`}
-                                      >
-                                        <Smile className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Reagir</TooltipContent>
-                                  </Tooltip>
+                                  <EmojiPicker onEmojiSelect={(emoji) => handleReaction(message.id, emoji)}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button 
+                                          size="icon" 
+                                          variant="ghost" 
+                                          className="h-7 w-7"
+                                          data-testid={`button-react-${message.id}`}
+                                        >
+                                          <Smile className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Reagir</TooltipContent>
+                                    </Tooltip>
+                                  </EmojiPicker>
                                   
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -1006,6 +1085,31 @@ export default function Conversations() {
                                     {getTime(message.createdAt)}
                                   </span>
                                 </div>
+                                
+                                {/* Reactions */}
+                                {message.reactions && Object.keys(message.reactions).length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {Object.entries(message.reactions).map(([emoji, userIds]: [string, any]) => {
+                                      const count = Array.isArray(userIds) ? userIds.length : 0;
+                                      const hasReacted = Array.isArray(userIds) && userIds.includes(user?.id);
+                                      return (
+                                        <button
+                                          key={emoji}
+                                          className={cn(
+                                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-colors",
+                                            hasReacted 
+                                              ? "bg-primary/20 border border-primary text-primary" 
+                                              : "bg-muted/50 hover:bg-muted"
+                                          )}
+                                          onClick={() => handleReaction(message.id, emoji)}
+                                        >
+                                          <span>{emoji}</span>
+                                          <span className="text-muted-foreground">{count}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1359,6 +1463,14 @@ export default function Conversations() {
           onOpenChange={setMediaViewerOpen}
         />
       )}
+
+      {/* Forward Message Dialog */}
+      <ForwardMessageDialog
+        open={forwardDialogOpen}
+        onOpenChange={setForwardDialogOpen}
+        onForward={handleForwardToConversations}
+        isForwarding={isForwarding}
+      />
     </>
   );
 }
