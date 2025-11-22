@@ -1,4 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth-context";
+import { useWebSocket, useWebSocketEvent } from "@/lib/websocket";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6,6 +10,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -27,7 +36,10 @@ import {
   MapPin,
   User,
   CheckCircle,
+  Loader2,
+  Sparkles,
 } from "lucide-react";
+import * as Icons from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Tooltip,
@@ -40,15 +52,169 @@ import { NewConversationDialog } from "@/components/new-conversation-dialog";
 import { useRoute, useLocation } from "wouter";
 
 export default function Conversations() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [, params] = useRoute("/conversations/:channelId/:conversationId");
+  const [, setLocation] = useLocation();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"pending" | "attending" | "closed">("pending");
   const [newConversationOpen, setNewConversationOpen] = useState(false);
-  const [, params] = useRoute("/conversations/:channelId/:conversationId");
-  const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const [messageText, setMessageText] = useState("");
+  const [correctingText, setCorrectingText] = useState(false);
+  const [quickMessagesOpen, setQuickMessagesOpen] = useState(false);
   
-  const selectedConversation = params?.conversationId || null;
+  const selectedConversationId = params?.conversationId || null;
+
+  // Fetch conversations
+  const { data: conversations, isLoading: conversationsLoading } = useQuery<any[]>({
+    queryKey: ["/api/conversations", activeTab],
+    queryFn: async () => {
+      const response = await fetch(`/api/conversations?status=${activeTab}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch conversations");
+      return response.json();
+    },
+  });
+
+  // Fetch selected conversation details
+  const { data: selectedConversation } = useQuery<any>({
+    queryKey: ["/api/conversations", selectedConversationId],
+    enabled: !!selectedConversationId,
+    queryFn: async () => {
+      const response = await fetch(`/api/conversations/${selectedConversationId}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch conversation");
+      return response.json();
+    },
+  });
+
+  // Fetch messages
+  const { data: messages, isLoading: messagesLoading } = useQuery<any[]>({
+    queryKey: ["/api/conversations", selectedConversationId, "messages"],
+    enabled: !!selectedConversationId,
+    queryFn: async () => {
+      const response = await fetch(`/api/conversations/${selectedConversationId}/messages`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch messages");
+      return response.json();
+    },
+  });
+
+  // Fetch quick messages
+  const { data: quickMessages } = useQuery<any[]>({
+    queryKey: ["/api/quick-messages"],
+    enabled: user?.role === "admin" || user?.role === "attendant",
+  });
+
+  // Send message mutation
+  const sendMessageMutation = useMutation({
+    mutationFn: async (content: string) => {
+      return await apiRequest("POST", `/api/conversations/${selectedConversationId}/messages`, {
+        content,
+        type: "text",
+      });
+    },
+    onSuccess: () => {
+      setMessageText("");
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedConversationId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao enviar mensagem",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Text correction mutation
+  const correctTextMutation = useMutation({
+    mutationFn: async (text: string) => {
+      const res = await apiRequest("POST", "/api/ai/correct-text", { text });
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      setMessageText(data.correctedText);
+      toast({
+        title: "Texto corrigido!",
+        description: "O texto foi corrigido pela IA",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao corrigir texto",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // WebSocket events
+  useWebSocketEvent("message_created", (data) => {
+    if (data.conversation_id === selectedConversationId) {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedConversationId, "messages"] });
+    }
+    queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+  });
+
+  useWebSocketEvent("conversation_created", () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+  });
+
+  useWebSocketEvent("conversation_updated", (data) => {
+    if (data.id === selectedConversationId) {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedConversationId] });
+    }
+    queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+  });
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSendMessage = () => {
+    if (!messageText.trim()) return;
+    sendMessageMutation.mutate(messageText);
+  };
+
+  const handleCorrectText = async () => {
+    if (!messageText.trim()) return;
+    try {
+      await correctTextMutation.mutateAsync(messageText);
+    } catch (error) {
+      // Error is already handled by the mutation's onError
+    }
+  };
+
+  const handleQuickMessage = (quickMessage: any) => {
+    // Replace parameters with actual values
+    let content = quickMessage.content;
+    
+    const paramValues: Record<string, string> = {
+      clientName: selectedConversation?.client?.name || "Cliente",
+      clientEmail: selectedConversation?.client?.email || "",
+      attendantName: user?.name || "Atendente",
+      protocolId: selectedConversation?.protocol || "",
+      currentDate: new Date().toLocaleDateString("pt-BR"),
+      currentTime: new Date().toLocaleTimeString("pt-BR"),
+      companyName: "Minha Empresa",
+    };
+
+    Object.entries(paramValues).forEach(([key, value]) => {
+      content = content.replace(new RegExp(`{{${key}}}`, "g"), value);
+    });
+
+    setMessageText(content);
+    setQuickMessagesOpen(false);
+  };
 
   const copyProtocol = (protocol: string) => {
     navigator.clipboard.writeText(protocol);
@@ -58,37 +224,12 @@ export default function Conversations() {
     });
   };
 
-  const mockConversations: any[] = [
-    {
-      id: "1",
-      client: {
-        id: "1",
-        name: "João Silva",
-        email: "joao@exemplo.com",
-        image: "",
-      },
-      status: "pending",
-      lastMessage: "Olá, preciso de ajuda com meu pedido",
-      lastMessageAt: new Date(Date.now() - 300000).toISOString(),
-      protocol: "A1B2C3D4E5",
-    },
-    {
-      id: "2",
-      client: {
-        id: "2",
-        name: "Maria Santos",
-        email: "maria@exemplo.com",
-        image: "",
-      },
-      status: "attending",
-      lastMessage: "Obrigada pelo atendimento!",
-      lastMessageAt: new Date(Date.now() - 600000).toISOString(),
-      protocol: "F6G7H8I9J0",
-    },
-  ];
+  const getIconComponent = (iconName: string) => {
+    const IconComponent = (Icons as any)[iconName];
+    return IconComponent || Icons.MessageCircle;
+  };
 
-  const selectedConv = mockConversations.find(c => c.id === selectedConversation);
-  const mockProtocol = selectedConv?.protocol || "A1B2C3D4E5";
+  const filteredConversations = conversations?.filter(c => c.status === activeTab) || [];
 
   return (
     <div className="flex flex-1 h-full overflow-hidden">
@@ -154,7 +295,11 @@ export default function Conversations() {
             <Separator />
 
             <ScrollArea className="flex-1">
-              {mockConversations.filter(c => c.status === activeTab).length === 0 ? (
+              {conversationsLoading ? (
+                <div className="p-6 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                </div>
+              ) : filteredConversations.length === 0 ? (
                 <div className="p-6 text-center space-y-2">
                   <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
@@ -163,32 +308,34 @@ export default function Conversations() {
                 </div>
               ) : (
                 <div className="p-2 space-y-1">
-                  {mockConversations.filter(c => c.status === activeTab).map((conversation: any) => (
+                  {filteredConversations.map((conversation: any) => (
                     <div
                       key={conversation.id}
                       className={cn(
                         "p-3 rounded-md hover-elevate cursor-pointer",
-                        selectedConversation === conversation.id && "bg-sidebar-accent"
+                        selectedConversationId === conversation.id && "bg-sidebar-accent"
                       )}
                       onClick={() => setLocation(`/conversations/webchat/${conversation.id}`)}
                       data-testid={`conversation-item-${conversation.id}`}
                     >
                       <div className="flex gap-3">
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={conversation.client.image} />
-                          <AvatarFallback>{conversation.client.name[0]}</AvatarFallback>
+                          <AvatarImage src={conversation.client?.image} />
+                          <AvatarFallback>{conversation.client?.name?.[0] || "C"}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2">
                             <p className="font-medium text-sm truncate">
-                              {conversation.client.name}
+                              {conversation.client?.name || "Cliente"}
                             </p>
-                            <span className="text-xs text-muted-foreground whitespace-nowrap">
-                              {getRelativeDate(conversation.lastMessageAt)}
-                            </span>
+                            {conversation.last_message_at && (
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                {getRelativeDate(conversation.last_message_at)}
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-muted-foreground truncate">
-                            {conversation.lastMessage}
+                            {conversation.last_message_content || "Sem mensagens"}
                           </p>
                         </div>
                       </div>
@@ -218,21 +365,21 @@ export default function Conversations() {
 
       {/* Center - Conversation Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {selectedConversation ? (
+        {selectedConversationId && selectedConversation ? (
           <>
             {/* Conversation Header */}
             <div className="p-4 border-b bg-card flex-shrink-0">
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">
-                  <AvatarImage src={selectedConv?.client.image} />
-                  <AvatarFallback>{selectedConv?.client.name?.[0] || "C"}</AvatarFallback>
+                  <AvatarImage src={selectedConversation?.client?.image} />
+                  <AvatarFallback>{selectedConversation?.client?.name?.[0] || "C"}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
-                  <p className="font-medium">{selectedConv?.client.name || "Cliente"}</p>
+                  <p className="font-medium">{selectedConversation?.client?.name || "Cliente"}</p>
                   <p className="text-xs text-muted-foreground">
-                    {selectedConv?.lastMessageAt 
-                      ? `Visto por último ${getRelativeDate(selectedConv.lastMessageAt)}`
-                      : "Status desconhecido"}
+                    {selectedConversation?.last_message_at 
+                      ? `Visto por último ${getRelativeDate(selectedConversation.last_message_at)}`
+                      : "Nenhuma mensagem ainda"}
                   </p>
                 </div>
                 <Button
@@ -252,16 +399,64 @@ export default function Conversations() {
 
             {/* Messages Area */}
             <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
-                <div className="flex justify-center">
-                  <Badge variant="secondary" className="text-xs">
-                    Protocolo: {mockProtocol}
-                  </Badge>
+              {messagesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-                <div className="text-center text-sm text-muted-foreground py-8">
-                  Nenhuma mensagem ainda
+              ) : (
+                <div className="space-y-4">
+                  {selectedConversation?.protocol && (
+                    <div className="flex justify-center">
+                      <Badge variant="secondary" className="text-xs">
+                        Protocolo: {selectedConversation.protocol}
+                      </Badge>
+                    </div>
+                  )}
+                  
+                  {!messages || messages.length === 0 ? (
+                    <div className="text-center text-sm text-muted-foreground py-8">
+                      Nenhuma mensagem ainda
+                    </div>
+                  ) : (
+                    messages.map((message: any) => (
+                      <div
+                        key={message.id}
+                        className={cn(
+                          "flex gap-3",
+                          message.sender_id === user?.id && "flex-row-reverse"
+                        )}
+                      >
+                        <Avatar className="h-8 w-8 flex-shrink-0">
+                          <AvatarImage src={message.sender?.image} />
+                          <AvatarFallback>{message.sender?.name?.[0] || "U"}</AvatarFallback>
+                        </Avatar>
+                        <div className={cn(
+                          "flex flex-col gap-1 max-w-[70%]",
+                          message.sender_id === user?.id && "items-end"
+                        )}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {message.sender?.name}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(message.created_at).toLocaleTimeString("pt-BR")}
+                            </span>
+                          </div>
+                          <div className={cn(
+                            "rounded-lg px-4 py-2",
+                            message.sender_id === user?.id 
+                              ? "bg-primary text-primary-foreground" 
+                              : "bg-muted"
+                          )}>
+                            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={messagesEndRef} />
                 </div>
-              </div>
+              )}
             </ScrollArea>
 
             {/* Message Input */}
@@ -270,14 +465,33 @@ export default function Conversations() {
                 <div className="flex-1 relative">
                   <Input
                     placeholder="Digite sua mensagem..."
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
                     className="pr-48"
                     data-testid="input-message"
                   />
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="button-text-correction">
-                          <Wand2 className="h-4 w-4" />
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-8 w-8" 
+                          data-testid="button-text-correction"
+                          onClick={handleCorrectText}
+                          disabled={!messageText.trim() || correctTextMutation.isPending}
+                        >
+                          {correctTextMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Wand2 className="h-4 w-4" />
+                          )}
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -285,16 +499,54 @@ export default function Conversations() {
                       </TooltipContent>
                     </Tooltip>
                     
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="button-quick-messages">
-                          <MessageCircle className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Mensagens prontas</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    {(user?.role === "admin" || user?.role === "attendant") && (
+                      <Popover open={quickMessagesOpen} onOpenChange={setQuickMessagesOpen}>
+                        <PopoverTrigger asChild>
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-8 w-8" 
+                            data-testid="button-quick-messages"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80" align="end">
+                          <div className="space-y-2">
+                            <h4 className="font-semibold text-sm">Mensagens Prontas</h4>
+                            {!quickMessages || quickMessages.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">
+                                Nenhuma mensagem pronta configurada
+                              </p>
+                            ) : (
+                              <ScrollArea className="max-h-64">
+                                <div className="space-y-1">
+                                  {quickMessages.map((qm: any) => {
+                                    const IconComponent = getIconComponent(qm.icon);
+                                    return (
+                                      <div
+                                        key={qm.id}
+                                        className="p-2 rounded-md hover:bg-accent cursor-pointer flex items-start gap-2"
+                                        onClick={() => handleQuickMessage(qm)}
+                                        data-testid={`quick-message-${qm.id}`}
+                                      >
+                                        <IconComponent className="h-4 w-4 mt-0.5 flex-shrink-0 text-primary" />
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium">{qm.title}</p>
+                                          <p className="text-xs text-muted-foreground line-clamp-2">
+                                            {qm.content}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </ScrollArea>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
                     
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -343,8 +595,17 @@ export default function Conversations() {
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button size="icon" data-testid="button-send-message">
-                      <Send className="h-4 w-4" />
+                    <Button 
+                      size="icon" 
+                      data-testid="button-send-message"
+                      onClick={handleSendMessage}
+                      disabled={!messageText.trim() || sendMessageMutation.isPending}
+                    >
+                      {sendMessageMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -375,35 +636,37 @@ export default function Conversations() {
 
           <ScrollArea className="flex-1">
             <div className="p-4 space-y-4">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Protocolo</p>
-                <div className="flex items-center gap-2">
-                  <p className="font-mono text-sm font-medium flex-1" data-testid="text-protocol">
-                    {mockProtocol}
-                  </p>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => copyProtocol(mockProtocol)}
-                        className="h-8 w-8"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Copiar protocolo</p>
-                    </TooltipContent>
-                  </Tooltip>
+              {selectedConversation.protocol && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Protocolo</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-mono text-sm font-medium flex-1" data-testid="text-protocol">
+                      {selectedConversation.protocol}
+                    </p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => copyProtocol(selectedConversation.protocol)}
+                          className="h-8 w-8"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Copiar protocolo</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Status</p>
                 <Badge variant="secondary" data-testid="badge-status">
-                  {selectedConv?.status === "pending" ? "Pendente" : 
-                   selectedConv?.status === "attending" ? "Atendendo" : "Encerrada"}
+                  {selectedConversation.status === "pending" ? "Pendente" : 
+                   selectedConversation.status === "attending" ? "Atendendo" : "Encerrada"}
                 </Badge>
               </div>
 
@@ -411,71 +674,41 @@ export default function Conversations() {
                 <p className="text-xs text-muted-foreground mb-1">Cliente</p>
                 <div className="flex items-center gap-2">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={selectedConv?.client.image} />
-                    <AvatarFallback>{selectedConv?.client.name?.[0] || "C"}</AvatarFallback>
+                    <AvatarImage src={selectedConversation.client?.image} />
+                    <AvatarFallback>{selectedConversation.client?.name?.[0] || "C"}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="text-sm font-medium">{selectedConv?.client.name || "Cliente"}</p>
-                    <p className="text-xs text-muted-foreground">{selectedConv?.client.email || ""}</p>
+                    <p className="text-sm font-medium">{selectedConversation.client?.name || "Cliente"}</p>
+                    <p className="text-xs text-muted-foreground">{selectedConversation.client?.email || ""}</p>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Atendente</p>
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-sm">Não atribuído</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Geolocalização</p>
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-sm">São Paulo, Brasil</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Criado em</p>
-                <p className="text-sm">
-                  {selectedConv?.lastMessageAt 
-                    ? new Date(selectedConv.lastMessageAt).toLocaleDateString("pt-BR")
-                    : new Date().toLocaleDateString("pt-BR")}
-                </p>
-              </div>
-
-              <Separator />
-
-              <div>
-                <p className="text-xs text-muted-foreground mb-2">Conversas Anteriores</p>
-                <div className="space-y-2">
-                  <div className="p-2 rounded-md bg-muted/50 hover:bg-muted cursor-pointer transition-colors">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-3 w-3 text-green-500" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">Protocolo: B2C3D4E5F6</p>
-                        <p className="text-xs text-muted-foreground">Encerrado há 2 dias</p>
-                      </div>
+              {selectedConversation.attendant && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Atendente</p>
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={selectedConversation.attendant?.image} />
+                      <AvatarFallback>{selectedConversation.attendant?.name?.[0] || "A"}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm font-medium">{selectedConversation.attendant?.name}</p>
+                      <p className="text-xs text-muted-foreground">{selectedConversation.attendant?.email}</p>
                     </div>
                   </div>
-                  <div className="p-2 rounded-md bg-muted/50 hover:bg-muted cursor-pointer transition-colors">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-3 w-3 text-green-500" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">Protocolo: C3D4E5F6G7</p>
-                        <p className="text-xs text-muted-foreground">Encerrado há 5 dias</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-center py-2">
-                    <Button variant="ghost" size="sm" className="text-xs">
-                      Ver todas
-                    </Button>
-                  </div>
                 </div>
-              </div>
+              )}
+
+              {selectedConversation.created_at && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Criado em</p>
+                  <p className="text-sm">
+                    {new Date(selectedConversation.created_at).toLocaleDateString("pt-BR")} às {" "}
+                    {new Date(selectedConversation.created_at).toLocaleTimeString("pt-BR")}
+                  </p>
+                </div>
+              )}
             </div>
           </ScrollArea>
         </div>

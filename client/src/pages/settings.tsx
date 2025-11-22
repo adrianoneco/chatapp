@@ -1,7 +1,8 @@
 import { Route, useLocation, Link } from "wouter";
-import { Settings as SettingsIcon, MessageSquare } from "lucide-react";
+import { Settings as SettingsIcon, MessageSquare, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Channels from "./settings/channels";
+import QuickMessages from "./settings/quick-messages";
 
 export default function Settings() {
   const [location] = useLocation();
@@ -11,6 +12,11 @@ export default function Settings() {
       title: "Canais",
       url: "/dashboard/settings/channels",
       icon: MessageSquare,
+    },
+    {
+      title: "Mensagens Prontas",
+      url: "/dashboard/settings/quick-messages",
+      icon: MessageCircle,
     },
   ];
 
@@ -48,6 +54,7 @@ export default function Settings() {
 
       <div className="flex-1 bg-card border rounded-lg p-6">
         <Route path="/dashboard/settings/channels" component={Channels} />
+        <Route path="/dashboard/settings/quick-messages" component={QuickMessages} />
         <Route path="/dashboard/settings">
           {() => (
             <div className="text-center py-12">

@@ -8,6 +8,7 @@ import path from "path";
 import { authenticateToken, requireRole, generateToken, type AuthRequest } from "./middleware/auth";
 import { sendPasswordResetEmail } from "./services/email";
 import { initializeWebSocket, getWSManager } from "./websocket";
+import { correctText, generateQuickMessage } from "./services/groq";
 import {
   registerUserSchema,
   loginSchema,
@@ -15,7 +16,13 @@ import {
   resetPasswordSchema,
   updateUserSchema,
   updatePreferencesSchema,
+  insertConversationSchema,
+  insertMessageSchema,
+  insertQuickMessageSchema,
   type SafeUser,
+  type Conversation,
+  type Message,
+  type QuickMessage,
 } from "@shared/schema";
 
 const upload = multer({
@@ -736,6 +743,495 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     res.json(apiDocs);
   }
+
+  // CONVERSATIONS ROUTES
+  app.get("/api/conversations", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const currentUser = req.user!;
+      const status = req.query.status as string | undefined;
+
+      let query = `
+        SELECT c.*, 
+          json_build_object('id', client.id, 'email', client.email, 'name', client.name, 'image', client.image, 'role', client.role) as client,
+          json_build_object('id', att.id, 'email', att.email, 'name', att.name, 'image', att.image, 'role', att.role) as attendant,
+          p.protocol,
+          (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_content
+        FROM conversations c
+        INNER JOIN users client ON c.client_id = client.id
+        LEFT JOIN users att ON c.attendant_id = att.id
+        LEFT JOIN protocols p ON p.conversation_id = c.id
+        WHERE 1=1
+      `;
+      const params: any[] = [];
+
+      if (currentUser.role === "client") {
+        params.push(currentUser.id);
+        query += ` AND c.client_id = $${params.length}`;
+      } else if (currentUser.role === "attendant") {
+        params.push(currentUser.id);
+        query += ` AND (c.attendant_id = $${params.length} OR c.attendant_id IS NULL)`;
+      }
+
+      if (status) {
+        params.push(status);
+        query += ` AND c.status = $${params.length}`;
+      }
+
+      query += " ORDER BY c.last_message_at DESC NULLS LAST, c.created_at DESC";
+
+      const result = await pool.query(query, params);
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get conversations error:", error);
+      res.status(500).json({ message: "Erro ao buscar conversas" });
+    }
+  });
+
+  app.get("/api/conversations/:id", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const currentUser = req.user!;
+
+      let query = `
+        SELECT c.*, 
+          json_build_object('id', client.id, 'email', client.email, 'name', client.name, 'image', client.image, 'role', client.role) as client,
+          json_build_object('id', att.id, 'email', att.email, 'name', att.name, 'image', att.image, 'role', att.role) as attendant,
+          p.protocol
+        FROM conversations c
+        INNER JOIN users client ON c.client_id = client.id
+        LEFT JOIN users att ON c.attendant_id = att.id
+        LEFT JOIN protocols p ON p.conversation_id = c.id
+        WHERE c.id = $1
+      `;
+      const params: any[] = [req.params.id];
+
+      if (currentUser.role === "client") {
+        params.push(currentUser.id);
+        query += ` AND c.client_id = $${params.length}`;
+      } else if (currentUser.role === "attendant") {
+        params.push(currentUser.id);
+        query += ` AND (c.attendant_id = $${params.length} OR c.attendant_id IS NULL)`;
+      }
+
+      const result = await pool.query(query, params);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Get conversation error:", error);
+      res.status(500).json({ message: "Erro ao buscar conversa" });
+    }
+  });
+
+  app.post("/api/conversations", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+    const client = await pool.connect();
+    try {
+      const data = insertConversationSchema.parse(req.body);
+
+      await client.query("BEGIN");
+
+      // Create conversation
+      const convResult = await client.query(
+        `INSERT INTO conversations (client_id, attendant_id, status) 
+         VALUES ($1, $2, $3) 
+         RETURNING *`,
+        [data.clientId, data.attendantId || null, data.status || "pending"]
+      );
+
+      const conversation = convResult.rows[0];
+
+      // Generate protocol
+      const protocol = Math.random().toString(36).substring(2, 12).toUpperCase();
+      await client.query(
+        `INSERT INTO protocols (conversation_id, protocol) VALUES ($1, $2)`,
+        [conversation.id, protocol]
+      );
+
+      await client.query("COMMIT");
+
+      // Fetch full conversation with relations
+      const fullConvResult = await client.query(
+        `SELECT c.*, 
+          json_build_object('id', client.id, 'email', client.email, 'name', client.name, 'image', client.image, 'role', client.role) as client,
+          json_build_object('id', att.id, 'email', att.email, 'name', att.name, 'image', att.image, 'role', att.role) as attendant,
+          p.protocol
+        FROM conversations c
+        INNER JOIN users client ON c.client_id = client.id
+        LEFT JOIN users att ON c.attendant_id = att.id
+        LEFT JOIN protocols p ON p.conversation_id = c.id
+        WHERE c.id = $1`,
+        [conversation.id]
+      );
+
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "conversation_created",
+          data: fullConvResult.rows[0]
+        });
+      }
+
+      res.status(201).json(fullConvResult.rows[0]);
+    } catch (error: any) {
+      await client.query("ROLLBACK");
+      console.error("Create conversation error:", error);
+      res.status(400).json({ message: error.message || "Erro ao criar conversa" });
+    } finally {
+      client.release();
+    }
+  });
+
+  app.patch("/api/conversations/:id", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const currentUser = req.user!;
+      const { status, attendantId } = req.body;
+
+      const updates: string[] = [];
+      const values: any[] = [];
+      let paramCount = 1;
+
+      if (status) {
+        updates.push(`status = $${paramCount}`);
+        values.push(status);
+        paramCount++;
+      }
+
+      if (attendantId !== undefined) {
+        updates.push(`attendant_id = $${paramCount}`);
+        values.push(attendantId);
+        paramCount++;
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ message: "Nenhum dado para atualizar" });
+      }
+
+      updates.push("updated_at = NOW()");
+      values.push(req.params.id);
+
+      const result = await pool.query(
+        `UPDATE conversations SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+        values
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      // Fetch full conversation
+      const fullConvResult = await pool.query(
+        `SELECT c.*, 
+          json_build_object('id', client.id, 'email', client.email, 'name', client.name, 'image', client.image, 'role', client.role) as client,
+          json_build_object('id', att.id, 'email', att.email, 'name', att.name, 'image', att.image, 'role', att.role) as attendant,
+          p.protocol
+        FROM conversations c
+        INNER JOIN users client ON c.client_id = client.id
+        LEFT JOIN users att ON c.attendant_id = att.id
+        LEFT JOIN protocols p ON p.conversation_id = c.id
+        WHERE c.id = $1`,
+        [req.params.id]
+      );
+
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "conversation_updated",
+          data: fullConvResult.rows[0]
+        });
+      }
+
+      res.json(fullConvResult.rows[0]);
+    } catch (error: any) {
+      console.error("Update conversation error:", error);
+      res.status(400).json({ message: error.message || "Erro ao atualizar conversa" });
+    }
+  });
+
+  // MESSAGES ROUTES
+  app.get("/api/conversations/:conversationId/messages", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const currentUser = req.user!;
+      const { conversationId } = req.params;
+
+      // Verify access to conversation
+      const convCheck = await pool.query(
+        "SELECT * FROM conversations WHERE id = $1",
+        [conversationId]
+      );
+
+      if (convCheck.rows.length === 0) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      const conv = convCheck.rows[0];
+      
+      if (currentUser.role === "client" && conv.client_id !== currentUser.id) {
+        return res.status(403).json({ message: "Permissão negada" });
+      }
+
+      if (currentUser.role === "attendant" && conv.attendant_id !== currentUser.id && conv.attendant_id !== null) {
+        return res.status(403).json({ message: "Permissão negada" });
+      }
+
+      const result = await pool.query(
+        `SELECT m.*,
+          json_build_object('id', u.id, 'email', u.email, 'name', u.name, 'image', u.image, 'role', u.role) as sender
+        FROM messages m
+        INNER JOIN users u ON m.sender_id = u.id
+        WHERE m.conversation_id = $1
+        ORDER BY m.created_at ASC`,
+        [conversationId]
+      );
+
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get messages error:", error);
+      res.status(500).json({ message: "Erro ao buscar mensagens" });
+    }
+  });
+
+  app.post("/api/conversations/:conversationId/messages", authenticateToken, async (req: AuthRequest, res) => {
+    const client = await pool.connect();
+    try {
+      const currentUser = req.user!;
+      const { conversationId } = req.params;
+      const data = insertMessageSchema.parse(req.body);
+
+      await client.query("BEGIN");
+
+      // Verify access to conversation
+      const convResult = await client.query(
+        "SELECT * FROM conversations WHERE id = $1",
+        [conversationId]
+      );
+
+      if (convResult.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      const conv = convResult.rows[0];
+
+      // Insert message
+      const msgResult = await client.query(
+        `INSERT INTO messages (conversation_id, sender_id, content, type) 
+         VALUES ($1, $2, $3, $4) 
+         RETURNING *`,
+        [conversationId, currentUser.id, data.content, data.type || "text"]
+      );
+
+      // Update conversation last message timestamp
+      await client.query(
+        "UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1",
+        [conversationId]
+      );
+
+      await client.query("COMMIT");
+
+      const message = msgResult.rows[0];
+
+      // Fetch full message with sender
+      const fullMsgResult = await client.query(
+        `SELECT m.*,
+          json_build_object('id', u.id, 'email', u.email, 'name', u.name, 'image', u.image, 'role', u.role) as sender
+        FROM messages m
+        INNER JOIN users u ON m.sender_id = u.id
+        WHERE m.id = $1`,
+        [message.id]
+      );
+
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "message_created",
+          data: fullMsgResult.rows[0]
+        });
+      }
+
+      res.status(201).json(fullMsgResult.rows[0]);
+    } catch (error: any) {
+      await client.query("ROLLBACK");
+      console.error("Create message error:", error);
+      res.status(400).json({ message: error.message || "Erro ao criar mensagem" });
+    } finally {
+      client.release();
+    }
+  });
+
+  // QUICK MESSAGES ROUTES
+  app.get("/api/quick-messages", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT qm.*,
+          json_build_object('id', u.id, 'email', u.email, 'name', u.name, 'image', u.image) as created_by_user
+        FROM quick_messages qm
+        INNER JOIN users u ON qm.created_by = u.id
+        ORDER BY qm.created_at DESC`
+      );
+
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get quick messages error:", error);
+      res.status(500).json({ message: "Erro ao buscar mensagens prontas" });
+    }
+  });
+
+  app.post("/api/quick-messages", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+    try {
+      const currentUser = req.user!;
+      const data = insertQuickMessageSchema.parse(req.body);
+
+      const result = await pool.query(
+        `INSERT INTO quick_messages (title, content, icon, parameters, created_by) 
+         VALUES ($1, $2, $3, $4, $5) 
+         RETURNING *`,
+        [data.title, data.content, data.icon || "MessageCircle", data.parameters || [], currentUser.id]
+      );
+
+      const quickMessage = result.rows[0];
+
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "quick_message_created",
+          data: quickMessage
+        });
+      }
+
+      res.status(201).json(quickMessage);
+    } catch (error: any) {
+      console.error("Create quick message error:", error);
+      res.status(400).json({ message: error.message || "Erro ao criar mensagem pronta" });
+    }
+  });
+
+  app.patch("/api/quick-messages/:id", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+    try {
+      const { title, content, icon, parameters } = req.body;
+
+      const updates: string[] = [];
+      const values: any[] = [];
+      let paramCount = 1;
+
+      if (title) {
+        updates.push(`title = $${paramCount}`);
+        values.push(title);
+        paramCount++;
+      }
+
+      if (content) {
+        updates.push(`content = $${paramCount}`);
+        values.push(content);
+        paramCount++;
+      }
+
+      if (icon) {
+        updates.push(`icon = $${paramCount}`);
+        values.push(icon);
+        paramCount++;
+      }
+
+      if (parameters !== undefined) {
+        updates.push(`parameters = $${paramCount}`);
+        values.push(parameters);
+        paramCount++;
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ message: "Nenhum dado para atualizar" });
+      }
+
+      updates.push("updated_at = NOW()");
+      values.push(req.params.id);
+
+      const result = await pool.query(
+        `UPDATE quick_messages SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+        values
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Mensagem pronta não encontrada" });
+      }
+
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "quick_message_updated",
+          data: result.rows[0]
+        });
+      }
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Update quick message error:", error);
+      res.status(400).json({ message: error.message || "Erro ao atualizar mensagem pronta" });
+    }
+  });
+
+  app.delete("/api/quick-messages/:id", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+    try {
+      const result = await pool.query(
+        "DELETE FROM quick_messages WHERE id = $1 RETURNING id",
+        [req.params.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Mensagem pronta não encontrada" });
+      }
+
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "quick_message_deleted",
+          data: { id: req.params.id }
+        });
+      }
+
+      res.json({ message: "Mensagem pronta excluída com sucesso" });
+    } catch (error: any) {
+      console.error("Delete quick message error:", error);
+      res.status(500).json({ message: "Erro ao excluir mensagem pronta" });
+    }
+  });
+
+  // AI ROUTES
+  app.post("/api/ai/correct-text", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const { text } = req.body;
+
+      if (!text || typeof text !== "string") {
+        return res.status(400).json({ message: "Texto é obrigatório" });
+      }
+
+      const correctedText = await correctText(text);
+      res.json({ correctedText });
+    } catch (error: any) {
+      console.error("Correct text error:", error);
+      res.status(500).json({ message: error.message || "Erro ao corrigir texto" });
+    }
+  });
+
+  app.post("/api/ai/generate-message", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const { prompt, parameters } = req.body;
+
+      if (!prompt || typeof prompt !== "string") {
+        return res.status(400).json({ message: "Prompt é obrigatório" });
+      }
+
+      if (!parameters || typeof parameters !== "object") {
+        return res.status(400).json({ message: "Parâmetros são obrigatórios" });
+      }
+
+      const generatedMessage = await generateQuickMessage(prompt, parameters);
+      res.json({ generatedMessage });
+    } catch (error: any) {
+      console.error("Generate message error:", error);
+      res.status(500).json({ message: error.message || "Erro ao gerar mensagem" });
+    }
+  });
 
   const httpServer = createServer(app);
   
