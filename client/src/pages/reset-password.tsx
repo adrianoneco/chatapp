@@ -75,8 +75,9 @@ export default function ResetPassword() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-purple-950 via-purple-900/50 to-blue-950" />
+        <Card className="w-full max-w-md relative z-10">
           <CardHeader className="space-y-4 text-center">
             <CardTitle className="text-2xl">Link Inválido</CardTitle>
             <CardDescription>
@@ -94,8 +95,9 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-b from-purple-950 via-purple-900/50 to-blue-950" />
+      <Card className="w-full max-w-md relative z-10">
         <CardHeader className="space-y-4 text-center">
           <div className="flex justify-center">
             <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center">
