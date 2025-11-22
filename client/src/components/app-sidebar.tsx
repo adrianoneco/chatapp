@@ -63,6 +63,12 @@ export function AppSidebar() {
     (item) => !item.roles || (user && item.roles.includes(user.role))
   );
 
+  const isRouteActive = (itemUrl: string, currentLocation: string) => {
+    if (itemUrl === currentLocation) return true;
+    if (currentLocation.startsWith(itemUrl) && itemUrl !== "/") return true;
+    return false;
+  };
+
   const isCollapsed = state === "collapsed";
 
   const { mutate } = useMutation({
@@ -148,10 +154,15 @@ export function AppSidebar() {
             <SidebarMenu>
               {filteredItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={location === item.url}>
+                  <SidebarMenuButton asChild isActive={isRouteActive(item.url, location)}>
                     <Link href={item.url} data-testid={`link-${item.title.toLowerCase()}`}>
-                      <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.title}</span>}
+                      <div className="flex items-center gap-2 flex-1">
+                        {isRouteActive(item.url, location) && (
+                          <div className="absolute left-0 w-1 h-8 bg-primary rounded-r-full" />
+                        )}
+                        <item.icon className="h-4 w-4" />
+                        {!isCollapsed && <span>{item.title}</span>}
+                      </div>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

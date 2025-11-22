@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -10,9 +10,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UserAvatar } from "./user-avatar";
-import { Search } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import type { SafeUser } from "@shared/schema";
+import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface NewConversationDialogProps {
   open: boolean;
@@ -22,10 +25,36 @@ interface NewConversationDialogProps {
 export function NewConversationDialog({ open, onOpenChange }: NewConversationDialogProps) {
   const [search, setSearch] = useState("");
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
   const { data: contacts = [] } = useQuery<SafeUser[]>({
     queryKey: ["/api/users?role=client"],
     enabled: open,
+  });
+
+  const createConversationMutation = useMutation({
+    mutationFn: async (clientId: string) => {
+      return await apiRequest("POST", "/api/conversations", {
+        clientId,
+        status: "pending",
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      setLocation(`/conversations/webchat/${data.id}`);
+      onOpenChange(false);
+      toast({
+        title: "Conversa criada!",
+        description: "Uma nova conversa foi iniciada",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao criar conversa",
+        variant: "destructive",
+      });
+    },
   });
 
   const filteredContacts = contacts.filter((contact) =>
@@ -34,8 +63,7 @@ export function NewConversationDialog({ open, onOpenChange }: NewConversationDia
   );
 
   const handleSelectContact = (contactId: string) => {
-    setLocation(`/conversations/webchat/${contactId}`);
-    onOpenChange(false);
+    createConversationMutation.mutate(contactId);
   };
 
   return (
@@ -69,14 +97,22 @@ export function NewConversationDialog({ open, onOpenChange }: NewConversationDia
                 {filteredContacts.map((contact) => (
                   <div
                     key={contact.id}
-                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                    onClick={() => handleSelectContact(contact.id)}
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-lg transition-colors",
+                      createConversationMutation.isPending
+                        ? "opacity-50 cursor-not-allowed"
+                        : "hover:bg-accent cursor-pointer"
+                    )}
+                    onClick={() => !createConversationMutation.isPending && handleSelectContact(contact.id)}
                   >
                     <UserAvatar name={contact.name} image={contact.image} className="h-10 w-10" />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{contact.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{contact.email}</p>
                     </div>
+                    {createConversationMutation.isPending && (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
                   </div>
                 ))}
               </div>

@@ -17,6 +17,7 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   image: text("image"),
   role: text("role").notNull().default("client"), // client, attendant, admin
+  remoteJid: text("remote_jid"), // WhatsApp number/ID
   deleted: boolean("deleted").notNull().default(false),
   preferences: jsonb("preferences").$type<UserPreferences>().notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -70,6 +71,7 @@ export const updateUserSchema = z.object({
   email: z.string().email("Email inválido").optional(),
   role: z.enum(["client", "attendant", "admin"]).optional(),
   image: z.string().optional(),
+  remoteJid: z.string().optional(),
 });
 
 export const updatePreferencesSchema = z.object({
@@ -97,6 +99,7 @@ export const conversations = pgTable("conversations", {
   clientId: uuid("client_id").notNull().references(() => users.id),
   attendantId: uuid("attendant_id").references(() => users.id),
   status: text("status").notNull().default("pending"), // pending, attending, closed
+  deleted: boolean("deleted").notNull().default(false),
   lastMessageAt: timestamp("last_message_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

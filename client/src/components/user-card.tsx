@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "./user-avatar";
 import { RoleBadge } from "./role-badge";
-import { Edit, Trash2 } from "lucide-react";
+import { Edit, Trash2, MessageSquare, Phone } from "lucide-react";
 import type { SafeUser } from "@shared/schema";
 import { getDate } from "@/lib/date-utils";
 
@@ -10,11 +10,13 @@ interface UserCardProps {
   user: SafeUser;
   onEdit: (user: SafeUser) => void;
   onDelete: (user: SafeUser) => void;
+  onStartConversation?: (user: SafeUser) => void;
   canEdit?: boolean;
   canDelete?: boolean;
+  showConversationButton?: boolean;
 }
 
-export function UserCard({ user, onEdit, onDelete, canEdit = true, canDelete = true }: UserCardProps) {
+export function UserCard({ user, onEdit, onDelete, onStartConversation, canEdit = true, canDelete = true, showConversationButton = false }: UserCardProps) {
   return (
     <Card className="hover-elevate" data-testid={`card-user-${user.id}`}>
       <CardContent className="p-6">
@@ -28,6 +30,12 @@ export function UserCard({ user, onEdit, onDelete, canEdit = true, canDelete = t
               <p className="text-sm text-muted-foreground mb-2 truncate" data-testid={`text-email-${user.id}`}>
                 {user.email}
               </p>
+              {user.remoteJid && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+                  <Phone className="h-3 w-3" />
+                  <span>{user.remoteJid}</span>
+                </div>
+              )}
               <RoleBadge role={user.role as any} />
             </div>
           </div>
@@ -54,6 +62,20 @@ export function UserCard({ user, onEdit, onDelete, canEdit = true, canDelete = t
             )}
           </div>
         </div>
+        {showConversationButton && onStartConversation && (
+          <div className="mt-4 flex gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => onStartConversation(user)}
+              className="flex-1"
+              data-testid={`button-start-conversation-${user.id}`}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Iniciar Conversa
+            </Button>
+          </div>
+        )}
         <div className="mt-4 text-xs text-muted-foreground">
           Criado em {getDate(user.createdAt)}
         </div>

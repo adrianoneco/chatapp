@@ -7,8 +7,10 @@ interface CardsManagerProps {
   isLoading: boolean;
   onEdit: (user: SafeUser) => void;
   onDelete: (user: SafeUser) => void;
+  onStartConversation?: (user: SafeUser) => void;
   canEdit?: boolean;
   canDelete?: boolean;
+  showConversationButton?: boolean;
 }
 
 export function CardsManager({
@@ -16,8 +18,10 @@ export function CardsManager({
   isLoading,
   onEdit,
   onDelete,
+  onStartConversation,
   canEdit = true,
   canDelete = true,
+  showConversationButton = false,
 }: CardsManagerProps) {
   if (isLoading) {
     return (
@@ -37,8 +41,10 @@ export function CardsManager({
           user={user}
           onEdit={onEdit}
           onDelete={onDelete}
+          onStartConversation={onStartConversation}
           canEdit={canEdit}
           canDelete={canDelete}
+          showConversationButton={showConversationButton}
         />
       ))}
     </div>

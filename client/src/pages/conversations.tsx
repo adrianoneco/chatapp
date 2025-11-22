@@ -16,6 +16,20 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -38,6 +52,12 @@ import {
   CheckCircle,
   Loader2,
   Sparkles,
+  MoreVertical,
+  Play,
+  XCircle,
+  Trash2,
+  RefreshCw,
+  Mic2,
 } from "lucide-react";
 import * as Icons from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -156,6 +176,91 @@ export default function Conversations() {
     },
   });
 
+  // Update conversation status mutation
+  const updateConversationStatusMutation = useMutation({
+    mutationFn: async ({ conversationId, status }: { conversationId: string; status: string }) => {
+      return await apiRequest("PATCH", `/api/conversations/${conversationId}`, { status });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      toast({
+        title: "Status atualizado!",
+        description: "O status da conversa foi atualizado",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao atualizar status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete conversation mutation
+  const deleteConversationMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      return await apiRequest("DELETE", `/api/conversations/${conversationId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      setLocation("/conversations");
+      toast({
+        title: "Conversa excluída!",
+        description: "A conversa foi excluída com sucesso",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao excluir conversa",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Transfer conversation mutation
+  const transferConversationMutation = useMutation({
+    mutationFn: async ({ conversationId, attendantId }: { conversationId: string; attendantId: string | null }) => {
+      return await apiRequest("PATCH", `/api/conversations/${conversationId}/transfer`, { attendantId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      toast({
+        title: "Conversa transferida!",
+        description: "A conversa foi transferida com sucesso",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao transferir conversa",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Transcribe conversation mutation
+  const transcribeConversationMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      const res = await apiRequest("POST", `/api/conversations/${conversationId}/transcribe`);
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Transcrição concluída!",
+        description: "A conversa foi transcrita com sucesso",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao transcrever conversa",
+        variant: "destructive",
+      });
+    },
+  });
+
   // WebSocket events
   useWebSocketEvent("message_created", (data) => {
     if (data.conversation_id === selectedConversationId) {
@@ -229,7 +334,7 @@ export default function Conversations() {
     return IconComponent || Icons.MessageCircle;
   };
 
-  const filteredConversations = conversations?.filter(c => c.status === activeTab) || [];
+  const filteredConversations = conversations?.filter(c => c.status === activeTab && !c.deleted) || [];
 
   return (
     <div className="flex flex-1 h-full overflow-hidden">
@@ -237,7 +342,7 @@ export default function Conversations() {
       <div
         className={cn(
           "bg-card border-r transition-all duration-300 flex flex-col h-full overflow-hidden",
-          leftSidebarOpen ? "w-80" : "w-0"
+          leftSidebarOpen ? "w-96" : "w-0"
         )}
       >
         {leftSidebarOpen && (
@@ -279,10 +384,20 @@ export default function Conversations() {
                   <TabsTrigger value="pending" data-testid="tab-pending">
                     <Clock className="h-3 w-3 mr-1" />
                     Pendente
+                    {(conversations?.filter(c => c.status === "pending" && !c.deleted).length || 0) > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-4 min-w-4 px-1 text-xs">
+                        {conversations?.filter(c => c.status === "pending" && !c.deleted).length || 0}
+                      </Badge>
+                    )}
                   </TabsTrigger>
                   <TabsTrigger value="attending" data-testid="tab-attending">
                     <MessageSquare className="h-3 w-3 mr-1" />
                     Atendendo
+                    {(conversations?.filter(c => c.status === "attending" && !c.deleted).length || 0) > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-4 min-w-4 px-1 text-xs">
+                        {conversations?.filter(c => c.status === "attending" && !c.deleted).length || 0}
+                      </Badge>
+                    )}
                   </TabsTrigger>
                   <TabsTrigger value="closed" data-testid="tab-closed">
                     <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -309,37 +424,67 @@ export default function Conversations() {
               ) : (
                 <div className="p-2 space-y-1">
                   {filteredConversations.map((conversation: any) => (
-                    <div
-                      key={conversation.id}
-                      className={cn(
-                        "p-3 rounded-md hover-elevate cursor-pointer",
-                        selectedConversationId === conversation.id && "bg-sidebar-accent"
-                      )}
-                      onClick={() => setLocation(`/conversations/webchat/${conversation.id}`)}
-                      data-testid={`conversation-item-${conversation.id}`}
-                    >
-                      <div className="flex gap-3">
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={conversation.client?.image} />
-                          <AvatarFallback>{conversation.client?.name?.[0] || "C"}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-medium text-sm truncate">
-                              {conversation.client?.name || "Cliente"}
-                            </p>
-                            {conversation.last_message_at && (
-                              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                {getRelativeDate(conversation.last_message_at)}
-                              </span>
-                            )}
+                    <ContextMenu key={conversation.id}>
+                      <ContextMenuTrigger>
+                        <div
+                          className={cn(
+                            "p-3 rounded-md hover-elevate cursor-pointer",
+                            selectedConversationId === conversation.id && "bg-sidebar-accent"
+                          )}
+                          onClick={() => setLocation(`/conversations/webchat/${conversation.id}`)}
+                          data-testid={`conversation-item-${conversation.id}`}
+                        >
+                          <div className="flex gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={conversation.client?.image} />
+                              <AvatarFallback>{conversation.client?.name?.[0] || "C"}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-medium text-sm truncate">
+                                  {conversation.client?.name || "Cliente"}
+                                </p>
+                                {conversation.last_message_at && (
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                    {getRelativeDate(conversation.last_message_at)}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {conversation.last_message_content || "Sem mensagens"}
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {conversation.last_message_content || "Sem mensagens"}
-                          </p>
                         </div>
-                      </div>
-                    </div>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent>
+                        {conversation.status === "pending" && (
+                          <ContextMenuItem onClick={() => updateConversationStatusMutation.mutate({ conversationId: conversation.id, status: "attending" })}>
+                            <Play className="h-4 w-4 mr-2" />
+                            Iniciar Atendimento
+                          </ContextMenuItem>
+                        )}
+                        {conversation.status === "attending" && (
+                          <ContextMenuItem onClick={() => updateConversationStatusMutation.mutate({ conversationId: conversation.id, status: "closed" })}>
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Encerrar Conversa
+                          </ContextMenuItem>
+                        )}
+                        <ContextMenuItem onClick={() => transferConversationMutation.mutate({ conversationId: conversation.id, attendantId: null })}>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Transferir
+                        </ContextMenuItem>
+                        <ContextMenuItem onClick={() => transcribeConversationMutation.mutate(conversation.id)}>
+                          <Mic2 className="h-4 w-4 mr-2" />
+                          Transcrever com I.A
+                        </ContextMenuItem>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem onClick={() => deleteConversationMutation.mutate(conversation.id)} className="text-destructive">
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Excluir
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
                   ))}
                 </div>
               )}
@@ -382,6 +527,40 @@ export default function Conversations() {
                       : "Nenhuma mensagem ainda"}
                   </p>
                 </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" data-testid="button-conversation-menu">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {selectedConversation?.status === "pending" && (
+                      <DropdownMenuItem onClick={() => updateConversationStatusMutation.mutate({ conversationId: selectedConversationId!, status: "attending" })}>
+                        <Play className="h-4 w-4 mr-2" />
+                        Iniciar Atendimento
+                      </DropdownMenuItem>
+                    )}
+                    {selectedConversation?.status === "attending" && (
+                      <DropdownMenuItem onClick={() => updateConversationStatusMutation.mutate({ conversationId: selectedConversationId!, status: "closed" })}>
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Encerrar Conversa
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={() => transferConversationMutation.mutate({ conversationId: selectedConversationId!, attendantId: null })}>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Transferir
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => transcribeConversationMutation.mutate(selectedConversationId!)}>
+                      <Mic2 className="h-4 w-4 mr-2" />
+                      Transcrever com I.A
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => deleteConversationMutation.mutate(selectedConversationId!)} className="text-destructive">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Excluir
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
                   size="icon"
                   variant="ghost"

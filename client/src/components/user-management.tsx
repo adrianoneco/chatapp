@@ -12,6 +12,7 @@ import { LayoutGrid, List, Plus, type LucideIcon } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeUsers } from "@/hooks/use-realtime-users";
+import { useLocation } from "wouter";
 
 interface UserManagementProps {
   role: "client" | "attendant" | "admin";
@@ -31,6 +32,7 @@ export function UserManagement({
   icon: Icon,
 }: UserManagementProps) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -144,6 +146,34 @@ export function UserManagement({
     if (selectedUser) {
       await deleteMutation.mutateAsync(selectedUser.id);
     }
+  };
+
+  const startConversationMutation = useMutation({
+    mutationFn: async (clientId: string) => {
+      return await apiRequest("POST", "/api/conversations", {
+        clientId,
+        status: "pending",
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      setLocation(`/conversations/webchat/${data.id}`);
+      toast({
+        title: "Conversa criada!",
+        description: "Uma nova conversa foi iniciada",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao criar conversa",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleStartConversation = (user: SafeUser) => {
+    startConversationMutation.mutate(user.id);
   };
 
   return (

@@ -32,6 +32,18 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// Create data directory structure if it doesn't exist
+const dataDir = path.join(process.cwd(), "data");
+const dataUploadsDir = path.join(dataDir, "uploads");
+const profilesDir = path.join(dataUploadsDir, "profiles");
+const messagesDir = path.join(dataUploadsDir, "messages");
+const attachmentsDir = path.join(dataUploadsDir, "attachments");
+[dataDir, dataUploadsDir, profilesDir, messagesDir, attachmentsDir].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
+
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown
@@ -46,8 +58,11 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
-// Serve uploaded files
+// Serve uploaded files (legacy)
 app.use("/uploads", express.static(uploadsDir));
+
+// Serve data files
+app.use("/data", express.static(dataDir));
 
 app.use((req, res, next) => {
   const start = Date.now();

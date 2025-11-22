@@ -4,11 +4,23 @@ if (!process.env.GROQ_API_KEY) {
   console.warn("GROQ_API_KEY not found. AI features will not work.");
 }
 
-const groq = process.env.GROQ_API_KEY 
-  ? new Groq({ apiKey: process.env.GROQ_API_KEY })
-  : null;
+const getRandomApiKey = (): string | null => {
+  if (!process.env.GROQ_API_KEY) return null;
+  
+  const apiKeys = process.env.GROQ_API_KEY.split(',').map(key => key.trim());
+  if (apiKeys.length === 0) return null;
+  
+  const randomIndex = Math.floor(Math.random() * apiKeys.length);
+  return apiKeys[randomIndex];
+};
+
+const getGroqClient = (): Groq | null => {
+  const apiKey = getRandomApiKey();
+  return apiKey ? new Groq({ apiKey }) : null;
+};
 
 export async function correctText(text: string): Promise<string> {
+  const groq = getGroqClient();
   if (!groq) {
     throw new Error("Groq API key not configured");
   }
@@ -41,6 +53,7 @@ export async function generateQuickMessage(
   prompt: string,
   parameters: Record<string, string>
 ): Promise<string> {
+  const groq = getGroqClient();
   if (!groq) {
     throw new Error("Groq API key not configured");
   }
@@ -85,5 +98,35 @@ Gere a mensagem usando estes valores diretamente.`
   } catch (error) {
     console.error("Groq API error:", error);
     throw new Error("Erro ao gerar mensagem com IA");
+  }
+}
+
+export async function summarizeConversation(transcript: string): Promise<string> {
+  const groq = getGroqClient();
+  if (!groq) {
+    throw new Error("Groq API key not configured");
+  }
+
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "Você é um assistente especializado em resumir conversas de atendimento ao cliente. Crie um resumo conciso e estruturado da conversa, destacando: 1) Motivo do contato, 2) Principais pontos discutidos, 3) Resolução ou próximos passos. Use bullet points e seja objetivo."
+        },
+        {
+          role: "user",
+          content: `Resuma esta conversa de atendimento:\n\n${transcript}`
+        }
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.3,
+      max_tokens: 1000,
+    });
+
+    return completion.choices[0]?.message?.content?.trim() || "Não foi possível gerar o resumo";
+  } catch (error) {
+    console.error("Groq API error:", error);
+    throw new Error("Erro ao resumir conversa com IA");
   }
 }

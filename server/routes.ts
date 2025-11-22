@@ -27,7 +27,11 @@ import {
 
 const upload = multer({
   storage: multer.diskStorage({
-    destination: "uploads/",
+    destination: (req, file, cb) => {
+      const type = (req.query.type as string) || "profiles";
+      const destPath = `data/uploads/${type}`;
+      cb(null, destPath);
+    },
     filename: (req, file, cb) => {
       const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
       cb(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
@@ -469,7 +473,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: "Nenhum arquivo enviado" });
     }
 
-    const url = `/uploads/${req.file.filename}`;
+    const type = (req.query.type as string) || "profiles";
+    const url = `/data/uploads/${type}/${req.file.filename}`;
     res.json({ url });
   });
 
@@ -946,6 +951,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Update conversation error:", error);
       res.status(400).json({ message: error.message || "Erro ao atualizar conversa" });
+    }
+  });
+
+  app.delete("/api/conversations/:id", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+    try {
+      const result = await pool.query(
+        "UPDATE conversations SET deleted = true, updated_at = NOW() WHERE id = $1 RETURNING *",
+        [req.params.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "conversation_deleted",
+          data: { id: req.params.id }
+        });
+      }
+
+      res.json({ message: "Conversa excluída com sucesso" });
+    } catch (error: any) {
+      console.error("Delete conversation error:", error);
+      res.status(400).json({ message: error.message || "Erro ao excluir conversa" });
+    }
+  });
+
+  app.patch("/api/conversations/:id/transfer", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+    try {
+      const { attendantId } = req.body;
+
+      const result = await pool.query(
+        "UPDATE conversations SET attendant_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+        [attendantId, req.params.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      const fullConvResult = await pool.query(
+        `SELECT c.*, 
+          json_build_object('id', client.id, 'email', client.email, 'name', client.name, 'image', client.image, 'role', client.role) as client,
+          json_build_object('id', att.id, 'email', att.email, 'name', att.name, 'image', att.image, 'role', att.role) as attendant,
+          p.protocol
+        FROM conversations c
+        INNER JOIN users client ON c.client_id = client.id
+        LEFT JOIN users att ON c.attendant_id = att.id
+        LEFT JOIN protocols p ON p.conversation_id = c.id
+        WHERE c.id = $1`,
+        [req.params.id]
+      );
+
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "conversation_updated",
+          data: fullConvResult.rows[0]
+        });
+      }
+
+      res.json(fullConvResult.rows[0]);
+    } catch (error: any) {
+      console.error("Transfer conversation error:", error);
+      res.status(400).json({ message: error.message || "Erro ao transferir conversa" });
+    }
+  });
+
+  app.post("/api/conversations/:id/transcribe", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+
+      const messagesResult = await pool.query(
+        `SELECT m.*, u.name as sender_name
+        FROM messages m
+        INNER JOIN users u ON m.sender_id = u.id
+        WHERE m.conversation_id = $1
+        ORDER BY m.created_at ASC`,
+        [id]
+      );
+
+      if (messagesResult.rows.length === 0) {
+        return res.status(404).json({ message: "Nenhuma mensagem encontrada para transcrever" });
+      }
+
+      const transcript = messagesResult.rows.map((msg: any) => 
+        `${msg.sender_name}: ${msg.content}`
+      ).join("\n");
+
+      const { summarizeConversation } = await import("./services/groq");
+      const summary = await summarizeConversation(transcript);
+
+      res.json({ transcript, summary });
+    } catch (error: any) {
+      console.error("Transcribe conversation error:", error);
+      res.status(400).json({ message: error.message || "Erro ao transcrever conversa" });
     }
   });
 
