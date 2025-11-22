@@ -56,7 +56,7 @@ const menuItems = [
   },
   {
     title: "Documentação API",
-    url: "/api-docs",
+    url: "/docs",
     icon: BookOpen,
     roles: ["admin"],
   },
