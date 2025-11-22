@@ -67,56 +67,10 @@ app.use(cookieParser());
 import cors from "cors";
 
 // Configure CORS to work with cookies (credentials)
-// If CLIENT_ORIGIN is set, parse as comma-separated list of allowed origins
-// Otherwise, allow all origins to support credentials
-const clientOriginEnv = process.env.CLIENT_ORIGIN?.trim();
-const allowedOrigins = clientOriginEnv 
-  ? clientOriginEnv.split(',').map(o => o.trim()).filter(Boolean)
-  : [];
-
+// Allow all origins and enable credentials to support cookies
 app.use(
   cors({
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean | string) => void) => {
-      // If no allowed origins configured, allow all origins
-      if (allowedOrigins.length === 0) {
-        return callback(null, origin || true);
-      }
-      
-      // If no origin header (same-origin requests), allow it
-      if (!origin) {
-        return callback(null, true);
-      }
-      
-      // Extract hostname from origin URL
-      let originHostname: string;
-      try {
-        originHostname = new URL(origin).hostname;
-      } catch {
-        // If origin is not a valid URL, reject it
-        return callback(new Error('Invalid origin'));
-      }
-      
-      // Check if origin hostname matches any allowed hostname
-      const isAllowed = allowedOrigins.some(allowed => {
-        // Parse allowed origin to extract hostname
-        let allowedHostname: string;
-        try {
-          // Try parsing as URL first (if it has protocol)
-          allowedHostname = new URL(allowed).hostname;
-        } catch {
-          // If not a valid URL, treat it as a hostname directly
-          allowedHostname = allowed.replace(/^https?:\/\//, '').split(':')[0];
-        }
-        
-        return originHostname === allowedHostname;
-      });
-      
-      if (isAllowed) {
-        return callback(null, origin);
-      }
-      
-      return callback(new Error('Not allowed by CORS'));
-    },
+    origin: true,
     credentials: true,
   }),
 );

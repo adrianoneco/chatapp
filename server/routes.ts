@@ -182,40 +182,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const safeUser = toSafeUser(user);
       const token = generateToken(safeUser);
 
-      // Cookie options: In Replit environment, frontend (.replit.dev) and backend (.repl.co)
-      // are on different domains, which browsers treat as cross-site. We need SameSite=none
-      // and secure=true for cookies to work properly. Detect Replit or use CLIENT_ORIGIN env.
-      const origin = req.get('origin') || '';
-      const host = req.get('host') || '';
-      const isReplit = origin.includes('.replit.dev') || origin.includes('.repl.co') ||
-                       host.includes('.replit.dev') || host.includes('.repl.co');
-
-      const clientOrigin = CLIENT_ORIGIN;
-      const clientOriginIsHttps = clientOrigin.toLowerCase().startsWith('https://');
-      const isCrossSite = !!clientOrigin || isReplit;
-
+      // Simplified cookie configuration for persistent sessions
       const cookieOptions: any = {
         httpOnly: true,
-        // secure when running in production or when client origin uses HTTPS
-        secure: process.env.NODE_ENV === "production" || clientOriginIsHttps || isReplit,
+        secure: process.env.NODE_ENV === "production",
         maxAge: 24 * 60 * 60 * 1000, // 1 day
         path: "/",
-        sameSite: isCrossSite ? "none" : "lax",
+        sameSite: "lax",
       };
 
-      // If CLIENT_ORIGIN is set, explicitly set cookie domain to ensure the cookie
-      // is scoped to the client host (useful when behind a proxy). Do not set
-      // for localhost-like origins.
-      if (COOKIE_DOMAIN) {
-        cookieOptions.domain = COOKIE_DOMAIN;
-      }
-
       res.cookie(COOKIE_NAME, token, cookieOptions);
-      // NOTE: debug header removed to avoid leaking cookie config in responses.
 
-      // In development, return the token in the JSON response as a fallback so
-      // the frontend can persist it (useful when cookies aren't available
-      // in some dev setups). Do NOT return the token in production responses.
+      // Always return token in development for fallback
       if (process.env.NODE_ENV === "production") {
         res.json(safeUser);
       } else {
