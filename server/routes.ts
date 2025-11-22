@@ -123,20 +123,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     updatedAt: row.updated_at,
   });
 
-  // AUTH ROUTES
-  const COOKIE_NAME = process.env.APP_COOKIE_NAME || "token";
-  const CLIENT_ORIGIN = (process.env.CLIENT_ORIGIN || '').trim();
-  let COOKIE_DOMAIN: string | undefined;
-  if (CLIENT_ORIGIN) {
-    try {
-      const parsed = new URL(CLIENT_ORIGIN);
-      if (parsed.hostname && !parsed.hostname.match(/localhost|127\.0\.0\.1/)) {
-        COOKIE_DOMAIN = parsed.hostname === 'chatapp.easydev.com.br' ? 'chatapp.easydev.com.br' : parsed.hostname;
-      }
-    } catch (e) {
-      /* ignore invalid CLIENT_ORIGIN */
-    }
-  }
+  // AUTH ROUTES - Simplified configuration
+  const COOKIE_NAME = process.env.APP_COOKIE_NAME || "auth_token";
   app.post("/api/auth/register", async (req, res) => {
     try {
       const data = registerUserSchema.parse(req.body);
@@ -182,32 +170,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const safeUser = toSafeUser(user);
       const token = generateToken(safeUser);
 
-      // Simplified cookie configuration for persistent sessions
-      const cookieOptions: any = {
+      // Set cookie with proper configuration for persistence
+      // Use SameSite=None with Secure for cross-origin (Replit environment)
+      // Use SameSite=Lax without Secure for same-origin (local development)
+      const isProduction = process.env.NODE_ENV === "production";
+      const origin = req.get('origin') || '';
+      const isReplit = origin.includes('.replit.dev') || origin.includes('.repl.co');
+      const isCrossOrigin = isReplit || isProduction;
+
+      res.cookie(COOKIE_NAME, token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: isCrossOrigin,
         maxAge: 24 * 60 * 60 * 1000, // 1 day
         path: "/",
-        sameSite: "lax",
-      };
+        sameSite: isCrossOrigin ? "none" : "lax",
+      });
 
-      res.cookie(COOKIE_NAME, token, cookieOptions);
-
-      // Always return token in development for fallback
-      if (process.env.NODE_ENV === "production") {
-        res.json(safeUser);
-      } else {
-        res.json({ ...safeUser, token });
-      }
+      res.json(safeUser);
     } catch (error: any) {
       res.status(400).json({ message: error.message || "Erro ao fazer login" });
     }
   });
 
   app.post("/api/auth/logout", (req, res) => {
-    const clearOpts: any = { path: "/" };
-    if (COOKIE_DOMAIN) clearOpts.domain = COOKIE_DOMAIN;
-    res.clearCookie(COOKIE_NAME, clearOpts);
+    res.clearCookie(COOKIE_NAME, { path: "/" });
     res.json({ message: "Logout realizado com sucesso" });
   });
 

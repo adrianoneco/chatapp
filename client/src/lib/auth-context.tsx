@@ -49,23 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      const res = await apiRequest("POST", "/api/auth/login", { email, password });
-      // Attempt to parse JSON to read potential dev fallback token
-      try {
-        const json = await res.json();
-        return json;
-      } catch (e) {
-        return null;
-      }
+      await apiRequest("POST", "/api/auth/login", { email, password });
     },
-    onSuccess: async (data: any) => {
-      // If backend returned a dev token (development fallback), persist it
-      if (data?.token) {
-        try {
-          localStorage.setItem("devToken", data.token);
-        } catch (e) { }
-      }
-
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
     },
@@ -76,10 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiRequest("POST", "/api/auth/logout", {});
     },
     onSuccess: async () => {
-      try {
-        localStorage.removeItem("devToken");
-      } catch (e) { }
-
       // Set query data to null immediately
       queryClient.setQueryData(["/api/auth/me"], null);
       // Clear all other queries except auth
