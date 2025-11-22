@@ -10,6 +10,9 @@ import express, {
 } from "express";
 
 import cookieParser from "cookie-parser";
+import session from "express-session";
+import connectPg from "connect-pg-simple";
+import { pool } from "./database";
 import { registerRoutes } from "./routes";
 import { initializeDatabase } from "./database";
 
@@ -57,6 +60,35 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+// Trust proxy - Required for secure cookies to work behind Replit's proxy
+app.set('trust proxy', 1);
+
+// Session configuration with PostgreSQL store
+const PgSession = connectPg(session);
+
+if (!process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET environment variable is required");
+}
+
+app.use(
+  session({
+    store: new PgSession({
+      pool: pool,
+      tableName: "user_sessions",
+      createTableIfMissing: true,
+    }),
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    },
+  })
+);
 
 // Enable CORS with credentials so cookies (HttpOnly session token) are allowed
 // When behind a proxy or using a separate client origin, browsers will only

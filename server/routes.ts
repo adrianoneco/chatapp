@@ -5,7 +5,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import multer from "multer";
 import path from "path";
-import { authenticateToken, requireRole, generateToken, verifyToken, type AuthRequest } from "./middleware/auth";
+import { authenticateUser, requireRole, type AuthRequest } from "./middleware/auth";
 import { sendPasswordResetEmail } from "./services/email";
 import { initializeWebSocket, getWSManager } from "./websocket";
 import { correctText, generateQuickMessage } from "./services/groq";
@@ -123,8 +123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     updatedAt: row.updated_at,
   });
 
-  // AUTH ROUTES - Simplified configuration
-  const COOKIE_NAME = process.env.APP_COOKIE_NAME || "auth_token";
+  // AUTH ROUTES - Session-based authentication
   app.post("/api/auth/register", async (req, res) => {
     try {
       const data = registerUserSchema.parse(req.body);
@@ -147,7 +146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", async (req: AuthRequest, res) => {
     try {
       const data = loginSchema.parse(req.body);
 
@@ -168,73 +167,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const safeUser = toSafeUser(user);
-      const token = generateToken(safeUser);
+      
+      // Store user in session
+      req.session.userId = safeUser.id;
+      req.session.user = safeUser;
 
-      // Set cookie with proper configuration for persistence
-      // Use SameSite=None with Secure for cross-origin (Replit environment)
-      // Use SameSite=Lax without Secure for same-origin (local development)
-      const isProduction = process.env.NODE_ENV === "production";
-      const origin = req.get('origin') || '';
-      const isReplit = origin.includes('.replit.dev') || origin.includes('.repl.co');
-      const isCrossOrigin = isReplit || isProduction;
-
-      res.cookie(COOKIE_NAME, token, {
-        httpOnly: true,
-        secure: isCrossOrigin,
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
-        path: "/",
-        sameSite: isCrossOrigin ? "none" : "lax",
+      // Save session and return user
+      req.session.save((err) => {
+        if (err) {
+          console.error("Error saving session:", err);
+          return res.status(500).json({ message: "Erro ao criar sessão" });
+        }
+        res.json(safeUser);
       });
-
-      res.json(safeUser);
     } catch (error: any) {
       res.status(400).json({ message: error.message || "Erro ao fazer login" });
     }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
-    res.clearCookie(COOKIE_NAME, { path: "/" });
-    res.json({ message: "Logout realizado com sucesso" });
+  app.post("/api/auth/logout", (req: AuthRequest, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error("Error destroying session:", err);
+        return res.status(500).json({ message: "Erro ao fazer logout" });
+      }
+      res.clearCookie("connect.sid");
+      res.json({ message: "Logout realizado com sucesso" });
+    });
   });
 
-  app.get("/api/auth/me", authenticateToken, async (req: AuthRequest, res) => {
+  app.get("/api/auth/me", authenticateUser, async (req: AuthRequest, res) => {
     try {
+      // Session already verified by authenticateUser middleware
+      // Re-fetch user from database to ensure fresh data
       const result = await pool.query(
-        "SELECT id, email, name, image, role, deleted, preferences, created_at, updated_at FROM users WHERE id = $1 AND deleted = false",
+        "SELECT id, email, name, image, role, remote_jid, deleted, preferences, created_at, updated_at FROM users WHERE id = $1 AND deleted = false",
         [req.user!.id]
       );
 
       if (result.rows.length === 0) {
+        // User was deleted, destroy session
+        req.session.destroy(() => {});
         return res.status(404).json({ message: "Usuário não encontrado" });
       }
 
       const safeUser = toSafeUser(result.rows[0]);
+      
+      // Update session with fresh user data
+      req.session.user = safeUser;
+      
       res.json(safeUser);
     } catch (error: any) {
       res.status(500).json({ message: "Erro ao buscar usuário" });
-    }
-  });
-
-  // Lightweight status endpoint to help debug authentication from the client.
-  // Returns whether a cookie with the configured name is present and whether
-  // the token is valid. This endpoint is safe for debugging and does not
-  // modify any state.
-  app.get("/api/auth/status", async (req, res) => {
-    try {
-      const COOKIE_NAME = process.env.APP_COOKIE_NAME || "token";
-      const token = req.cookies?.[COOKIE_NAME];
-      if (!token) {
-        return res.json({ authenticated: false, cookiePresent: false, cookieName: COOKIE_NAME });
-      }
-
-      const user = verifyToken(token as string);
-      if (!user) {
-        return res.json({ authenticated: false, cookiePresent: true, cookieName: COOKIE_NAME });
-      }
-
-      return res.json({ authenticated: true, cookiePresent: true, cookieName: COOKIE_NAME, user: { id: user.id, email: user.email, role: user.role } });
-    } catch (error) {
-      return res.status(500).json({ authenticated: false, error: String(error) });
     }
   });
 
@@ -335,7 +319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // USER ROUTES
-  app.get("/api/users", authenticateToken, async (req: AuthRequest, res) => {
+  app.get("/api/users", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const role = req.query.role as string | undefined;
       const currentUser = req.user!;
@@ -369,7 +353,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users", authenticateToken, requireRole("admin"), async (req: AuthRequest, res) => {
+  app.post("/api/users", authenticateUser, requireRole("admin"), async (req: AuthRequest, res) => {
     try {
       const { name, email, role, image, password } = req.body;
 
@@ -406,7 +390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/:id", authenticateToken, async (req: AuthRequest, res) => {
+  app.get("/api/users/:id", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const currentUser = req.user!;
 
@@ -433,7 +417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/users/:id", authenticateToken, async (req: AuthRequest, res) => {
+  app.patch("/api/users/:id", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const data = updateUserSchema.parse(req.body);
       const currentUser = req.user!;
@@ -507,7 +491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/users/:id", authenticateToken, requireRole("admin"), async (req: AuthRequest, res) => {
+  app.delete("/api/users/:id", authenticateUser, requireRole("admin"), async (req: AuthRequest, res) => {
     try {
       const result = await pool.query(
         "UPDATE users SET deleted = true, updated_at = NOW() WHERE id = $1 AND deleted = false RETURNING id, role",
@@ -534,7 +518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // UPDATE PREFERENCES
-  app.patch("/api/users/preferences", authenticateToken, async (req: AuthRequest, res) => {
+  app.patch("/api/users/preferences", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const data = updatePreferencesSchema.parse(req.body);
       const currentUser = req.user!;
@@ -560,7 +544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // UPLOAD ROUTE
-  app.post("/api/upload", authenticateToken, upload.single("file"), (req, res) => {
+  app.post("/api/upload", authenticateUser, upload.single("file"), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "Nenhum arquivo enviado" });
     }
@@ -571,7 +555,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ATTACHMENT UPLOAD ROUTE (up to 1GB)
-  app.post("/api/upload/attachment", authenticateToken, attachmentUpload.single("file"), (req, res) => {
+  app.post("/api/upload/attachment", authenticateUser, attachmentUpload.single("file"), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "Nenhum arquivo enviado" });
     }
@@ -594,7 +578,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     if (!hasValidApiKey) {
       const authReq = req as AuthRequest;
-      authenticateToken(authReq, res, () => {
+      authenticateUser(authReq, res, () => {
         if (!authReq.user) {
           return res.status(401).json({ 
             message: "Autenticação necessária. Use JWT (usuário autenticado) ou X-API-Key header" 
@@ -859,7 +843,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // CONVERSATIONS ROUTES
-  app.get("/api/conversations", authenticateToken, async (req: AuthRequest, res) => {
+  app.get("/api/conversations", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const currentUser = req.user!;
       const status = req.query.status as string | undefined;
@@ -904,7 +888,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get conversation history for a specific client
-  app.get("/api/conversations/history/:clientId", authenticateToken, async (req: AuthRequest, res) => {
+  app.get("/api/conversations/history/:clientId", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const currentUser = req.user!;
       const { clientId } = req.params;
@@ -936,7 +920,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/conversations/:id", authenticateToken, async (req: AuthRequest, res) => {
+  app.get("/api/conversations/:id", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const currentUser = req.user!;
 
@@ -976,7 +960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/conversations", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+  app.post("/api/conversations", authenticateUser, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
     const client = await pool.connect();
     try {
       const data = insertConversationSchema.parse(req.body);
@@ -1034,7 +1018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/conversations/:id", authenticateToken, async (req: AuthRequest, res) => {
+  app.patch("/api/conversations/:id", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const currentUser = req.user!;
       const { status, attendantId } = req.body;
@@ -1100,7 +1084,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/conversations/:id", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+  app.delete("/api/conversations/:id", authenticateUser, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
     try {
       const result = await pool.query(
         "UPDATE conversations SET deleted = true, updated_at = NOW() WHERE id = $1 RETURNING *",
@@ -1126,7 +1110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/conversations/:id/transfer", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+  app.patch("/api/conversations/:id/transfer", authenticateUser, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
     try {
       const { attendantId } = req.body;
 
@@ -1167,7 +1151,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/conversations/:id/transcribe", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+  app.post("/api/conversations/:id/transcribe", authenticateUser, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
 
@@ -1218,7 +1202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // MESSAGES ROUTES
-  app.get("/api/conversations/:conversationId/messages", authenticateToken, async (req: AuthRequest, res) => {
+  app.get("/api/conversations/:conversationId/messages", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const currentUser = req.user!;
       const { conversationId } = req.params;
@@ -1286,7 +1270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/conversations/:conversationId/messages", authenticateToken, async (req: AuthRequest, res) => {
+  app.post("/api/conversations/:conversationId/messages", authenticateUser, async (req: AuthRequest, res) => {
     const client = await pool.connect();
     try {
       const currentUser = req.user!;
@@ -1406,7 +1390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE MESSAGE ROUTE
-  app.delete("/api/conversations/:conversationId/messages/:messageId", authenticateToken, async (req: AuthRequest, res) => {
+  app.delete("/api/conversations/:conversationId/messages/:messageId", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const currentUser = req.user!;
       const { messageId } = req.params;
@@ -1450,7 +1434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ADD REACTION TO MESSAGE ROUTE
-  app.post("/api/conversations/:conversationId/messages/:messageId/react", authenticateToken, async (req: AuthRequest, res) => {
+  app.post("/api/conversations/:conversationId/messages/:messageId/react", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const currentUser = req.user!;
       const { messageId } = req.params;
@@ -1511,7 +1495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // QUICK MESSAGES ROUTES
-  app.get("/api/quick-messages", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+  app.get("/api/quick-messages", authenticateUser, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
     try {
       const result = await pool.query(
         `SELECT qm.*,
@@ -1528,7 +1512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/quick-messages", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+  app.post("/api/quick-messages", authenticateUser, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
     try {
       const currentUser = req.user!;
       const data = insertQuickMessageSchema.parse(req.body);
@@ -1557,7 +1541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/quick-messages/:id", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+  app.patch("/api/quick-messages/:id", authenticateUser, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
     try {
       const { title, content, icon, parameters } = req.body;
 
@@ -1620,7 +1604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/quick-messages/:id", authenticateToken, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
+  app.delete("/api/quick-messages/:id", authenticateUser, requireRole("admin", "attendant"), async (req: AuthRequest, res) => {
     try {
       const result = await pool.query(
         "DELETE FROM quick_messages WHERE id = $1 RETURNING id",
@@ -1647,7 +1631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI ROUTES
-  app.post("/api/ai/correct-text", authenticateToken, async (req: AuthRequest, res) => {
+  app.post("/api/ai/correct-text", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const { text } = req.body;
 
@@ -1663,7 +1647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/generate-message", authenticateToken, async (req: AuthRequest, res) => {
+  app.post("/api/ai/generate-message", authenticateUser, async (req: AuthRequest, res) => {
     try {
       const { prompt, parameters } = req.body;
 
@@ -1684,7 +1668,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GENERAL SETTINGS ROUTES
-  app.get("/api/settings/general", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.get("/api/settings/general", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const result = await pool.query(
         "SELECT * FROM general_settings LIMIT 1"
@@ -1731,7 +1715,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/settings/general", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.post("/api/settings/general", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const data = insertGeneralSettingsSchema.parse(req.body);
 
@@ -1780,7 +1764,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // CHANNEL ROUTES
-  app.get("/api/channels", authenticateToken, requireRole(["admin", "attendant"]), async (req: AuthRequest, res) => {
+  app.get("/api/channels", authenticateUser, requireRole(["admin", "attendant"]), async (req: AuthRequest, res) => {
     try {
       const result = await pool.query(
         "SELECT * FROM channels ORDER BY is_default DESC, created_at DESC"
@@ -1805,7 +1789,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/channels", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.post("/api/channels", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const data = insertChannelSchema.parse(req.body);
 
@@ -1841,7 +1825,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/channels/:id", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.put("/api/channels/:id", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
       const data = req.body;
@@ -1880,7 +1864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/channels/:id", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.delete("/api/channels/:id", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
 
@@ -1911,7 +1895,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // EVOLUTION API ENDPOINTS
-  app.post("/api/channels/:id/connect", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.post("/api/channels/:id/connect", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
 
@@ -1972,7 +1956,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/channels/:id/status", authenticateToken, requireRole(["admin", "attendant"]), async (req: AuthRequest, res) => {
+  app.get("/api/channels/:id/status", authenticateUser, requireRole(["admin", "attendant"]), async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
 
@@ -2033,7 +2017,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/channels/:id/qrcode", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.get("/api/channels/:id/qrcode", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
 
@@ -2073,7 +2057,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/channels/:id/sync", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.post("/api/channels/:id/sync", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
 
@@ -2123,7 +2107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/channels/:id/disconnect", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.post("/api/channels/:id/disconnect", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
 
@@ -2420,7 +2404,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // WEBHOOK ROUTES
-  app.get("/api/webhooks", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.get("/api/webhooks", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const result = await pool.query(
         "SELECT * FROM webhooks ORDER BY created_at DESC"
@@ -2445,7 +2429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/webhooks", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.post("/api/webhooks", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const data = insertWebhookSchema.parse(req.body);
       const apiKey = crypto.randomBytes(32).toString("hex");
@@ -2475,7 +2459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/webhooks/:id", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.delete("/api/webhooks/:id", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
 
@@ -2495,7 +2479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/webhooks/:id/test", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.post("/api/webhooks/:id/test", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
 
@@ -2550,7 +2534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // API KEYS ROUTES
-  app.get("/api/webhooks/keys", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.get("/api/webhooks/keys", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       const result = await pool.query(
         "SELECT * FROM api_keys ORDER BY created_at DESC LIMIT 1"
@@ -2584,7 +2568,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/webhooks/keys/regenerate", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+  app.post("/api/webhooks/keys/regenerate", authenticateUser, requireRole(["admin"]), async (req: AuthRequest, res) => {
     try {
       // Delete old keys
       await pool.query("DELETE FROM api_keys");
