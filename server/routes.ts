@@ -22,12 +22,14 @@ import {
   insertQuickMessageSchema,
   insertGeneralSettingsSchema,
   insertWebhookSchema,
+  insertChannelSchema,
   type SafeUser,
   type Conversation,
   type Message,
   type QuickMessage,
   type GeneralSettings,
   type Webhook,
+  type Channel,
 } from "@shared/schema";
 
 const upload = multer({
@@ -1710,6 +1712,137 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Save general settings error:", error);
       res.status(500).json({ message: "Erro ao salvar configurações" });
+    }
+  });
+
+  // CHANNEL ROUTES
+  app.get("/api/channels", authenticateToken, requireRole(["admin", "attendant"]), async (req: AuthRequest, res) => {
+    try {
+      const result = await pool.query(
+        "SELECT * FROM channels ORDER BY is_default DESC, created_at DESC"
+      );
+
+      const channels = result.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        type: row.type,
+        description: row.description,
+        active: row.active,
+        isDefault: row.is_default,
+        config: row.config || {},
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+
+      res.json(channels);
+    } catch (error: any) {
+      console.error("Get channels error:", error);
+      res.status(500).json({ message: "Erro ao buscar canais" });
+    }
+  });
+
+  app.post("/api/channels", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const data = insertChannelSchema.parse(req.body);
+
+      const result = await pool.query(
+        `INSERT INTO channels (name, type, description, active, is_default, config)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+         RETURNING *`,
+        [
+          data.name,
+          data.type,
+          data.description || null,
+          data.active ?? true,
+          data.isDefault ?? false,
+          JSON.stringify(data.config || {})
+        ]
+      );
+
+      const row = result.rows[0];
+      res.status(201).json({
+        id: row.id,
+        name: row.name,
+        type: row.type,
+        description: row.description,
+        active: row.active,
+        isDefault: row.is_default,
+        config: row.config || {},
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      });
+    } catch (error: any) {
+      console.error("Create channel error:", error);
+      res.status(500).json({ message: "Erro ao criar canal" });
+    }
+  });
+
+  app.put("/api/channels/:id", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const data = req.body;
+
+      const result = await pool.query(
+        `UPDATE channels
+         SET name = COALESCE($1, name),
+             description = COALESCE($2, description),
+             active = COALESCE($3, active),
+             config = COALESCE($4::jsonb, config),
+             updated_at = NOW()
+         WHERE id = $5
+         RETURNING *`,
+        [data.name, data.description, data.active, data.config ? JSON.stringify(data.config) : null, id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Canal não encontrado" });
+      }
+
+      const row = result.rows[0];
+      res.json({
+        id: row.id,
+        name: row.name,
+        type: row.type,
+        description: row.description,
+        active: row.active,
+        isDefault: row.is_default,
+        config: row.config || {},
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      });
+    } catch (error: any) {
+      console.error("Update channel error:", error);
+      res.status(500).json({ message: "Erro ao atualizar canal" });
+    }
+  });
+
+  app.delete("/api/channels/:id", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+
+      // Check if channel is default
+      const channelCheck = await pool.query(
+        "SELECT is_default FROM channels WHERE id = $1",
+        [id]
+      );
+
+      if (channelCheck.rows.length === 0) {
+        return res.status(404).json({ message: "Canal não encontrado" });
+      }
+
+      if (channelCheck.rows[0].is_default) {
+        return res.status(400).json({ message: "Não é possível deletar o canal padrão" });
+      }
+
+      const result = await pool.query(
+        "DELETE FROM channels WHERE id = $1 RETURNING id",
+        [id]
+      );
+
+      res.json({ message: "Canal deletado com sucesso" });
+    } catch (error: any) {
+      console.error("Delete channel error:", error);
+      res.status(500).json({ message: "Erro ao deletar canal" });
     }
   });
 

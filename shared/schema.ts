@@ -95,13 +95,41 @@ export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 // User without sensitive data
 export type SafeUser = Omit<User, "passwordHash">;
 
+// Channel configuration type
+export type ChannelConfig = {
+  apiUrl?: string;
+  apiKey?: string;
+  instanceName?: string;
+  connected?: boolean;
+  profileName?: string;
+  profilePicUrl?: string;
+  phoneNumber?: string;
+  qrCode?: string;
+  webhookConfigured?: boolean;
+};
+
+// Channels table
+export const channels = pgTable("channels", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // webchat, whatsapp, etc
+  description: text("description"),
+  active: boolean("active").notNull().default(true),
+  isDefault: boolean("is_default").notNull().default(false),
+  config: jsonb("config").$type<ChannelConfig>().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // Conversations table
 export const conversations = pgTable("conversations", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: uuid("client_id").notNull().references(() => users.id),
   attendantId: uuid("attendant_id").references(() => users.id),
+  channelId: uuid("channel_id").references(() => channels.id),
   status: text("status").notNull().default("pending"), // pending, attending, closed
   deleted: boolean("deleted").notNull().default(false),
+  externalId: text("external_id"), // WhatsApp remoteJid or external conversation ID
   lastMessageAt: timestamp("last_message_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -127,11 +155,22 @@ export const messages = pgTable("messages", {
   forwardedFromMessageId: uuid("forwarded_from_message_id"), // For forwards - self-referencing
   status: text("status").notNull().default("sent"), // sent, deleted, edited
   reactions: jsonb("reactions").$type<Record<string, string[]>>().default(sql`'{}'::jsonb`), // emoji -> [userId1, userId2]
+  externalId: text("external_id"), // WhatsApp message ID or external message ID
+  metadata: jsonb("metadata").$type<Record<string, any>>().default(sql`'{}'::jsonb`), // Additional metadata from external channels
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Insert schemas
+export const insertChannelSchema = createInsertSchema(channels, {
+  name: z.string().min(1, "Nome é obrigatório"),
+  type: z.string().min(1, "Tipo é obrigatório"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertConversationSchema = createInsertSchema(conversations).omit({
   id: true,
   createdAt: true,
@@ -235,6 +274,7 @@ export const insertWebhookSchema = createInsertSchema(webhooks, {
 });
 
 // Types
+export type Channel = typeof channels.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
 export type Protocol = typeof protocols.$inferSelect;
 export type Message = typeof messages.$inferSelect;
@@ -242,6 +282,7 @@ export type QuickMessage = typeof quickMessages.$inferSelect;
 export type GeneralSettings = typeof generalSettings.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type Webhook = typeof webhooks.$inferSelect;
+export type InsertChannel = z.infer<typeof insertChannelSchema>;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type InsertProtocol = z.infer<typeof insertProtocolSchema>;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
