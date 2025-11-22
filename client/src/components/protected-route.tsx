@@ -9,13 +9,14 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { user, isLoading, isAuthenticated } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      setLocation("/login");
+      const redirectPath = encodeURIComponent(location);
+      setLocation(`/login?redirect=${redirectPath}`);
     }
-  }, [isLoading, isAuthenticated, setLocation]);
+  }, [isLoading, isAuthenticated, location, setLocation]);
 
   useEffect(() => {
     if (!isLoading && user && allowedRoles && !allowedRoles.includes(user.role as any)) {
