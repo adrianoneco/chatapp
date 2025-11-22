@@ -10,6 +10,7 @@ import express, {
 } from "express";
 
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { initializeDatabase } from "./database";
 
@@ -57,6 +58,19 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+// Enable CORS with credentials so cookies (HttpOnly session token) are allowed
+// When behind a proxy or using a separate client origin, browsers will only
+// include cookies if Access-Control-Allow-Credentials is true and the
+// Access-Control-Allow-Origin is not '*'. We reflect the incoming origin
+// to allow same-site and cross-site dev setups. For production consider
+// setting a specific `CLIENT_ORIGIN` env var instead of reflecting origin.
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  }),
+);
 
 // Serve uploaded files (legacy)
 app.use("/uploads", express.static(uploadsDir));
