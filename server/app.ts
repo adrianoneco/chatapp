@@ -66,18 +66,30 @@ app.use(cookieParser());
 // setting a specific `CLIENT_ORIGIN` env var instead of reflecting origin.
 import cors from "cors";
 
-// Configure CORS with a whitelist. Include `CLIENT_ORIGIN` (when set)
-// and the API address used in production/dev access so browsers will accept
-// cookies from that origin. If no origin header is present (e.g., server-side
-// requests or same-origin), allow the request.
-const allowedOrigins = [process.env.CLIENT_ORIGIN, "http://51.77.73.172:5000"].filter(Boolean) as string[];
-
+// Configure CORS to allow requests from the Replit environment
+// In development, Vite serves the frontend on the same origin
+// In production, we serve both from the same server
 app.use(
   cors({
     origin: (origin, callback) => {
-      // allow requests with no origin (e.g., curl, server-to-server)
+      // Allow requests with no origin (same-origin, curl, server-to-server)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      
+      // Allow Replit dev/production URLs
+      if (origin.includes('.replit.dev') || origin.includes('.repl.co') || origin.includes('.replit.app')) {
+        return callback(null, true);
+      }
+      
+      // Allow localhost for local development
+      if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
+        return callback(null, true);
+      }
+      
+      // Allow custom CLIENT_ORIGIN if set
+      if (process.env.CLIENT_ORIGIN && origin === process.env.CLIENT_ORIGIN) {
+        return callback(null, true);
+      }
+      
       return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
