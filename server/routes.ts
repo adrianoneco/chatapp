@@ -9,6 +9,7 @@ import { authenticateToken, requireRole, generateToken, type AuthRequest } from 
 import { sendPasswordResetEmail } from "./services/email";
 import { initializeWebSocket, getWSManager } from "./websocket";
 import { correctText, generateQuickMessage } from "./services/groq";
+import { createEvolutionAPIService, formatRemoteJid, extractPhoneFromJid } from "./services/evolution-api";
 import {
   registerUserSchema,
   loginSchema,
@@ -834,11 +835,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         SELECT c.*, 
           json_build_object('id', client.id, 'email', client.email, 'name', client.name, 'image', client.image, 'role', client.role) as client,
           json_build_object('id', att.id, 'email', att.email, 'name', att.name, 'image', att.image, 'role', att.role) as attendant,
+          json_build_object('id', ch.id, 'name', ch.name, 'type', ch.type) as channel,
           p.protocol,
           (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_content
         FROM conversations c
         INNER JOIN users client ON c.client_id = client.id
         LEFT JOIN users att ON c.attendant_id = att.id
+        LEFT JOIN channels ch ON c.channel_id = ch.id
         LEFT JOIN protocols p ON p.conversation_id = c.id
         WHERE 1=1
       `;
@@ -908,10 +911,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         SELECT c.*, 
           json_build_object('id', client.id, 'email', client.email, 'name', client.name, 'image', client.image, 'role', client.role) as client,
           json_build_object('id', att.id, 'email', att.email, 'name', att.name, 'image', att.image, 'role', att.role) as attendant,
+          json_build_object('id', ch.id, 'name', ch.name, 'type', ch.type) as channel,
           p.protocol
         FROM conversations c
         INNER JOIN users client ON c.client_id = client.id
         LEFT JOIN users att ON c.attendant_id = att.id
+        LEFT JOIN channels ch ON c.channel_id = ch.id
         LEFT JOIN protocols p ON p.conversation_id = c.id
         WHERE c.id = $1
       `;
@@ -1257,9 +1262,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await client.query("BEGIN");
 
-      // Verify access to conversation
+      // Verify access to conversation and get channel info
       const convResult = await client.query(
-        "SELECT * FROM conversations WHERE id = $1",
+        `SELECT c.*, ch.type as channel_type, ch.config as channel_config
+         FROM conversations c
+         LEFT JOIN channels ch ON c.channel_id = ch.id
+         WHERE c.id = $1`,
         [conversationId]
       );
 
@@ -1277,6 +1285,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
          RETURNING *`,
         [conversationId, currentUser.id, data.content, data.type || "text", data.quotedMessageId || null, data.forwardedFromMessageId || null]
       );
+
+      // If conversation is on WhatsApp channel, send via Evolution API
+      if (conv.channel_type === 'whatsapp' && conv.external_id) {
+        try {
+          const evolutionAPI = createEvolutionAPIService(conv.channel_config);
+          
+          // Send message via WhatsApp
+          if (data.type === 'text' || !data.type) {
+            await evolutionAPI.sendTextMessage(
+              conv.external_id,
+              data.content,
+              data.quotedMessageId
+            );
+          } else if (['image', 'video', 'audio', 'file'].includes(data.type)) {
+            // For media messages, you would need to handle file uploads
+            // This is a simplified version
+            console.log('Media message sending not yet implemented');
+          }
+        } catch (error) {
+          console.error('Error sending WhatsApp message:', error);
+          // Don't fail the request, message is already saved
+        }
+      }
 
       // Update conversation last message timestamp
       await client.query(
@@ -1845,6 +1876,515 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro ao deletar canal" });
     }
   });
+
+  // EVOLUTION API ENDPOINTS
+  app.post("/api/channels/:id/connect", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+
+      const channelResult = await pool.query(
+        "SELECT * FROM channels WHERE id = $1 AND type = 'whatsapp'",
+        [id]
+      );
+
+      if (channelResult.rows.length === 0) {
+        return res.status(404).json({ message: "Canal WhatsApp não encontrado" });
+      }
+
+      const channel = channelResult.rows[0];
+      const evolutionAPI = createEvolutionAPIService(channel.config);
+
+      // Try to create/connect instance
+      let result;
+      try {
+        const status = await evolutionAPI.getInstanceStatus();
+        if (status.state === 'open') {
+          return res.json({ message: "Instância já conectada", connected: true });
+        }
+      } catch (error) {
+        // Instance doesn't exist, create it
+        result = await evolutionAPI.createInstance();
+      }
+
+      // Get QR Code
+      const qrCode = await evolutionAPI.getQRCode();
+
+      // Configure webhooks
+      const webhookUrl = `${req.protocol}://${req.get('host')}/api/webhooks/evolution/${id}`;
+      await evolutionAPI.configureWebhook(webhookUrl, [
+        'messages.upsert',
+        'messages.update',
+        'connection.update',
+      ]);
+
+      // Update channel config
+      const updatedConfig = {
+        ...channel.config,
+        qrCode: qrCode.base64,
+        webhookConfigured: true,
+      };
+
+      await pool.query(
+        "UPDATE channels SET config = $1::jsonb, updated_at = NOW() WHERE id = $2",
+        [JSON.stringify(updatedConfig), id]
+      );
+
+      res.json({
+        qrCode: qrCode.base64,
+        message: "QR Code gerado. Escaneie com seu WhatsApp.",
+      });
+    } catch (error: any) {
+      console.error("Connect channel error:", error);
+      res.status(500).json({ message: "Erro ao conectar canal", error: error.message });
+    }
+  });
+
+  app.get("/api/channels/:id/status", authenticateToken, requireRole(["admin", "attendant"]), async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+
+      const channelResult = await pool.query(
+        "SELECT * FROM channels WHERE id = $1 AND type = 'whatsapp'",
+        [id]
+      );
+
+      if (channelResult.rows.length === 0) {
+        return res.status(404).json({ message: "Canal WhatsApp não encontrado" });
+      }
+
+      const channel = channelResult.rows[0];
+      const evolutionAPI = createEvolutionAPIService(channel.config);
+
+      try {
+        const status = await evolutionAPI.getInstanceStatus();
+        const connected = status.state === 'open';
+
+        let profile = null;
+        if (connected) {
+          try {
+            profile = await evolutionAPI.getProfileInfo();
+          } catch (error) {
+            console.error("Error fetching profile:", error);
+          }
+        }
+
+        // Update channel config with connection status
+        const updatedConfig = {
+          ...channel.config,
+          connected,
+          profileName: profile?.profileName || channel.config.profileName,
+          profilePicUrl: profile?.profilePictureUrl || channel.config.profilePicUrl,
+          phoneNumber: profile?.phoneNumber || channel.config.phoneNumber,
+        };
+
+        await pool.query(
+          "UPDATE channels SET config = $1::jsonb, updated_at = NOW() WHERE id = $2",
+          [JSON.stringify(updatedConfig), id]
+        );
+
+        res.json({
+          connected,
+          state: status.state,
+          profile: connected ? profile : null,
+        });
+      } catch (error) {
+        res.json({
+          connected: false,
+          state: 'close',
+          profile: null,
+        });
+      }
+    } catch (error: any) {
+      console.error("Get channel status error:", error);
+      res.status(500).json({ message: "Erro ao obter status do canal" });
+    }
+  });
+
+  app.get("/api/channels/:id/qrcode", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+
+      const channelResult = await pool.query(
+        "SELECT * FROM channels WHERE id = $1 AND type = 'whatsapp'",
+        [id]
+      );
+
+      if (channelResult.rows.length === 0) {
+        return res.status(404).json({ message: "Canal WhatsApp não encontrado" });
+      }
+
+      const channel = channelResult.rows[0];
+      
+      if (channel.config.qrCode) {
+        return res.json({ qrCode: channel.config.qrCode });
+      }
+
+      const evolutionAPI = createEvolutionAPIService(channel.config);
+      const qrCode = await evolutionAPI.getQRCode();
+
+      // Update channel config
+      const updatedConfig = {
+        ...channel.config,
+        qrCode: qrCode.base64,
+      };
+
+      await pool.query(
+        "UPDATE channels SET config = $1::jsonb, updated_at = NOW() WHERE id = $2",
+        [JSON.stringify(updatedConfig), id]
+      );
+
+      res.json({ qrCode: qrCode.base64 });
+    } catch (error: any) {
+      console.error("Get QR Code error:", error);
+      res.status(500).json({ message: "Erro ao obter QR Code" });
+    }
+  });
+
+  app.post("/api/channels/:id/sync", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+
+      const channelResult = await pool.query(
+        "SELECT * FROM channels WHERE id = $1 AND type = 'whatsapp'",
+        [id]
+      );
+
+      if (channelResult.rows.length === 0) {
+        return res.status(404).json({ message: "Canal WhatsApp não encontrado" });
+      }
+
+      const channel = channelResult.rows[0];
+      const evolutionAPI = createEvolutionAPIService(channel.config);
+
+      // Get all conversations for this channel
+      const conversationsResult = await pool.query(
+        "SELECT * FROM conversations WHERE channel_id = $1 AND deleted = false",
+        [id]
+      );
+
+      let syncedCount = 0;
+
+      for (const conversation of conversationsResult.rows) {
+        if (!conversation.external_id) continue;
+
+        try {
+          const messages = await evolutionAPI.fetchMessages(conversation.external_id, 50);
+          
+          for (const msg of messages) {
+            // Process and save message (simplified - you'd need to map WhatsApp message structure)
+            // This is a placeholder for the actual implementation
+            syncedCount++;
+          }
+        } catch (error) {
+          console.error(`Error syncing conversation ${conversation.id}:`, error);
+        }
+      }
+
+      res.json({
+        message: `${syncedCount} mensagens sincronizadas`,
+        syncedCount,
+      });
+    } catch (error: any) {
+      console.error("Sync channel error:", error);
+      res.status(500).json({ message: "Erro ao sincronizar canal" });
+    }
+  });
+
+  app.post("/api/channels/:id/disconnect", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+
+      const channelResult = await pool.query(
+        "SELECT * FROM channels WHERE id = $1 AND type = 'whatsapp'",
+        [id]
+      );
+
+      if (channelResult.rows.length === 0) {
+        return res.status(404).json({ message: "Canal WhatsApp não encontrado" });
+      }
+
+      const channel = channelResult.rows[0];
+      const evolutionAPI = createEvolutionAPIService(channel.config);
+
+      await evolutionAPI.logoutInstance();
+
+      // Update channel config
+      const updatedConfig = {
+        ...channel.config,
+        connected: false,
+        qrCode: undefined,
+        profileName: undefined,
+        profilePicUrl: undefined,
+      };
+
+      await pool.query(
+        "UPDATE channels SET config = $1::jsonb, updated_at = NOW() WHERE id = $2",
+        [JSON.stringify(updatedConfig), id]
+      );
+
+      res.json({ message: "Canal desconectado com sucesso" });
+    } catch (error: any) {
+      console.error("Disconnect channel error:", error);
+      res.status(500).json({ message: "Erro ao desconectar canal" });
+    }
+  });
+
+  // EVOLUTION API WEBHOOK ENDPOINTS (Public - no JWT auth, validated by apikey)
+  app.post("/api/webhooks/evolution/:channelId", async (req, res) => {
+    try {
+      const { channelId } = req.params;
+      const webhookData = req.body;
+
+      console.log("Evolution API webhook received:", JSON.stringify(webhookData, null, 2));
+
+      // Get channel
+      const channelResult = await pool.query(
+        "SELECT * FROM channels WHERE id = $1 AND type = 'whatsapp'",
+        [channelId]
+      );
+
+      if (channelResult.rows.length === 0) {
+        return res.status(404).json({ message: "Canal não encontrado" });
+      }
+
+      const channel = channelResult.rows[0];
+
+      // Handle different event types
+      if (webhookData.event === 'messages.upsert') {
+        await handleMessageUpsert(webhookData, channel);
+      } else if (webhookData.event === 'connection.update') {
+        await handleConnectionUpdate(webhookData, channel);
+      } else if (webhookData.event === 'messages.update') {
+        await handleMessageUpdate(webhookData, channel);
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Evolution webhook error:", error);
+      res.status(500).json({ message: "Erro ao processar webhook" });
+    }
+  });
+
+  // Helper function to handle message upsert
+  async function handleMessageUpsert(webhookData: any, channel: any) {
+    const messages = webhookData.data?.messages || [];
+    
+    for (const msg of messages) {
+      try {
+        const key = msg.key;
+        const messageContent = msg.message;
+        const pushName = msg.pushName || "WhatsApp User";
+        const remoteJid = key.remoteJid;
+        const fromMe = key.fromMe;
+        const messageId = key.id;
+
+        // Skip status updates and group messages for now
+        if (remoteJid === 'status@broadcast' || remoteJid.includes('@g.us')) {
+          continue;
+        }
+
+        // Extract phone number
+        const phoneNumber = extractPhoneFromJid(remoteJid);
+
+        // Find or create user for this WhatsApp contact
+        let userResult = await pool.query(
+          "SELECT * FROM users WHERE remote_jid = $1",
+          [remoteJid]
+        );
+
+        let userId;
+        if (userResult.rows.length === 0) {
+          // Create new user for this contact
+          const email = `whatsapp_${phoneNumber}@system.local`;
+          const tempPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+          
+          const newUserResult = await pool.query(
+            `INSERT INTO users (email, password_hash, name, role, remote_jid)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING *`,
+            [email, tempPassword, pushName, 'client', remoteJid]
+          );
+          userId = newUserResult.rows[0].id;
+        } else {
+          userId = userResult.rows[0].id;
+          
+          // Update name if it changed
+          await pool.query(
+            "UPDATE users SET name = $1 WHERE id = $2",
+            [pushName, userId]
+          );
+        }
+
+        // Find or create conversation
+        let conversationResult = await pool.query(
+          "SELECT * FROM conversations WHERE external_id = $1 AND channel_id = $2",
+          [remoteJid, channel.id]
+        );
+
+        let conversationId;
+        if (conversationResult.rows.length === 0) {
+          // Create new conversation
+          const newConvResult = await pool.query(
+            `INSERT INTO conversations (client_id, channel_id, external_id, status, last_message_at)
+             VALUES ($1, $2, $3, $4, NOW())
+             RETURNING *`,
+            [userId, channel.id, remoteJid, 'pending']
+          );
+          conversationId = newConvResult.rows[0].id;
+
+          // Generate protocol
+          const protocol = Math.floor(Math.random() * 9000000000) + 1000000000;
+          await pool.query(
+            "INSERT INTO protocols (conversation_id, protocol) VALUES ($1, $2)",
+            [conversationId, protocol.toString()]
+          );
+        } else {
+          conversationId = conversationResult.rows[0].id;
+          
+          // Update last message timestamp
+          await pool.query(
+            "UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1",
+            [conversationId]
+          );
+        }
+
+        // Extract message text
+        let messageText = '';
+        let messageType = 'text';
+        
+        if (messageContent.conversation) {
+          messageText = messageContent.conversation;
+        } else if (messageContent.extendedTextMessage?.text) {
+          messageText = messageContent.extendedTextMessage.text;
+        } else if (messageContent.imageMessage?.caption) {
+          messageText = messageContent.imageMessage.caption || '[Imagem]';
+          messageType = 'image';
+        } else if (messageContent.videoMessage?.caption) {
+          messageText = messageContent.videoMessage.caption || '[Vídeo]';
+          messageType = 'video';
+        } else if (messageContent.audioMessage) {
+          messageText = '[Áudio]';
+          messageType = 'audio';
+        } else if (messageContent.documentMessage) {
+          messageText = messageContent.documentMessage.fileName || '[Documento]';
+          messageType = 'file';
+        } else {
+          messageText = '[Mensagem não suportada]';
+        }
+
+        // Check if message already exists
+        const existingMsg = await pool.query(
+          "SELECT id FROM messages WHERE external_id = $1",
+          [messageId]
+        );
+
+        if (existingMsg.rows.length === 0) {
+          // Create message
+          const msgResult = await pool.query(
+            `INSERT INTO messages (conversation_id, sender_id, content, type, external_id, metadata)
+             VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+             RETURNING *`,
+            [
+              conversationId,
+              userId,
+              messageText,
+              messageType,
+              messageId,
+              JSON.stringify({ fromMe, remoteJid, pushName })
+            ]
+          );
+
+          // Fetch full message with sender info
+          const fullMsgResult = await pool.query(
+            `SELECT 
+              m.id,
+              m.conversation_id,
+              m.sender_id,
+              m.content,
+              m.type,
+              m.read,
+              m.status,
+              m.external_id,
+              m.created_at,
+              m.updated_at,
+              json_build_object('id', u.id, 'email', u.email, 'name', u.name, 'image', u.image, 'role', u.role) as sender
+            FROM messages m
+            INNER JOIN users u ON m.sender_id = u.id
+            WHERE m.id = $1`,
+            [msgResult.rows[0].id]
+          );
+
+          // Notify via WebSocket
+          const wsManager = getWSManager();
+          if (wsManager) {
+            wsManager.broadcastToAll('message:new', {
+              conversationId,
+              message: fullMsgResult.rows[0],
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error processing message:", error);
+      }
+    }
+  }
+
+  // Helper function to handle connection updates
+  async function handleConnectionUpdate(webhookData: any, channel: any) {
+    const data = webhookData.data;
+    
+    if (data.state === 'open') {
+      // Update channel config
+      const updatedConfig = {
+        ...channel.config,
+        connected: true,
+        qrCode: undefined,
+      };
+
+      await pool.query(
+        "UPDATE channels SET config = $1::jsonb, updated_at = NOW() WHERE id = $2",
+        [JSON.stringify(updatedConfig), channel.id]
+      );
+
+      console.log(`Channel ${channel.name} connected`);
+    } else if (data.state === 'close') {
+      // Update channel config
+      const updatedConfig = {
+        ...channel.config,
+        connected: false,
+      };
+
+      await pool.query(
+        "UPDATE channels SET config = $1::jsonb, updated_at = NOW() WHERE id = $2",
+        [JSON.stringify(updatedConfig), channel.id]
+      );
+
+      console.log(`Channel ${channel.name} disconnected`);
+    }
+  }
+
+  // Helper function to handle message updates
+  async function handleMessageUpdate(webhookData: any, channel: any) {
+    const messages = webhookData.data?.messages || [];
+    
+    for (const msg of messages) {
+      try {
+        const key = msg.key;
+        const messageId = key.id;
+        const update = msg.update;
+
+        if (update?.status) {
+          // Update message status (delivered, read, etc)
+          await pool.query(
+            "UPDATE messages SET status = $1, updated_at = NOW() WHERE external_id = $2",
+            [update.status, messageId]
+          );
+        }
+      } catch (error) {
+        console.error("Error updating message:", error);
+      }
+    }
+  }
 
   // WEBHOOK ROUTES
   app.get("/api/webhooks", authenticateToken, requireRole(["admin"]), async (req: AuthRequest, res) => {

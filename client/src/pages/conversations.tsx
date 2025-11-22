@@ -708,9 +708,18 @@ export default function Conversations() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between gap-2">
-                                <p className="font-medium text-sm truncate">
-                                  {conversation.client?.name || "Cliente"}
-                                </p>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {conversation.channel?.type === 'whatsapp' ? (
+                                    <div className="flex-shrink-0 w-4 h-4 rounded bg-primary/10 flex items-center justify-center">
+                                      <img src="/evolution-logo.png" alt="WhatsApp" className="w-3 h-3 object-contain" />
+                                    </div>
+                                  ) : (
+                                    <MessageSquare className="h-4 w-4 flex-shrink-0 text-primary" />
+                                  )}
+                                  <p className="font-medium text-sm truncate">
+                                    {conversation.client?.name || "Cliente"}
+                                  </p>
+                                </div>
                                 {conversation.last_message_at && (
                                   <span className="text-xs text-muted-foreground whitespace-nowrap">
                                     {getRelativeDate(conversation.last_message_at)}
@@ -788,7 +797,14 @@ export default function Conversations() {
                   <AvatarFallback>{selectedConversation?.client?.name?.[0] || "C"}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
-                  <p className="font-medium">{selectedConversation?.client?.name || "Cliente"}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium">{selectedConversation?.client?.name || "Cliente"}</p>
+                    {selectedConversation?.channel?.type === 'whatsapp' && (
+                      <div className="flex-shrink-0 w-5 h-5 rounded bg-primary/10 flex items-center justify-center">
+                        <img src="/evolution-logo.png" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" />
+                      </div>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     {selectedConversation?.last_message_at 
                       ? `Visto por último ${getRelativeDate(selectedConversation.last_message_at)}`
