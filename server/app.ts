@@ -76,7 +76,7 @@ const allowedOrigins = clientOriginEnv
 
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean | string) => void) => {
       // If no allowed origins configured, allow all origins
       if (allowedOrigins.length === 0) {
         return callback(null, origin || true);
@@ -87,15 +87,28 @@ app.use(
         return callback(null, true);
       }
       
-      // Check if origin is in allowed list (support both with and without protocol)
-      const originWithoutProtocol = origin.replace(/^https?:\/\//, '');
+      // Extract hostname from origin URL
+      let originHostname: string;
+      try {
+        originHostname = new URL(origin).hostname;
+      } catch {
+        // If origin is not a valid URL, reject it
+        return callback(new Error('Invalid origin'));
+      }
+      
+      // Check if origin hostname matches any allowed hostname
       const isAllowed = allowedOrigins.some(allowed => {
-        const allowedWithoutProtocol = allowed.replace(/^https?:\/\//, '');
-        return origin === allowed || 
-               originWithoutProtocol === allowedWithoutProtocol ||
-               originWithoutProtocol === allowed ||
-               origin === `http://${allowed}` ||
-               origin === `https://${allowed}`;
+        // Parse allowed origin to extract hostname
+        let allowedHostname: string;
+        try {
+          // Try parsing as URL first (if it has protocol)
+          allowedHostname = new URL(allowed).hostname;
+        } catch {
+          // If not a valid URL, treat it as a hostname directly
+          allowedHostname = allowed.replace(/^https?:\/\//, '').split(':')[0];
+        }
+        
+        return originHostname === allowedHostname;
       });
       
       if (isAllowed) {
