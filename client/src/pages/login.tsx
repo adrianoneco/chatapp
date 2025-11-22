@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, MessageSquare } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { PiChatTeardropFill } from "react-icons/pi";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -56,16 +57,7 @@ export default function Login() {
         <CardHeader className="space-y-4 text-center">
           <div className="flex justify-center">
             <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-xl shadow-purple-500/50">
-              <img 
-                src="/logo.svg" 
-                alt="Logo" 
-                className="h-10 w-10"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                }}
-              />
-              <MessageSquare className="hidden h-8 w-8 text-white" />
+              <PiChatTeardropFill className="h-9 w-9 text-white" />
             </div>
           </div>
           <div>

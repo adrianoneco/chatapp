@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Settings, User } from "lucide-react";
 import { Link } from "wouter";
+import { PiChatTeardropFill } from "react-icons/pi";
 
 export function AppHeader() {
   const { user, logout } = useAuth();
@@ -25,17 +26,8 @@ export function AppHeader() {
       <div className="flex items-center gap-4">
         <SidebarTrigger className="text-white hover:bg-white/10" data-testid="button-sidebar-toggle" />
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center">
-            <img 
-              src="/logo.svg" 
-              alt="Logo" 
-              className="h-5 w-5"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-              }}
-            />
-            <span className="hidden text-lg font-bold">SC</span>
+          <div className="h-9 w-9 rounded-xl bg-white/10 flex items-center justify-center">
+            <PiChatTeardropFill className="h-5 w-5 text-white" />
           </div>
           <div>
             <h1 className="text-base font-semibold">Sistema de Atendimento</h1>

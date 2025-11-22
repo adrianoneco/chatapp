@@ -13,6 +13,7 @@ import {
 import { MessageSquare, Users, Headphones, Shield, LayoutDashboard } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
+import { PiChatTeardropFill } from "react-icons/pi";
 
 const menuItems = [
   {
@@ -63,17 +64,8 @@ export function AppSidebar() {
       <SidebarHeader className="p-6">
         {!isCollapsed && (
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
-              <img 
-                src="/logo.svg" 
-                alt="Logo" 
-                className="h-6 w-6"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                }}
-              />
-              <MessageSquare className="hidden h-5 w-5 text-white" />
+            <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-lg">
+              <PiChatTeardropFill className="h-6 w-6 text-white" />
             </div>
             <div>
               <h2 className="font-semibold text-base">Sistema</h2>
