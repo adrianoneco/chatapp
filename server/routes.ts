@@ -169,14 +169,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const safeUser = toSafeUser(user);
       const token = generateToken(safeUser);
 
-      res.cookie("token", token, {
+      // Cookie options: allow configuring cross-site behavior via CLIENT_ORIGIN.
+      // If `CLIENT_ORIGIN` is set (typical when frontend is served from a different origin),
+      // we set `SameSite=None` so browsers will accept the cookie from cross-site responses.
+      // Note: modern browsers require `Secure` when `SameSite=None`. We therefore set
+      // `secure` to true in production. For local development over HTTP, consider using
+      // the dev server proxy (same origin) or run via HTTPS if you need cross-site cookies.
+      const cookieOptions: any = {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
+        path: "/",
+      };
 
-      res.json(safeUser);
+      if (process.env.CLIENT_ORIGIN) {
+        cookieOptions.sameSite = "none";
+      } else {
+        cookieOptions.sameSite = "lax";
+      }
+
+      res.cookie("token", token, cookieOptions);
+
+      // In development, return the token in the JSON response as a fallback so
+      // the frontend can persist it (useful when cookies aren't available
+      // in some dev setups). Do NOT return the token in production responses.
+      if (process.env.NODE_ENV === "production") {
+        res.json(safeUser);
+      } else {
+        res.json({ ...safeUser, token });
+      }
     } catch (error: any) {
       res.status(400).json({ message: error.message || "Erro ao fazer login" });
     }
