@@ -438,6 +438,277 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ url });
   });
 
+  // API DOCUMENTATION ROUTE
+  app.get("/api/docs", async (req: any, res) => {
+    const apiKey = req.headers['x-api-key'] as string;
+    const hasValidApiKey = apiKey && apiKey === process.env.GLOBAL_API_KEY;
+    
+    if (!hasValidApiKey) {
+      const authReq = req as AuthRequest;
+      authenticateToken(authReq, res, () => {
+        if (!authReq.user) {
+          return res.status(401).json({ 
+            message: "Autenticação necessária. Use JWT (usuário autenticado) ou X-API-Key header" 
+          });
+        }
+        sendApiDocs(req, res);
+      });
+      return;
+    }
+    
+    sendApiDocs(req, res);
+  });
+
+  function sendApiDocs(req: any, res: any) {
+    const baseUrl = req.protocol + '://' + req.get('host');
+    
+    const apiDocs = {
+      version: "1.0.0",
+      baseUrl,
+      authentication: {
+        description: "A API usa JWT para autenticação de usuários e API Key para acesso à documentação",
+        methods: [
+          {
+            type: "JWT Cookie",
+            description: "Token JWT armazenado em httpOnly cookie após login",
+            header: "Cookie: token=<jwt>"
+          },
+          {
+            type: "API Key",
+            description: "Para acessar esta documentação",
+            header: "X-API-Key: <sua-api-key>"
+          }
+        ]
+      },
+      endpoints: [
+        {
+          group: "Autenticação",
+          routes: [
+            {
+              method: "POST",
+              path: "/api/auth/register",
+              description: "Registrar novo usuário",
+              auth: false,
+              body: {
+                email: "string (email válido)",
+                password: "string (mínimo 6 caracteres)",
+                name: "string (mínimo 2 caracteres)",
+                role: "string (client|attendant|admin) [opcional, padrão: client]"
+              },
+              responses: {
+                "201": {
+                  description: "Usuário criado com sucesso",
+                  example: {
+                    id: "uuid",
+                    email: "user@example.com",
+                    name: "Nome do Usuário",
+                    image: null,
+                    role: "client",
+                    deleted: false,
+                    createdAt: "2024-01-01T00:00:00.000Z",
+                    updatedAt: "2024-01-01T00:00:00.000Z"
+                  }
+                },
+                "400": { message: "Email já cadastrado ou dados inválidos" }
+              }
+            },
+            {
+              method: "POST",
+              path: "/api/auth/login",
+              description: "Fazer login (retorna JWT em cookie)",
+              auth: false,
+              body: {
+                email: "string",
+                password: "string"
+              },
+              responses: {
+                "200": {
+                  description: "Login realizado com sucesso",
+                  example: {
+                    id: "uuid",
+                    email: "user@example.com",
+                    name: "Nome",
+                    role: "client"
+                  }
+                },
+                "401": { message: "Credenciais inválidas" }
+              }
+            },
+            {
+              method: "POST",
+              path: "/api/auth/logout",
+              description: "Fazer logout (limpa cookie)",
+              auth: false,
+              responses: {
+                "200": { message: "Logout realizado com sucesso" }
+              }
+            },
+            {
+              method: "GET",
+              path: "/api/auth/me",
+              description: "Obter dados do usuário logado",
+              auth: true,
+              responses: {
+                "200": {
+                  example: {
+                    id: "uuid",
+                    email: "user@example.com",
+                    name: "Nome",
+                    role: "client"
+                  }
+                },
+                "401": { message: "Autenticação necessária" }
+              }
+            },
+            {
+              method: "POST",
+              path: "/api/auth/forgot-password",
+              description: "Solicitar reset de senha via email",
+              auth: false,
+              body: {
+                email: "string"
+              },
+              responses: {
+                "200": { message: "Se o email existir, você receberá instruções" }
+              }
+            },
+            {
+              method: "POST",
+              path: "/api/auth/reset-password",
+              description: "Redefinir senha com token",
+              auth: false,
+              body: {
+                token: "string",
+                password: "string (mínimo 6 caracteres)"
+              },
+              responses: {
+                "200": { message: "Senha redefinida com sucesso" },
+                "400": { message: "Token inválido ou expirado" }
+              }
+            }
+          ]
+        },
+        {
+          group: "Usuários",
+          routes: [
+            {
+              method: "GET",
+              path: "/api/users",
+              description: "Listar usuários (filtrar por role)",
+              auth: true,
+              queryParams: {
+                role: "string (client|attendant|admin) [opcional]"
+              },
+              permissions: "Atendentes só podem ver clientes. Admins veem todos.",
+              responses: {
+                "200": {
+                  description: "Lista de usuários",
+                  example: [
+                    {
+                      id: "uuid",
+                      email: "user@example.com",
+                      name: "Nome",
+                      image: null,
+                      role: "client",
+                      deleted: false,
+                      createdAt: "2024-01-01T00:00:00.000Z",
+                      updatedAt: "2024-01-01T00:00:00.000Z"
+                    }
+                  ]
+                },
+                "403": { message: "Permissão negada" }
+              }
+            },
+            {
+              method: "POST",
+              path: "/api/users",
+              description: "Criar novo usuário (apenas admin)",
+              auth: true,
+              permissions: "Apenas administradores",
+              body: {
+                email: "string",
+                password: "string (mínimo 6 caracteres)",
+                name: "string",
+                role: "string (client|attendant|admin)",
+                image: "string [opcional]"
+              },
+              responses: {
+                "201": { description: "Usuário criado" },
+                "400": { message: "Email já cadastrado" },
+                "403": { message: "Permissão negada" }
+              }
+            },
+            {
+              method: "GET",
+              path: "/api/users/:id",
+              description: "Buscar usuário por ID",
+              auth: true,
+              permissions: "Atendentes só podem ver clientes",
+              responses: {
+                "200": { description: "Dados do usuário" },
+                "403": { message: "Permissão negada" },
+                "404": { message: "Usuário não encontrado" }
+              }
+            },
+            {
+              method: "PATCH",
+              path: "/api/users/:id",
+              description: "Atualizar usuário",
+              auth: true,
+              permissions: "Admins podem atualizar qualquer usuário. Outros só podem atualizar a si mesmos.",
+              body: {
+                name: "string [opcional]",
+                email: "string [opcional]",
+                role: "string (apenas admin) [opcional]",
+                image: "string [opcional]"
+              },
+              responses: {
+                "200": { description: "Usuário atualizado" },
+                "400": { message: "Email já cadastrado" },
+                "403": { message: "Permissão negada" }
+              }
+            },
+            {
+              method: "DELETE",
+              path: "/api/users/:id",
+              description: "Excluir usuário (soft delete - apenas admin)",
+              auth: true,
+              permissions: "Apenas administradores",
+              responses: {
+                "200": { message: "Usuário excluído com sucesso" },
+                "403": { message: "Permissão negada" },
+                "404": { message: "Usuário não encontrado" }
+              }
+            }
+          ]
+        },
+        {
+          group: "Upload",
+          routes: [
+            {
+              method: "POST",
+              path: "/api/upload",
+              description: "Upload de imagem (máx 5MB)",
+              auth: true,
+              contentType: "multipart/form-data",
+              body: {
+                file: "File (jpeg|jpg|png|gif|webp)"
+              },
+              responses: {
+                "200": {
+                  example: { url: "/uploads/1234567890-123456789.jpg" }
+                },
+                "400": { message: "Nenhum arquivo enviado ou tipo inválido" }
+              }
+            }
+          ]
+        }
+      ]
+    };
+
+    res.json(apiDocs);
+  }
+
   const httpServer = createServer(app);
   
   // Initialize WebSocket server

@@ -18,6 +18,7 @@ import Contacts from "@/pages/contacts";
 import Attendants from "@/pages/attendants";
 import Admins from "@/pages/admins";
 import Settings from "@/pages/settings";
+import ApiDocs from "@/pages/api-docs";
 
 function Router() {
   return (
@@ -29,6 +30,7 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/docs" component={ApiDocs} />
       
       <Route path="/dashboard">
         {(params) => {
