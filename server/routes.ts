@@ -14,6 +14,7 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   updateUserSchema,
+  updatePreferencesSchema,
   type SafeUser,
 } from "@shared/schema";
 
@@ -47,6 +48,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     image: row.image,
     role: row.role,
     deleted: row.deleted,
+    preferences: row.preferences || {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -60,7 +62,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await pool.query(
         `INSERT INTO users (email, password_hash, name, role) 
          VALUES ($1, $2, $3, $4) 
-         RETURNING id, email, name, image, role, deleted, created_at, updated_at`,
+         RETURNING id, email, name, image, role, deleted, preferences, created_at, updated_at`,
         [data.email, passwordHash, data.name, data.role || "client"]
       );
 
@@ -118,7 +120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/auth/me", authenticateToken, async (req: AuthRequest, res) => {
     try {
       const result = await pool.query(
-        "SELECT id, email, name, image, role, deleted, created_at, updated_at FROM users WHERE id = $1 AND deleted = false",
+        "SELECT id, email, name, image, role, deleted, preferences, created_at, updated_at FROM users WHERE id = $1 AND deleted = false",
         [req.user!.id]
       );
 
@@ -245,7 +247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Permissão negada" });
       }
 
-      let query = "SELECT id, email, name, image, role, deleted, created_at, updated_at FROM users WHERE deleted = false";
+      let query = "SELECT id, email, name, image, role, deleted, preferences, created_at, updated_at FROM users WHERE deleted = false";
       const params: any[] = [];
 
       if (role) {
@@ -277,7 +279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await pool.query(
         `INSERT INTO users (email, password_hash, name, role, image) 
          VALUES ($1, $2, $3, $4, $5) 
-         RETURNING id, email, name, image, role, deleted, created_at, updated_at`,
+         RETURNING id, email, name, image, role, deleted, preferences, created_at, updated_at`,
         [email, passwordHash, name, role || "client", image || null]
       );
 
@@ -306,7 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentUser = req.user!;
 
       const result = await pool.query(
-        "SELECT id, email, name, image, role, deleted, created_at, updated_at FROM users WHERE id = $1 AND deleted = false",
+        "SELECT id, email, name, image, role, deleted, preferences, created_at, updated_at FROM users WHERE id = $1 AND deleted = false",
         [req.params.id]
       );
 
@@ -374,7 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       values.push(req.params.id);
 
       const result = await pool.query(
-        `UPDATE users SET ${updates.join(", ")} WHERE id = $${paramCount} AND deleted = false RETURNING id, email, name, image, role, deleted, created_at, updated_at`,
+        `UPDATE users SET ${updates.join(", ")} WHERE id = $${paramCount} AND deleted = false RETURNING id, email, name, image, role, deleted, preferences, created_at, updated_at`,
         values
       );
 
@@ -425,6 +427,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Usuário excluído com sucesso" });
     } catch (error: any) {
       res.status(500).json({ message: "Erro ao excluir usuário" });
+    }
+  });
+
+  // UPDATE PREFERENCES
+  app.patch("/api/users/preferences", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const data = updatePreferencesSchema.parse(req.body);
+      const currentUser = req.user!;
+
+      const result = await pool.query(
+        `UPDATE users 
+         SET preferences = jsonb_set(COALESCE(preferences, '{}'::jsonb), '{}', $1::jsonb, true),
+             updated_at = NOW()
+         WHERE id = $2 AND deleted = false 
+         RETURNING id, email, name, image, role, deleted, preferences, created_at, updated_at`,
+        [JSON.stringify(data), currentUser.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      const user = toSafeUser(result.rows[0]);
+      res.json(user);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Erro ao atualizar preferências" });
     }
   });
 

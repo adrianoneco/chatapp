@@ -16,7 +16,24 @@ import {
   Clock,
   CheckCircle2,
   MessageSquare,
+  Copy,
+  Send,
+  Image as ImageIcon,
+  Paperclip,
+  Mic,
+  Video,
+  Wand2,
+  MessageCircle,
+  MapPin,
+  User,
+  CheckCircle,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getRelativeDate } from "@/lib/date-utils";
 import { NewConversationDialog } from "@/components/new-conversation-dialog";
@@ -29,8 +46,17 @@ export default function Conversations() {
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [, params] = useRoute("/conversations/:channelId/:conversationId");
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   
   const selectedConversation = params?.conversationId || null;
+
+  const copyProtocol = (protocol: string) => {
+    navigator.clipboard.writeText(protocol);
+    toast({
+      title: "Protocolo copiado!",
+      description: "O número de protocolo foi copiado para a área de transferência",
+    });
+  };
 
   const mockConversations: any[] = [
     {
@@ -240,45 +266,91 @@ export default function Conversations() {
 
             {/* Message Input */}
             <div className="p-4 border-t bg-card flex-shrink-0">
-              <div className="flex gap-2 items-center">
-                <Input
-                  placeholder="Digite sua mensagem..."
-                  className="flex-1"
-                  data-testid="input-message"
-                />
-                <div className="flex gap-1">
-                  <Button size="icon" variant="ghost" data-testid="button-text-correction" title="Correção de texto">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </Button>
-                  <Button size="icon" variant="ghost" data-testid="button-quick-messages" title="Mensagens prontas">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                    </svg>
-                  </Button>
-                  <Button size="icon" variant="ghost" data-testid="button-record-audio" title="Gravar áudio">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                  </Button>
-                  <Button size="icon" variant="ghost" data-testid="button-record-video" title="Gravar vídeo">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </Button>
-                  <Button size="icon" variant="ghost" data-testid="button-send-image" title="Enviar imagem">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </Button>
-                  <Button size="icon" variant="ghost" data-testid="button-send-attachment" title="Enviar anexo">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                  </Button>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 relative">
+                  <Input
+                    placeholder="Digite sua mensagem..."
+                    className="pr-48"
+                    data-testid="input-message"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="button-text-correction">
+                          <Wand2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Correção de texto</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="button-quick-messages">
+                          <MessageCircle className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Mensagens prontas</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="button-record-audio">
+                          <Mic className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Gravar áudio</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="button-record-video">
+                          <Video className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Gravar vídeo</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="button-send-image">
+                          <ImageIcon className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Enviar imagem</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="button-send-attachment">
+                          <Paperclip className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Enviar anexo</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </div>
-                <Button data-testid="button-send-message">Enviar</Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="icon" data-testid="button-send-message">
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Enviar mensagem</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </>
@@ -296,28 +368,35 @@ export default function Conversations() {
 
       {/* Right Sidebar - Conversation Info */}
       {rightSidebarOpen && selectedConversation && (
-        <div className="w-80 bg-card border-l p-4">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Informações</h3>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setRightSidebarOpen(false)}
-                data-testid="button-close-right-sidebar"
-              >
-                <PanelRightClose className="h-4 w-4" />
-              </Button>
-            </div>
+        <div className="w-80 bg-card border-l flex flex-col h-full overflow-hidden">
+          <div className="p-4 border-b">
+            <h3 className="font-semibold">Informações</h3>
+          </div>
 
-            <Separator />
-
-            <div className="space-y-3">
+          <ScrollArea className="flex-1">
+            <div className="p-4 space-y-4">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Protocolo</p>
-                <p className="font-mono text-sm font-medium" data-testid="text-protocol">
-                  {mockProtocol}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="font-mono text-sm font-medium flex-1" data-testid="text-protocol">
+                    {mockProtocol}
+                  </p>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => copyProtocol(mockProtocol)}
+                        className="h-8 w-8"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Copiar protocolo</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
 
               <div>
@@ -343,6 +422,22 @@ export default function Conversations() {
               </div>
 
               <div>
+                <p className="text-xs text-muted-foreground mb-1">Atendente</p>
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-sm">Não atribuído</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Geolocalização</p>
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-sm">São Paulo, Brasil</p>
+                </div>
+              </div>
+
+              <div>
                 <p className="text-xs text-muted-foreground mb-1">Criado em</p>
                 <p className="text-sm">
                   {selectedConv?.lastMessageAt 
@@ -350,8 +445,39 @@ export default function Conversations() {
                     : new Date().toLocaleDateString("pt-BR")}
                 </p>
               </div>
+
+              <Separator />
+
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Conversas Anteriores</p>
+                <div className="space-y-2">
+                  <div className="p-2 rounded-md bg-muted/50 hover:bg-muted cursor-pointer transition-colors">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-3 w-3 text-green-500" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">Protocolo: B2C3D4E5F6</p>
+                        <p className="text-xs text-muted-foreground">Encerrado há 2 dias</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-md bg-muted/50 hover:bg-muted cursor-pointer transition-colors">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-3 w-3 text-green-500" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">Protocolo: C3D4E5F6G7</p>
+                        <p className="text-xs text-muted-foreground">Encerrado há 5 dias</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-center py-2">
+                    <Button variant="ghost" size="sm" className="text-xs">
+                      Ver todas
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          </ScrollArea>
         </div>
       )}
       

@@ -26,9 +26,16 @@ export async function initializeDatabase() {
         image TEXT,
         role TEXT NOT NULL DEFAULT 'client',
         deleted BOOLEAN NOT NULL DEFAULT false,
+        preferences JSONB DEFAULT '{}',
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
+    `);
+
+    // Add preferences column if it doesn't exist (migration)
+    await client.query(`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}'
     `);
 
     // Create password_reset_tokens table

@@ -1,7 +1,13 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, uuid, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// User preferences type
+export type UserPreferences = {
+  sidebarCollapsed?: boolean;
+  theme?: 'light' | 'dark' | 'system';
+};
 
 // Users table with roles and soft delete
 export const users = pgTable("users", {
@@ -12,6 +18,7 @@ export const users = pgTable("users", {
   image: text("image"),
   role: text("role").notNull().default("client"), // client, attendant, admin
   deleted: boolean("deleted").notNull().default(false),
+  preferences: jsonb("preferences").$type<UserPreferences>().notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -65,6 +72,11 @@ export const updateUserSchema = z.object({
   image: z.string().optional(),
 });
 
+export const updatePreferencesSchema = z.object({
+  sidebarCollapsed: z.boolean().optional(),
+  theme: z.enum(['light', 'dark', 'system']).optional(),
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type RegisterUser = z.infer<typeof registerUserSchema>;
@@ -72,6 +84,7 @@ export type LoginUser = z.infer<typeof loginSchema>;
 export type ForgotPassword = z.infer<typeof forgotPasswordSchema>;
 export type ResetPassword = z.infer<typeof resetPasswordSchema>;
 export type UpdateUser = z.infer<typeof updateUserSchema>;
+export type UpdatePreferences = z.infer<typeof updatePreferencesSchema>;
 export type User = typeof users.$inferSelect;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 

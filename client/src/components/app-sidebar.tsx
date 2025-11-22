@@ -1,3 +1,4 @@
+import { useEffect, useRef, useCallback } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -14,6 +15,7 @@ import { MessageSquare, Users, Headphones, Shield, LayoutDashboard } from "lucid
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { PiChatTeardropFill } from "react-icons/pi";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 const menuItems = [
   {
@@ -51,13 +53,78 @@ const menuItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
-  const { state } = useSidebar();
+  const { state, setOpen } = useSidebar();
+  const queryClient = useQueryClient();
+  const initializedRef = useRef(false);
+  const lastSavedStateRef = useRef<boolean | undefined>(undefined);
+  const isMutatingRef = useRef(false);
 
   const filteredItems = menuItems.filter(
     (item) => !item.roles || (user && item.roles.includes(user.role))
   );
 
   const isCollapsed = state === "collapsed";
+
+  const { mutate } = useMutation({
+    mutationFn: async (preferences: { sidebarCollapsed?: boolean }) => {
+      const response = await fetch("/api/users/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(preferences),
+      });
+
+      if (!response.ok) {
+        throw new Error("Erro ao atualizar preferências");
+      }
+
+      return response.json();
+    },
+    onMutate: async (preferences) => {
+      isMutatingRef.current = true;
+      const previousState = lastSavedStateRef.current;
+      lastSavedStateRef.current = preferences.sidebarCollapsed;
+      return { previousState };
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/auth/me"], data);
+      lastSavedStateRef.current = data.preferences?.sidebarCollapsed;
+    },
+    onError: (_, __, context) => {
+      if (context?.previousState !== undefined) {
+        lastSavedStateRef.current = context.previousState;
+      }
+    },
+    onSettled: () => {
+      isMutatingRef.current = false;
+    },
+  });
+
+  useEffect(() => {
+    if (!initializedRef.current && user?.preferences?.sidebarCollapsed !== undefined) {
+      setOpen(!user.preferences.sidebarCollapsed);
+      lastSavedStateRef.current = user.preferences.sidebarCollapsed;
+      initializedRef.current = true;
+    }
+  }, [user?.preferences?.sidebarCollapsed, setOpen]);
+
+  useEffect(() => {
+    if (user?.preferences?.sidebarCollapsed !== undefined) {
+      lastSavedStateRef.current = user.preferences.sidebarCollapsed;
+    }
+  }, [user?.preferences?.sidebarCollapsed]);
+
+  useEffect(() => {
+    if (
+      user &&
+      initializedRef.current &&
+      lastSavedStateRef.current !== isCollapsed &&
+      !isMutatingRef.current
+    ) {
+      mutate({ sidebarCollapsed: isCollapsed });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCollapsed]);
 
   return (
     <Sidebar>
