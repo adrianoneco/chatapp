@@ -1064,6 +1064,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       type: row.type,
       quotedMessageId: row.quoted_message_id,
       forwardedFromMessageId: row.forwarded_from_message_id,
+      status: row.status,
+      reactions: row.reactions || {},
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       sender: row.sender, // Already JSON object from query
@@ -1106,6 +1108,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           m.type,
           m.quoted_message_id,
           m.forwarded_from_message_id,
+          m.status,
+          m.reactions,
           m.created_at,
           m.updated_at,
           json_build_object('id', u.id, 'email', u.email, 'name', u.name, 'image', u.image, 'role', u.role) as sender,
@@ -1188,6 +1192,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           m.type,
           m.quoted_message_id,
           m.forwarded_from_message_id,
+          m.status,
+          m.reactions,
           m.created_at,
           m.updated_at,
           json_build_object('id', u.id, 'email', u.email, 'name', u.name, 'image', u.image, 'role', u.role) as sender,
@@ -1226,6 +1232,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ message: error.message || "Erro ao criar mensagem" });
     } finally {
       client.release();
+    }
+  });
+
+  // DELETE MESSAGE ROUTE
+  app.delete("/api/conversations/:conversationId/messages/:messageId", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const currentUser = req.user!;
+      const { messageId } = req.params;
+
+      // Get message to verify ownership
+      const msgResult = await pool.query(
+        "SELECT * FROM messages WHERE id = $1",
+        [messageId]
+      );
+
+      if (msgResult.rows.length === 0) {
+        return res.status(404).json({ message: "Mensagem não encontrada" });
+      }
+
+      const message = msgResult.rows[0];
+
+      // Only the sender can delete their message
+      if (message.sender_id !== currentUser.id && currentUser.role !== "admin") {
+        return res.status(403).json({ message: "Permissão negada" });
+      }
+
+      // Update message status to deleted
+      await pool.query(
+        "UPDATE messages SET status = 'deleted', updated_at = NOW() WHERE id = $1",
+        [messageId]
+      );
+
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "message_deleted",
+          data: { id: messageId, conversationId: req.params.conversationId }
+        });
+      }
+
+      res.json({ message: "Mensagem excluída com sucesso" });
+    } catch (error: any) {
+      console.error("Delete message error:", error);
+      res.status(500).json({ message: "Erro ao excluir mensagem" });
+    }
+  });
+
+  // ADD REACTION TO MESSAGE ROUTE
+  app.post("/api/conversations/:conversationId/messages/:messageId/react", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const currentUser = req.user!;
+      const { messageId } = req.params;
+      const { emoji } = req.body;
+
+      if (!emoji || typeof emoji !== "string") {
+        return res.status(400).json({ message: "Emoji é obrigatório" });
+      }
+
+      // Get current message
+      const msgResult = await pool.query(
+        "SELECT reactions FROM messages WHERE id = $1",
+        [messageId]
+      );
+
+      if (msgResult.rows.length === 0) {
+        return res.status(404).json({ message: "Mensagem não encontrada" });
+      }
+
+      const currentReactions = msgResult.rows[0].reactions || {};
+      
+      // Toggle reaction: if user already reacted with this emoji, remove it; otherwise, add it
+      if (!currentReactions[emoji]) {
+        currentReactions[emoji] = [];
+      }
+
+      const userIndex = currentReactions[emoji].indexOf(currentUser.id);
+      if (userIndex > -1) {
+        // Remove reaction
+        currentReactions[emoji].splice(userIndex, 1);
+        if (currentReactions[emoji].length === 0) {
+          delete currentReactions[emoji];
+        }
+      } else {
+        // Add reaction
+        currentReactions[emoji].push(currentUser.id);
+      }
+
+      // Update message
+      await pool.query(
+        "UPDATE messages SET reactions = $1, updated_at = NOW() WHERE id = $2",
+        [JSON.stringify(currentReactions), messageId]
+      );
+
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "message_reacted",
+          data: { id: messageId, conversationId: req.params.conversationId, reactions: currentReactions }
+        });
+      }
+
+      res.json({ reactions: currentReactions });
+    } catch (error: any) {
+      console.error("React to message error:", error);
+      res.status(500).json({ message: "Erro ao reagir à mensagem" });
     }
   });
 

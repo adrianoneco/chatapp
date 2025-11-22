@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import {
   Popover,
   PopoverContent,
@@ -91,8 +92,45 @@ export default function Conversations() {
   const [quickMessagesOpen, setQuickMessagesOpen] = useState(false);
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [hoveredMessageId, setHoveredMessageId] = useState<number | null>(null);
+  const [sidebarSize, setSidebarSize] = useState(25);
   
   const selectedConversationId = params?.conversationId || null;
+  
+  // Load sidebar width from user preferences
+  useEffect(() => {
+    if (user?.preferences?.conversationSidebarWidth) {
+      const widthInPixels = user.preferences.conversationSidebarWidth;
+      const screenWidth = window.innerWidth;
+      const percentage = (widthInPixels / screenWidth) * 100;
+      setSidebarSize(Math.min(Math.max(percentage, 15), 50));
+    }
+  }, [user?.preferences?.conversationSidebarWidth]);
+  
+  // Save sidebar width mutation with debounce
+  const saveSidebarWidthMutation = useMutation({
+    mutationFn: async (widthPercentage: number) => {
+      const widthInPixels = Math.round((widthPercentage / 100) * window.innerWidth);
+      // Clamp to schema constraints (200-600px)
+      const clampedWidth = Math.min(Math.max(widthInPixels, 200), 600);
+      return await apiRequest("PATCH", "/api/users/preferences", {
+        conversationSidebarWidth: clampedWidth,
+      });
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/auth/me"], data);
+    },
+  });
+  
+  // Debounced save function
+  const saveWidthTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const debouncedSave = (size: number) => {
+    if (saveWidthTimeoutRef.current) {
+      clearTimeout(saveWidthTimeoutRef.current);
+    }
+    saveWidthTimeoutRef.current = setTimeout(() => {
+      saveSidebarWidthMutation.mutate(size);
+    }, 500);
+  };
 
   // Fetch conversations
   const { data: conversations, isLoading: conversationsLoading } = useQuery<any[]>({
@@ -353,16 +391,21 @@ export default function Conversations() {
   const filteredConversations = conversations?.filter(c => c.status === activeTab && !c.deleted) || [];
 
   return (
-    <div className="flex flex-1 h-full overflow-hidden">
+    <>
+    <ResizablePanelGroup direction="horizontal" className="flex flex-1 h-full overflow-hidden">
       {/* Left Sidebar - Conversations List */}
-      <div
-        className={cn(
-          "bg-card border-r transition-all duration-300 flex flex-col h-full overflow-hidden",
-          leftSidebarOpen ? "w-96" : "w-0"
-        )}
-      >
-        {leftSidebarOpen && (
-          <>
+      {leftSidebarOpen && (
+        <>
+          <ResizablePanel
+            defaultSize={sidebarSize}
+            minSize={15}
+            maxSize={50}
+            onResize={(size) => {
+              setSidebarSize(size);
+              debouncedSave(size);
+            }}
+            className="bg-card flex flex-col h-full overflow-hidden"
+          >
             <div className="p-4 space-y-4 flex-shrink-0">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-lg font-semibold">Conversas</h2>
@@ -505,9 +548,10 @@ export default function Conversations() {
                 </div>
               )}
             </ScrollArea>
-          </>
-        )}
-      </div>
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+        </>
+      )}
 
       {/* Toggle Button for Left Sidebar */}
       {!leftSidebarOpen && (
@@ -525,7 +569,7 @@ export default function Conversations() {
       )}
 
       {/* Center - Conversation Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <ResizablePanel className="flex-1 flex flex-col h-full overflow-hidden">
         {selectedConversationId && selectedConversation ? (
           <>
             {/* Conversation Header */}
@@ -993,7 +1037,7 @@ export default function Conversations() {
             </div>
           </div>
         )}
-      </div>
+      </ResizablePanel>
 
       {/* Right Sidebar - Conversation Info */}
       {rightSidebarOpen && selectedConversation && (
@@ -1081,11 +1125,12 @@ export default function Conversations() {
           </ScrollArea>
         </div>
       )}
+    </ResizablePanelGroup>
       
       <NewConversationDialog
         open={newConversationOpen}
         onOpenChange={setNewConversationOpen}
       />
-    </div>
+    </>
   );
 }
