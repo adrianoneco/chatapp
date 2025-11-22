@@ -174,19 +174,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // and secure=true for cookies to work properly. Detect Replit or use CLIENT_ORIGIN env.
       const origin = req.get('origin') || '';
       const host = req.get('host') || '';
-      const isReplit = origin.includes('.replit.dev') || origin.includes('.repl.co') || 
+      const isReplit = origin.includes('.replit.dev') || origin.includes('.repl.co') ||
                        host.includes('.replit.dev') || host.includes('.repl.co');
-      const isCrossSite = process.env.CLIENT_ORIGIN || isReplit;
+
+      const clientOrigin = (process.env.CLIENT_ORIGIN || '').trim();
+      const clientOriginIsHttps = clientOrigin.toLowerCase().startsWith('https://');
+      const isCrossSite = !!clientOrigin || isReplit;
 
       const cookieOptions: any = {
         httpOnly: true,
-        secure: isCrossSite || process.env.NODE_ENV === "production",
+        // secure when running in production or when client origin uses HTTPS
+        secure: process.env.NODE_ENV === "production" || clientOriginIsHttps || isReplit,
         maxAge: 24 * 60 * 60 * 1000, // 1 day
         path: "/",
         sameSite: isCrossSite ? "none" : "lax",
       };
 
+      // If CLIENT_ORIGIN is set, explicitly set cookie domain to ensure the cookie
+      // is scoped to the client host (useful when behind a proxy). Do not set
+      // for localhost-like origins.
+      if (clientOrigin) {
+        try {
+          const parsed = new URL(clientOrigin);
+          if (parsed.hostname && !parsed.hostname.match(/localhost|127\.0\.0\.1/)) {
+            // Force domain to chatapp.easydev.com.br when CLIENT_ORIGIN matches
+            if (parsed.hostname === 'chatapp.easydev.com.br') {
+              cookieOptions.domain = 'chatapp.easydev.com.br';
+            } else {
+              cookieOptions.domain = parsed.hostname;
+            }
+          }
+        } catch (e) {
+          // ignore invalid CLIENT_ORIGIN
+        }
+      }
+
       res.cookie("token", token, cookieOptions);
+      // DEBUG: expose cookie options in a header to help diagnose client cookie issues
+      // (temporary — safe to remove once debugging is complete)
+      try {
+        res.setHeader(
+          "X-Debug-Cookie",
+          JSON.stringify({ domain: cookieOptions.domain || null, secure: cookieOptions.secure, sameSite: cookieOptions.sameSite }),
+        );
+      } catch (e) {
+        /* ignore */
+      }
 
       // In development, return the token in the JSON response as a fallback so
       // the frontend can persist it (useful when cookies aren't available

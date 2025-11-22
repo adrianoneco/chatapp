@@ -12,22 +12,22 @@ export default function Settings() {
   const settingsMenu = [
     {
       title: "Geral",
-      url: "/dashboard/settings/general",
+      url: "/settings/general",
       icon: Cog,
     },
     {
       title: "Canais",
-      url: "/dashboard/settings/channels",
+      url: "/settings/channels",
       icon: MessageSquare,
     },
     {
       title: "Mensagens Prontas",
-      url: "/dashboard/settings/quick-messages",
+      url: "/settings/quick-messages",
       icon: MessageCircle,
     },
     {
       title: "Webhooks",
-      url: "/dashboard/settings/webhooks",
+      url: "/settings/webhooks",
       icon: Webhook,
     },
   ];
@@ -44,7 +44,7 @@ export default function Settings() {
             Gerencie as configurações do sistema
           </p>
         </div>
-        
+
         <nav className="space-y-1">
           {settingsMenu.map((item) => (
             <Link key={item.url} href={item.url}>
@@ -65,11 +65,11 @@ export default function Settings() {
       </div>
 
       <div className="flex-1 bg-card border rounded-lg p-6">
-        <Route path="/dashboard/settings/general" component={GeneralSettings} />
-        <Route path="/dashboard/settings/channels" component={Channels} />
-        <Route path="/dashboard/settings/quick-messages" component={QuickMessages} />
-        <Route path="/dashboard/settings/webhooks" component={WebhooksSettings} />
-        <Route path="/dashboard/settings">
+        <Route path="/settings/general" component={GeneralSettings} />
+        <Route path="/settings/channels" component={Channels} />
+        <Route path="/settings/quick-messages" component={QuickMessages} />
+        <Route path="/settings/webhooks" component={WebhooksSettings} />
+        <Route path="/settings">
           {() => (
             <div className="text-center py-12">
               <SettingsIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />

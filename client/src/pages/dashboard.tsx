@@ -13,9 +13,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    if (location === "/dashboard") {
-      setLocation("/contacts");
-    }
+    // No automatic redirect from root — render dashboard home at '/'
   }, [location, setLocation]);
 
   const style = {

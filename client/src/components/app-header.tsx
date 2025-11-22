@@ -25,14 +25,14 @@ export function AppHeader() {
     <header className="flex items-center justify-between gap-4 px-6 py-3 border-b bg-gradient-to-br from-purple-950 via-purple-900 to-blue-950 text-white sticky top-0 z-50 w-full">
       <div className="flex items-center gap-4">
         <SidebarTrigger className="text-white hover:bg-white/10" data-testid="button-sidebar-toggle" />
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-slate-800 via-slate-900 to-black flex items-center justify-center shadow-xl shadow-black/50 border border-slate-700/50">
-            <PiChatTeardropFill className="h-5 w-5 text-purple-400" />
+        <div className="flex justify-center items-center gap-3">
+          <div className="h-12 w-12 border rounded-2xl bg-gradient-to-br bg-gradient-to-br from-purple-950 via-purple-900 to-blue-950 flex items-center justify-center shadow-xl">
+            <PiChatTeardropFill className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight" style={{ fontFamily: "'Poppins', sans-serif" }}>Evolution Chat</h1>
+          <h1 className="text-3xl font-bold text-white">ChatApp</h1>
         </div>
       </div>
-      
+
       {user && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -53,13 +53,13 @@ export function AppHeader() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/dashboard/profile">
+              <Link href="/profile">
                 <User className="mr-2 h-4 w-4" />
                 <span>Perfil</span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <a href="/dashboard/settings">
+              <a href="/settings">
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Configurações</span>
               </a>

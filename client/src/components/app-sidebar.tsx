@@ -20,7 +20,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 const menuItems = [
   {
     title: "Dashboard",
-    url: "/dashboard",
+    url: "/contacts",
     icon: LayoutDashboard,
     roles: ["admin", "attendant", "client"],
   },
@@ -50,7 +50,7 @@ const menuItems = [
   },
   {
     title: "Configurações",
-    url: "/dashboard/settings",
+    url: "/settings",
     icon: Settings,
     roles: ["admin", "attendant"],
   },

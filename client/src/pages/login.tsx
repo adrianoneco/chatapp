@@ -58,7 +58,7 @@ export default function Login() {
         if (lastPage && lastPage !== '/' && !lastPage.startsWith('/login') && !lastPage.startsWith('/register')) {
           setLocation(lastPage);
         } else {
-          setLocation("/dashboard");
+          setLocation("/contacts");
         }
       }
     } catch (error: any) {
@@ -78,8 +78,8 @@ export default function Login() {
       <Card className="w-full max-w-md relative z-10 border-white/10 bg-black/40 backdrop-blur-xl">
         <CardHeader className="space-y-4 text-center">
           <div className="flex justify-center items-center gap-3">
-            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-xl shadow-purple-500/50">
-              <PiChatTeardropFill className="h-9 w-9 text-white" />
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br bg-gradient-to-br from-purple-950 via-purple-900 to-blue-950 flex items-center justify-center shadow-xl">
+              <PiChatTeardropFill className="h-12 w-12 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-white">ChatApp</h1>
           </div>

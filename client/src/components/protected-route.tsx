@@ -20,7 +20,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   useEffect(() => {
     if (!isLoading && user && allowedRoles && !allowedRoles.includes(user.role as any)) {
-      setLocation("/dashboard");
+      setLocation("/contacts");
     }
   }, [isLoading, user, allowedRoles, setLocation]);
 

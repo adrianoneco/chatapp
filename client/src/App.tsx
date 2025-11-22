@@ -24,58 +24,19 @@ function Router() {
   return (
     <Switch>
       <Route path="/">
-        {() => <Redirect to="/login" />}
+        {() => (
+          <DashboardLayout>
+            <DashboardHome />
+          </DashboardLayout>
+        )}
       </Route>
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/docs" component={ApiDocs} />
-      
-      <Route path="/dashboard">
-        {(params) => {
-          if (params && Object.keys(params).length === 0) {
-            return (
-              <DashboardLayout>
-                <DashboardHome />
-              </DashboardLayout>
-            );
-          }
-          return null;
-        }}
-      </Route>
-      
-      <Route path="/dashboard/conversations">
-        {() => (
-          <DashboardLayout>
-            <Conversations />
-          </DashboardLayout>
-        )}
-      </Route>
-      
-      <Route path="/dashboard/contacts">
-        {() => (
-          <DashboardLayout>
-            <Contacts />
-          </DashboardLayout>
-        )}
-      </Route>
-      
-      <Route path="/dashboard/attendants">
-        {() => (
-          <DashboardLayout>
-            <Attendants />
-          </DashboardLayout>
-        )}
-      </Route>
-      
-      <Route path="/dashboard/admins">
-        {() => (
-          <DashboardLayout>
-            <Admins />
-          </DashboardLayout>
-        )}
-      </Route>
+
+
 
       <Route path="/attendants">
         {() => (
@@ -84,7 +45,7 @@ function Router() {
           </DashboardLayout>
         )}
       </Route>
-      
+
       <Route path="/admins">
         {() => (
           <DashboardLayout>
@@ -92,7 +53,7 @@ function Router() {
           </DashboardLayout>
         )}
       </Route>
-      
+
       <Route path="/contacts">
         {() => (
           <DashboardLayout>
@@ -100,7 +61,7 @@ function Router() {
           </DashboardLayout>
         )}
       </Route>
-      
+
       <Route path="/conversations">
         {() => (
           <ConversationsLayout>
@@ -108,7 +69,7 @@ function Router() {
           </ConversationsLayout>
         )}
       </Route>
-      
+
       <Route path="/conversations/:channelId/:conversationId">
         {() => (
           <ConversationsLayout>
@@ -116,23 +77,23 @@ function Router() {
           </ConversationsLayout>
         )}
       </Route>
-      
-      <Route path="/dashboard/settings">
+
+      <Route path="/settings">
         {() => (
           <DashboardLayout>
             <Settings />
           </DashboardLayout>
         )}
       </Route>
-      
-      <Route path="/dashboard/settings/:tab">
+
+      <Route path="/settings/:tab">
         {() => (
           <DashboardLayout>
             <Settings />
           </DashboardLayout>
         )}
       </Route>
-      
+
       <Route component={NotFound} />
     </Switch>
   );
