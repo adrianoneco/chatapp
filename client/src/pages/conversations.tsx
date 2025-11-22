@@ -18,8 +18,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { getRelativeDate } from "@/lib/date-utils";
 import { NewConversationDialog } from "@/components/new-conversation-dialog";
 import { useRoute, useLocation } from "wouter";
 
@@ -159,10 +158,7 @@ export default function Conversations() {
                               {conversation.client.name}
                             </p>
                             <span className="text-xs text-muted-foreground whitespace-nowrap">
-                              {formatDistanceToNow(new Date(conversation.lastMessageAt), {
-                                addSuffix: true,
-                                locale: ptBR,
-                              })}
+                              {getRelativeDate(conversation.lastMessageAt)}
                             </span>
                           </div>
                           <p className="text-xs text-muted-foreground truncate">
@@ -209,10 +205,7 @@ export default function Conversations() {
                   <p className="font-medium">{selectedConv?.client.name || "Cliente"}</p>
                   <p className="text-xs text-muted-foreground">
                     {selectedConv?.lastMessageAt 
-                      ? `Visto por último ${formatDistanceToNow(new Date(selectedConv.lastMessageAt), { 
-                          addSuffix: true, 
-                          locale: ptBR 
-                        })}`
+                      ? `Visto por último ${getRelativeDate(selectedConv.lastMessageAt)}`
                       : "Status desconhecido"}
                   </p>
                 </div>

@@ -4,8 +4,7 @@ import { UserAvatar } from "./user-avatar";
 import { RoleBadge } from "./role-badge";
 import { Edit, Trash2 } from "lucide-react";
 import type { SafeUser } from "@shared/schema";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { getDate } from "@/lib/date-utils";
 
 interface UserCardProps {
   user: SafeUser;
@@ -56,7 +55,7 @@ export function UserCard({ user, onEdit, onDelete, canEdit = true, canDelete = t
           </div>
         </div>
         <div className="mt-4 text-xs text-muted-foreground">
-          Criado em {format(new Date(user.createdAt), "dd/MM/yyyy", { locale: ptBR })}
+          Criado em {getDate(user.createdAt)}
         </div>
       </CardContent>
     </Card>

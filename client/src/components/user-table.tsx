@@ -11,8 +11,7 @@ import { UserAvatar } from "./user-avatar";
 import { RoleBadge } from "./role-badge";
 import { Edit, Trash2 } from "lucide-react";
 import type { SafeUser } from "@shared/schema";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { getDateTime } from "@/lib/date-utils";
 
 interface UserTableProps {
   users: SafeUser[];
@@ -55,7 +54,7 @@ export function UserTable({ users, onEdit, onDelete, canEdit = true, canDelete =
                 <RoleBadge role={user.role as any} />
               </TableCell>
               <TableCell className="text-muted-foreground">
-                {format(new Date(user.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                {getDateTime(user.createdAt)}
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
