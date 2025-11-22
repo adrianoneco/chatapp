@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { SafeUser } from "@shared/schema";
-import { queryClient, apiRequest } from "./queryClient";
+import { queryClient, apiRequest, getQueryFn } from "./queryClient";
 
 interface AuthContextType {
   user: SafeUser | null;
@@ -25,10 +25,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [location, isAuthenticated]);
 
+  // Force revalidation on mount and treat 401 as null so the auth state
+  // is correctly reset when the cookie is present but invalid/expired.
   const { data: user, isLoading } = useQuery<SafeUser>({
     queryKey: ["/api/auth/me"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
     retry: false,
-    refetchOnWindowFocus: false,
+    // Always refetch on mount so a page refresh triggers a call to /api/auth/me
+    // and the cookie is read by the server.
+    refetchOnMount: "always",
+    // Also refetch on window focus to keep auth in sync across tabs.
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {
