@@ -45,8 +45,11 @@ export class WSManager {
     }
 
     try {
-      // Verify JWT token directly
-      const jwtSecret = process.env.JWT_SECRET || "your-secret-key-change-in-production";
+      // Verify JWT token using SESSION_SECRET (same as auth middleware)
+      const jwtSecret = process.env.SESSION_SECRET;
+      if (!jwtSecret) {
+        throw new Error("SESSION_SECRET not configured");
+      }
       const decoded = jwt.verify(token, jwtSecret) as any;
       
       // Authentication successful

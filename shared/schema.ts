@@ -138,10 +138,35 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   createdAt: true,
 });
 
+// Quick Messages table - predefined messages with parameters
+export const quickMessages = pgTable("quick_messages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  icon: text("icon").notNull().default("MessageCircle"),
+  parameters: text("parameters").array().notNull().default(sql`ARRAY[]::text[]`),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Insert schemas
+export const insertQuickMessageSchema = createInsertSchema(quickMessages, {
+  title: z.string().min(1, "Título é obrigatório"),
+  content: z.string().min(1, "Conteúdo é obrigatório"),
+  icon: z.string().min(1, "Ícone é obrigatório"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type Conversation = typeof conversations.$inferSelect;
 export type Protocol = typeof protocols.$inferSelect;
 export type Message = typeof messages.$inferSelect;
+export type QuickMessage = typeof quickMessages.$inferSelect;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type InsertProtocol = z.infer<typeof insertProtocolSchema>;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type InsertQuickMessage = z.infer<typeof insertQuickMessageSchema>;
