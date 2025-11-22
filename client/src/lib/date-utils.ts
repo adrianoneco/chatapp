@@ -64,3 +64,28 @@ export function getFullDateTime(date: string | Date): string {
   const parsedDate = parseDate(date);
   return format(parsedDate, "EEEE, dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR });
 }
+
+export function getDateDivider(date: string | Date): string {
+  const parsedDate = parseDate(date);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const messageDate = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate());
+  
+  if (messageDate.getTime() === today.getTime()) {
+    return "Hoje";
+  } else if (messageDate.getTime() === yesterday.getTime()) {
+    return "Ontem";
+  } else {
+    return format(parsedDate, "dd/MM/yyyy", { locale: ptBR });
+  }
+}
+
+export function isSameDay(date1: string | Date, date2: string | Date): boolean {
+  const parsed1 = parseDate(date1);
+  const parsed2 = parseDate(date2);
+  return parsed1.getDate() === parsed2.getDate() &&
+         parsed1.getMonth() === parsed2.getMonth() &&
+         parsed1.getFullYear() === parsed2.getFullYear();
+}

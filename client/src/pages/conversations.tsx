@@ -58,6 +58,10 @@ import {
   Trash2,
   RefreshCw,
   Mic2,
+  Reply,
+  Forward,
+  Smile,
+  ChevronDown,
 } from "lucide-react";
 import * as Icons from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -67,7 +71,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { getRelativeDate } from "@/lib/date-utils";
+import { getRelativeDate, getTime, getDateDivider, isSameDay } from "@/lib/date-utils";
 import { NewConversationDialog } from "@/components/new-conversation-dialog";
 import { useRoute, useLocation } from "wouter";
 
@@ -85,6 +89,8 @@ export default function Conversations() {
   const [messageText, setMessageText] = useState("");
   const [correctingText, setCorrectingText] = useState(false);
   const [quickMessagesOpen, setQuickMessagesOpen] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [hoveredMessageId, setHoveredMessageId] = useState<number | null>(null);
   
   const selectedConversationId = params?.conversationId || null;
 
@@ -145,10 +151,12 @@ export default function Conversations() {
       return await apiRequest("POST", `/api/conversations/${selectedConversationId}/messages`, {
         content,
         type: "text",
+        quotedMessageId: replyingTo?.id,
       });
     },
     onSuccess: () => {
       setMessageText("");
+      setReplyingTo(null);
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedConversationId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
     },
@@ -270,7 +278,8 @@ export default function Conversations() {
 
   // WebSocket events
   useWebSocketEvent("message_created", (data) => {
-    if (data.conversation_id === selectedConversationId) {
+    // Data is already in camelCase from backend formatMessageRow()
+    if (data.conversationId === selectedConversationId) {
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedConversationId, "messages"] });
     }
     queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
@@ -590,7 +599,7 @@ export default function Conversations() {
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {selectedConversation?.protocol && (
                     <div className="flex justify-center">
                       <Badge variant="secondary" className="text-xs">
@@ -604,41 +613,188 @@ export default function Conversations() {
                       Nenhuma mensagem ainda
                     </div>
                   ) : (
-                    messages.map((message: any) => (
-                      <div
-                        key={message.id}
-                        className={cn(
-                          "flex gap-3",
-                          message.sender_id === user?.id && "flex-row-reverse"
-                        )}
-                      >
-                        <Avatar className="h-8 w-8 flex-shrink-0">
-                          <AvatarImage src={message.sender?.image} />
-                          <AvatarFallback>{message.sender?.name?.[0] || "U"}</AvatarFallback>
-                        </Avatar>
-                        <div className={cn(
-                          "flex flex-col gap-1 max-w-[70%]",
-                          message.sender_id === user?.id && "items-end"
-                        )}>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">
-                              {message.sender?.name}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(message.created_at).toLocaleTimeString("pt-BR")}
-                            </span>
-                          </div>
-                          <div className={cn(
-                            "rounded-lg px-4 py-2",
-                            message.sender_id === user?.id 
-                              ? "bg-primary text-primary-foreground" 
-                              : "bg-muted"
-                          )}>
-                            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                    messages.map((message: any, index: number) => {
+                      const showDateDivider = index === 0 || !isSameDay(message.createdAt, messages[index - 1].createdAt);
+                      const isFromUser = message.senderId === user?.id;
+                      
+                      return (
+                        <div key={message.id}>
+                          {/* Day Divider */}
+                          {showDateDivider && (
+                            <div className="flex justify-center my-4">
+                              <Badge variant="secondary" className="text-xs px-3 py-1">
+                                {getDateDivider(message.createdAt)}
+                              </Badge>
+                            </div>
+                          )}
+                          
+                          {/* Message */}
+                          <div
+                            className={cn(
+                              "flex gap-2 items-end group",
+                              isFromUser && "flex-row-reverse"
+                            )}
+                            onMouseEnter={() => setHoveredMessageId(message.id)}
+                            onMouseLeave={() => setHoveredMessageId(null)}
+                          >
+                            <Avatar className="h-8 w-8 flex-shrink-0">
+                              <AvatarImage src={message.sender?.image} />
+                              <AvatarFallback>{message.sender?.name?.[0] || "U"}</AvatarFallback>
+                            </Avatar>
+                            
+                            <div className={cn(
+                              "flex flex-col gap-1 max-w-[70%] relative",
+                              isFromUser && "items-end"
+                            )}>
+                              {/* Sender name (only for other users' messages) */}
+                              {!isFromUser && (
+                                <span className="text-xs text-muted-foreground px-3">
+                                  {message.sender?.name}
+                                </span>
+                              )}
+                              
+                              {/* Action buttons (show on hover) */}
+                              {hoveredMessageId === message.id && (
+                                <div className={cn(
+                                  "absolute -top-8 flex gap-1 bg-card border rounded-md shadow-md p-1 z-10",
+                                  isFromUser ? "right-0" : "left-0"
+                                )}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-7 w-7"
+                                        onClick={() => setReplyingTo(message)}
+                                        data-testid={`button-reply-${message.id}`}
+                                      >
+                                        <Reply className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Responder</TooltipContent>
+                                  </Tooltip>
+                                  
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-7 w-7"
+                                        data-testid={`button-forward-${message.id}`}
+                                      >
+                                        <Forward className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Encaminhar</TooltipContent>
+                                  </Tooltip>
+                                  
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-7 w-7"
+                                        data-testid={`button-react-${message.id}`}
+                                      >
+                                        <Smile className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Reagir</TooltipContent>
+                                  </Tooltip>
+                                  
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-7 w-7"
+                                        data-testid={`button-more-${message.id}`}
+                                      >
+                                        <ChevronDown className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align={isFromUser ? "end" : "start"}>
+                                      <DropdownMenuItem data-testid={`menu-copy-${message.id}`}>
+                                        <Copy className="h-4 w-4 mr-2" />
+                                        Copiar
+                                      </DropdownMenuItem>
+                                      {isFromUser && (
+                                        <>
+                                          <DropdownMenuSeparator />
+                                          <DropdownMenuItem 
+                                            className="text-destructive"
+                                            data-testid={`menu-delete-${message.id}`}
+                                          >
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Deletar
+                                          </DropdownMenuItem>
+                                        </>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              )}
+                              
+                              {/* Message bubble with tail */}
+                              <div className="relative">
+                                {/* Tail pointer */}
+                                <div
+                                  className={cn(
+                                    "absolute top-0 w-0 h-0",
+                                    isFromUser
+                                      ? "right-0 border-l-[8px] border-l-transparent border-t-[8px] border-t-primary border-r-0 translate-x-[8px]"
+                                      : "left-0 border-r-[8px] border-r-transparent border-t-[8px] border-t-muted border-l-0 -translate-x-[8px]"
+                                  )}
+                                />
+                                
+                                {/* Message content */}
+                                <div className={cn(
+                                  "rounded-md px-3 py-2 relative",
+                                  isFromUser 
+                                    ? "bg-primary text-primary-foreground" 
+                                    : "bg-muted"
+                                )}>
+                                  {/* Quoted message (if reply) */}
+                                  {message.quotedMessage && (
+                                    <div className={cn(
+                                      "mb-2 pl-3 py-1 border-l-4 rounded-sm",
+                                      isFromUser 
+                                        ? "border-l-primary-foreground/50 bg-primary-foreground/10" 
+                                        : "border-l-primary bg-primary/10"
+                                    )}>
+                                      <p className={cn(
+                                        "text-xs font-medium mb-0.5",
+                                        isFromUser ? "text-primary-foreground/90" : "text-primary"
+                                      )}>
+                                        {message.quotedMessage.sender?.name || "Usuário"}
+                                      </p>
+                                      <p className={cn(
+                                        "text-xs line-clamp-2",
+                                        isFromUser ? "text-primary-foreground/70" : "text-muted-foreground"
+                                      )}>
+                                        {message.quotedMessage.content}
+                                      </p>
+                                    </div>
+                                  )}
+                                  
+                                  <p className="text-sm whitespace-pre-wrap break-words pr-12">
+                                    {message.content}
+                                  </p>
+                                  
+                                  {/* Time */}
+                                  <span className={cn(
+                                    "text-[10px] absolute bottom-1 right-2",
+                                    isFromUser ? "text-primary-foreground/70" : "text-muted-foreground"
+                                  )}>
+                                    {getTime(message.createdAt)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                   <div ref={messagesEndRef} />
                 </div>
@@ -646,8 +802,34 @@ export default function Conversations() {
             </ScrollArea>
 
             {/* Message Input */}
-            <div className="p-4 border-t bg-card flex-shrink-0">
-              <div className="flex gap-2 items-end">
+            <div className="border-t bg-card flex-shrink-0">
+              {/* Reply Preview */}
+              {replyingTo && (
+                <div className="p-3 border-b bg-muted/50 flex items-center gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Reply className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-xs font-medium">
+                        Respondendo a {replyingTo.sender?.name}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-1">
+                      {replyingTo.content}
+                    </p>
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 flex-shrink-0"
+                    onClick={() => setReplyingTo(null)}
+                    data-testid="button-cancel-reply"
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+              
+              <div className="p-4 flex gap-2 items-end">
                 <div className="flex-1 relative">
                   <Input
                     placeholder="Digite sua mensagem..."

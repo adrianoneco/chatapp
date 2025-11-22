@@ -1054,6 +1054,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to normalize message row from database to camelCase
+  function formatMessageRow(row: any) {
+    return {
+      id: row.id,
+      conversationId: row.conversation_id,
+      senderId: row.sender_id,
+      content: row.content,
+      type: row.type,
+      quotedMessageId: row.quoted_message_id,
+      forwardedFromMessageId: row.forwarded_from_message_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      sender: row.sender, // Already JSON object from query
+      quotedMessage: row.quoted_message, // Already JSON object from query
+    };
+  }
+
   // MESSAGES ROUTES
   app.get("/api/conversations/:conversationId/messages", authenticateToken, async (req: AuthRequest, res) => {
     try {
@@ -1081,16 +1098,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const result = await pool.query(
-        `SELECT m.*,
-          json_build_object('id', u.id, 'email', u.email, 'name', u.name, 'image', u.image, 'role', u.role) as sender
+        `SELECT 
+          m.id,
+          m.conversation_id,
+          m.sender_id,
+          m.content,
+          m.type,
+          m.quoted_message_id,
+          m.forwarded_from_message_id,
+          m.created_at,
+          m.updated_at,
+          json_build_object('id', u.id, 'email', u.email, 'name', u.name, 'image', u.image, 'role', u.role) as sender,
+          CASE 
+            WHEN m.quoted_message_id IS NOT NULL THEN 
+              json_build_object(
+                'id', qm.id, 
+                'content', qm.content,
+                'createdAt', qm.created_at,
+                'sender', json_build_object('id', qu.id, 'name', qu.name, 'image', qu.image)
+              )
+            ELSE NULL
+          END as quoted_message
         FROM messages m
         INNER JOIN users u ON m.sender_id = u.id
+        LEFT JOIN messages qm ON m.quoted_message_id = qm.id
+        LEFT JOIN users qu ON qm.sender_id = qu.id
         WHERE m.conversation_id = $1
         ORDER BY m.created_at ASC`,
         [conversationId]
       );
 
-      res.json(result.rows);
+      // Transform snake_case to camelCase for frontend
+      const messages = result.rows.map(formatMessageRow);
+
+      res.json(messages);
     } catch (error: any) {
       console.error("Get messages error:", error);
       res.status(500).json({ message: "Erro ao buscar mensagens" });
@@ -1137,25 +1178,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const message = msgResult.rows[0];
 
-      // Fetch full message with sender
+      // Fetch full message with sender and quoted message
       const fullMsgResult = await client.query(
-        `SELECT m.*,
-          json_build_object('id', u.id, 'email', u.email, 'name', u.name, 'image', u.image, 'role', u.role) as sender
+        `SELECT 
+          m.id,
+          m.conversation_id,
+          m.sender_id,
+          m.content,
+          m.type,
+          m.quoted_message_id,
+          m.forwarded_from_message_id,
+          m.created_at,
+          m.updated_at,
+          json_build_object('id', u.id, 'email', u.email, 'name', u.name, 'image', u.image, 'role', u.role) as sender,
+          CASE 
+            WHEN m.quoted_message_id IS NOT NULL THEN 
+              json_build_object(
+                'id', qm.id, 
+                'content', qm.content,
+                'createdAt', qm.created_at,
+                'sender', json_build_object('id', qu.id, 'name', qu.name, 'image', qu.image)
+              )
+            ELSE NULL
+          END as quoted_message
         FROM messages m
         INNER JOIN users u ON m.sender_id = u.id
+        LEFT JOIN messages qm ON m.quoted_message_id = qm.id
+        LEFT JOIN users qu ON qm.sender_id = qu.id
         WHERE m.id = $1`,
         [message.id]
       );
+
+      const normalizedMessage = formatMessageRow(fullMsgResult.rows[0]);
 
       const wsManager = getWSManager();
       if (wsManager) {
         wsManager.broadcastToAll({
           type: "message_created",
-          data: fullMsgResult.rows[0]
+          data: normalizedMessage
         });
       }
 
-      res.status(201).json(fullMsgResult.rows[0]);
+      res.status(201).json(normalizedMessage);
     } catch (error: any) {
       await client.query("ROLLBACK");
       console.error("Create message error:", error);
