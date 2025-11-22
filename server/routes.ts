@@ -794,6 +794,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get conversation history for a specific client
+  app.get("/api/conversations/history/:clientId", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const currentUser = req.user!;
+      const { clientId } = req.params;
+
+      // Authorization check: only the client themselves or attendants/admins can view history
+      if (currentUser.role === "client" && currentUser.id !== clientId) {
+        return res.status(403).json({ message: "Não autorizado a visualizar este histórico" });
+      }
+
+      const query = `
+        SELECT c.*, 
+          json_build_object('id', client.id, 'email', client.email, 'name', client.name, 'image', client.image, 'role', client.role) as client,
+          json_build_object('id', att.id, 'email', att.email, 'name', att.name, 'image', att.image, 'role', att.role) as attendant,
+          p.protocol
+        FROM conversations c
+        INNER JOIN users client ON c.client_id = client.id
+        LEFT JOIN users att ON c.attendant_id = att.id
+        LEFT JOIN protocols p ON p.conversation_id = c.id
+        WHERE c.client_id = $1
+        ORDER BY c.created_at DESC
+        LIMIT 10
+      `;
+
+      const result = await pool.query(query, [clientId]);
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get conversation history error:", error);
+      res.status(500).json({ message: "Erro ao buscar histórico de conversas" });
+    }
+  });
+
   app.get("/api/conversations/:id", authenticateToken, async (req: AuthRequest, res) => {
     try {
       const currentUser = req.user!;
