@@ -38,7 +38,7 @@ export default function ApiDocs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
 
   useEffect(() => {
     if (user) {
@@ -49,7 +49,7 @@ export default function ApiDocs() {
   const fetchDocs = async () => {
     setLoading(true);
     setError("");
-    
+
     try {
       const response = await fetch("/api/docs", {
         credentials: "include",
@@ -82,7 +82,8 @@ export default function ApiDocs() {
     let curl = `curl -X ${route.method} '${baseUrl}${route.path}'`;
 
     if (route.auth) {
-      curl += ` \\\n  -H 'Cookie: token=<seu-jwt-token>'`;
+      const authHeader = apiDocs?.authentication?.methods?.[0]?.header || "Cookie: token=<seu-jwt-token>";
+      curl += ` \\\n+  -H '${authHeader}'`;
     }
 
     if (route.contentType === "multipart/form-data") {
@@ -119,7 +120,7 @@ export default function ApiDocs() {
     }
   };
 
-  if (!user) {
+  if (!isLoading && !user) {
     return <Redirect to="/login" />;
   }
 
@@ -301,8 +302,8 @@ export default function ApiDocs() {
                                           status.startsWith("2")
                                             ? "default"
                                             : status.startsWith("4")
-                                            ? "destructive"
-                                            : "secondary"
+                                              ? "destructive"
+                                              : "secondary"
                                         }
                                       >
                                         {status}

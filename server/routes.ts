@@ -5,7 +5,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import multer from "multer";
 import path from "path";
-import { authenticateToken, requireRole, generateToken, type AuthRequest } from "./middleware/auth";
+import { authenticateToken, requireRole, generateToken, verifyToken, type AuthRequest } from "./middleware/auth";
 import { sendPasswordResetEmail } from "./services/email";
 import { initializeWebSocket, getWSManager } from "./websocket";
 import { correctText, generateQuickMessage } from "./services/groq";
@@ -124,6 +124,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AUTH ROUTES
+  const COOKIE_NAME = process.env.APP_COOKIE_NAME || "token";
+  const CLIENT_ORIGIN = (process.env.CLIENT_ORIGIN || '').trim();
+  let COOKIE_DOMAIN: string | undefined;
+  if (CLIENT_ORIGIN) {
+    try {
+      const parsed = new URL(CLIENT_ORIGIN);
+      if (parsed.hostname && !parsed.hostname.match(/localhost|127\.0\.0\.1/)) {
+        COOKIE_DOMAIN = parsed.hostname === 'chatapp.easydev.com.br' ? 'chatapp.easydev.com.br' : parsed.hostname;
+      }
+    } catch (e) {
+      /* ignore invalid CLIENT_ORIGIN */
+    }
+  }
   app.post("/api/auth/register", async (req, res) => {
     try {
       const data = registerUserSchema.parse(req.body);
@@ -177,7 +190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isReplit = origin.includes('.replit.dev') || origin.includes('.repl.co') ||
                        host.includes('.replit.dev') || host.includes('.repl.co');
 
-      const clientOrigin = (process.env.CLIENT_ORIGIN || '').trim();
+      const clientOrigin = CLIENT_ORIGIN;
       const clientOriginIsHttps = clientOrigin.toLowerCase().startsWith('https://');
       const isCrossSite = !!clientOrigin || isReplit;
 
@@ -193,33 +206,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If CLIENT_ORIGIN is set, explicitly set cookie domain to ensure the cookie
       // is scoped to the client host (useful when behind a proxy). Do not set
       // for localhost-like origins.
-      if (clientOrigin) {
-        try {
-          const parsed = new URL(clientOrigin);
-          if (parsed.hostname && !parsed.hostname.match(/localhost|127\.0\.0\.1/)) {
-            // Force domain to chatapp.easydev.com.br when CLIENT_ORIGIN matches
-            if (parsed.hostname === 'chatapp.easydev.com.br') {
-              cookieOptions.domain = 'chatapp.easydev.com.br';
-            } else {
-              cookieOptions.domain = parsed.hostname;
-            }
-          }
-        } catch (e) {
-          // ignore invalid CLIENT_ORIGIN
-        }
+      if (COOKIE_DOMAIN) {
+        cookieOptions.domain = COOKIE_DOMAIN;
       }
 
-      res.cookie("token", token, cookieOptions);
-      // DEBUG: expose cookie options in a header to help diagnose client cookie issues
-      // (temporary — safe to remove once debugging is complete)
-      try {
-        res.setHeader(
-          "X-Debug-Cookie",
-          JSON.stringify({ domain: cookieOptions.domain || null, secure: cookieOptions.secure, sameSite: cookieOptions.sameSite }),
-        );
-      } catch (e) {
-        /* ignore */
-      }
+      res.cookie(COOKIE_NAME, token, cookieOptions);
+      // NOTE: debug header removed to avoid leaking cookie config in responses.
 
       // In development, return the token in the JSON response as a fallback so
       // the frontend can persist it (useful when cookies aren't available
@@ -235,7 +227,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/logout", (req, res) => {
-    res.clearCookie("token");
+    const clearOpts: any = { path: "/" };
+    if (COOKIE_DOMAIN) clearOpts.domain = COOKIE_DOMAIN;
+    res.clearCookie(COOKIE_NAME, clearOpts);
     res.json({ message: "Logout realizado com sucesso" });
   });
 
@@ -254,6 +248,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(safeUser);
     } catch (error: any) {
       res.status(500).json({ message: "Erro ao buscar usuário" });
+    }
+  });
+
+  // Lightweight status endpoint to help debug authentication from the client.
+  // Returns whether a cookie with the configured name is present and whether
+  // the token is valid. This endpoint is safe for debugging and does not
+  // modify any state.
+  app.get("/api/auth/status", async (req, res) => {
+    try {
+      const COOKIE_NAME = process.env.APP_COOKIE_NAME || "token";
+      const token = req.cookies?.[COOKIE_NAME];
+      if (!token) {
+        return res.json({ authenticated: false, cookiePresent: false, cookieName: COOKIE_NAME });
+      }
+
+      const user = verifyToken(token as string);
+      if (!user) {
+        return res.json({ authenticated: false, cookiePresent: true, cookieName: COOKIE_NAME });
+      }
+
+      return res.json({ authenticated: true, cookiePresent: true, cookieName: COOKIE_NAME, user: { id: user.id, email: user.email, role: user.role } });
+    } catch (error) {
+      return res.status(500).json({ authenticated: false, error: String(error) });
     }
   });
 
@@ -639,7 +656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           {
             type: "JWT Cookie",
             description: "Token JWT armazenado em httpOnly cookie após login",
-            header: "Cookie: token=<jwt>"
+            header: `Cookie: ${process.env.APP_COOKIE_NAME || 'token'}=<jwt>`
           },
           {
             type: "API Key",

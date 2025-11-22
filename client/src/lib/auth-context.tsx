@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Force revalidation on mount and treat 401 as null so the auth state
   // is correctly reset when the cookie is present but invalid/expired.
-  const { data: user, isLoading } = useQuery<SafeUser>({
+  const { data: user, isLoading, isFetching } = useQuery<SafeUser>({
     queryKey: ["/api/auth/me"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     retry: false,
@@ -37,6 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Also refetch on window focus to keep auth in sync across tabs.
     refetchOnWindowFocus: true,
   });
+
+  // Consider the auth state loading while the query is loading OR fetching
+  // so that UI (ProtectedRoute, WebSocket) doesn't treat the user as
+  // unauthenticated while a background refetch is happening.
+  const isLoadingAuth = isLoading || isFetching;
 
   useEffect(() => {
     setIsAuthenticated(!!user);
@@ -98,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user: user || null, isLoading, login, logout, isAuthenticated }}>
+    <AuthContext.Provider value={{ user: user || null, isLoading: isLoadingAuth, login, logout, isAuthenticated }}>
       {children}
     </AuthContext.Provider>
   );

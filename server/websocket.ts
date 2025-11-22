@@ -36,7 +36,8 @@ export class WSManager {
   private handleUpgrade(request: IncomingMessage, socket: any, head: Buffer) {
     // Parse cookies from the request
     const cookies = request.headers.cookie ? cookie.parse(request.headers.cookie) : {};
-    const token = cookies.token;
+    const COOKIE_NAME = process.env.APP_COOKIE_NAME || "token";
+    const token = cookies[COOKIE_NAME];
 
     if (!token) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");

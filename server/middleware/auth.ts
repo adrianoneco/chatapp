@@ -30,7 +30,8 @@ export function verifyToken(token: string): SafeUser | null {
 }
 
 export function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
-  const token = req.cookies?.token;
+  const COOKIE_NAME = process.env.APP_COOKIE_NAME || "token";
+  const token = req.cookies?.[COOKIE_NAME];
 
   if (!token) {
     return res.status(401).json({ message: "Autenticação necessária" });
