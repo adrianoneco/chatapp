@@ -10,6 +10,8 @@ import Register from "@/pages/register";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import { DashboardLayout } from "@/pages/dashboard";
+import DashboardHome from "@/pages/dashboard-home";
+import Conversations from "@/pages/conversations";
 import Contacts from "@/pages/contacts";
 import Attendants from "@/pages/attendants";
 import Admins from "@/pages/admins";
@@ -26,9 +28,22 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
       
       <Route path="/dashboard">
+        {(params) => {
+          if (params && Object.keys(params).length === 0) {
+            return (
+              <DashboardLayout>
+                <DashboardHome />
+              </DashboardLayout>
+            );
+          }
+          return null;
+        }}
+      </Route>
+      
+      <Route path="/dashboard/conversations">
         {() => (
           <DashboardLayout>
-            <Redirect to="/dashboard/contacts" />
+            <Conversations />
           </DashboardLayout>
         )}
       </Route>
