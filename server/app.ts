@@ -10,7 +10,6 @@ import express, {
 } from "express";
 
 import cookieParser from "cookie-parser";
-import cors from "cors";
 import { registerRoutes } from "./routes";
 import { initializeDatabase } from "./database";
 
@@ -65,9 +64,22 @@ app.use(cookieParser());
 // Access-Control-Allow-Origin is not '*'. We reflect the incoming origin
 // to allow same-site and cross-site dev setups. For production consider
 // setting a specific `CLIENT_ORIGIN` env var instead of reflecting origin.
+import cors from "cors";
+
+// Configure CORS with a whitelist. Include `CLIENT_ORIGIN` (when set)
+// and the API address used in production/dev access so browsers will accept
+// cookies from that origin. If no origin header is present (e.g., server-side
+// requests or same-origin), allow the request.
+const allowedOrigins = [process.env.CLIENT_ORIGIN, "http://51.77.73.172:5000"].filter(Boolean) as string[];
+
 app.use(
   cors({
-    origin: true,
+    origin: (origin, callback) => {
+      // allow requests with no origin (e.g., curl, server-to-server)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   }),
 );
