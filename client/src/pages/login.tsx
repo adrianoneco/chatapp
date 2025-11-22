@@ -21,7 +21,7 @@ export default function Login() {
   // Get redirect URL from query params
   const getRedirectUrl = () => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('redirect_url');
+    return params.get('redirect');
   };
 
   const {
@@ -49,10 +49,10 @@ export default function Login() {
         description: "Bem-vindo de volta.",
       });
       
-      // Priority: redirect_url param > lastVisitedPage > dashboard
+      // Priority: redirect param > lastVisitedPage > dashboard
       const redirectUrl = getRedirectUrl();
       if (redirectUrl && redirectUrl !== '/' && !redirectUrl.startsWith('/login') && !redirectUrl.startsWith('/register')) {
-        setLocation(redirectUrl);
+        setLocation(decodeURIComponent(redirectUrl));
       } else {
         const lastPage = localStorage.getItem('lastVisitedPage');
         if (lastPage && lastPage !== '/' && !lastPage.startsWith('/login') && !lastPage.startsWith('/register')) {

@@ -51,6 +51,21 @@ const upload = multer({
   },
 });
 
+const attachmentUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const type = (req.query.type as string) || "attachments";
+      const destPath = `data/uploads/${type}`;
+      cb(null, destPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
+    },
+  }),
+  limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Helper to convert DB row to SafeUser
   const toSafeUser = (row: any): SafeUser => ({
@@ -478,6 +493,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const type = (req.query.type as string) || "profiles";
     const url = `/data/uploads/${type}/${req.file.filename}`;
     res.json({ url });
+  });
+
+  // ATTACHMENT UPLOAD ROUTE (up to 1GB)
+  app.post("/api/upload/attachment", authenticateToken, attachmentUpload.single("file"), (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "Nenhum arquivo enviado" });
+    }
+
+    const type = (req.query.type as string) || "attachments";
+    const url = `/data/uploads/${type}/${req.file.filename}`;
+    const fileInfo = {
+      url,
+      filename: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    };
+    res.json(fileInfo);
   });
 
   // API DOCUMENTATION ROUTE
