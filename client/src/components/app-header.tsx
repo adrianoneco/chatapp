@@ -22,16 +22,14 @@ export function AppHeader() {
   };
 
   return (
-    <header className="flex items-center justify-between gap-4 px-4 py-3 border-b bg-gradient-to-r from-purple-950 via-purple-900/50 to-blue-950 text-white sticky top-0 z-50">
+    <header className="flex items-center justify-between gap-4 px-6 py-3 border-b bg-gradient-to-br from-purple-950 via-purple-900 to-blue-950 text-white sticky top-0 z-50 w-full">
       <div className="flex items-center gap-4">
         <SidebarTrigger className="text-white hover:bg-white/10" data-testid="button-sidebar-toggle" />
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-white/10 flex items-center justify-center">
+          <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-xl shadow-purple-500/50">
             <PiChatTeardropFill className="h-5 w-5 text-white" />
           </div>
-          <div>
-            <h1 className="text-base font-semibold">Sistema de Atendimento</h1>
-          </div>
+          <h1 className="text-lg font-semibold">ChatApp</h1>
         </div>
       </div>
       

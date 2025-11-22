@@ -11,6 +11,7 @@ import { EmptyState } from "./empty-state";
 import { LayoutGrid, List, Plus, type LucideIcon } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtimeUsers } from "@/hooks/use-realtime-users";
 
 interface UserManagementProps {
   role: "client" | "attendant" | "admin";
@@ -37,6 +38,9 @@ export function UserManagement({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<SafeUser | null>(null);
+
+  // Enable real-time updates via WebSocket
+  useRealtimeUsers(role);
 
   const { data: users = [], isLoading } = useQuery<SafeUser[]>({
     queryKey: [`/api/users?role=${role}`],

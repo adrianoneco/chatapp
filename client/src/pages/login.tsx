@@ -34,11 +34,22 @@ export default function Login() {
     setIsLoading(true);
     try {
       await login(data.email, data.password);
+      
+      // Wait a bit for auth state to update
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       toast({
         title: "Login realizado com sucesso!",
         description: "Bem-vindo de volta.",
       });
-      setLocation("/dashboard");
+      
+      // Redirect to last visited page or dashboard
+      const lastPage = localStorage.getItem('lastVisitedPage');
+      if (lastPage && lastPage !== '/' && !lastPage.startsWith('/login') && !lastPage.startsWith('/register')) {
+        setLocation(lastPage);
+      } else {
+        setLocation("/dashboard");
+      }
     } catch (error: any) {
       toast({
         variant: "destructive",

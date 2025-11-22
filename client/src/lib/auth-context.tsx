@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import type { SafeUser } from "@shared/schema";
 import { queryClient, apiRequest } from "./queryClient";
 
@@ -15,6 +16,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [location] = useLocation();
+
+  // Save last visited page
+  useEffect(() => {
+    if (isAuthenticated && location && !location.startsWith('/login') && !location.startsWith('/register')) {
+      localStorage.setItem('lastVisitedPage', location);
+    }
+  }, [location, isAuthenticated]);
 
   const { data: user, isLoading } = useQuery<SafeUser>({
     queryKey: ["/api/auth/me"],
@@ -28,11 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      const result = await apiRequest<SafeUser>("POST", "/api/auth/login", { email, password });
+      const result = await apiRequest("POST", "/api/auth/login", { email, password });
       return result;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
     },
   });
 
@@ -40,9 +50,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     mutationFn: async () => {
       await apiRequest("POST", "/api/auth/logout", {});
     },
-    onSuccess: () => {
-      queryClient.clear();
-      setIsAuthenticated(false);
+    onSuccess: async () => {
+      // Set query data to null immediately
+      queryClient.setQueryData(["/api/auth/me"], null);
+      // Clear all other queries except auth
+      const queries = queryClient.getQueryCache().getAll();
+      queries.forEach((query) => {
+        const key = query.queryKey[0];
+        if (key !== "/api/auth/me") {
+          queryClient.removeQueries({ queryKey: query.queryKey });
+        }
+      });
+      // Don't clear lastVisitedPage so user can return to it after login
     },
   });
 

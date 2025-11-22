@@ -7,6 +7,7 @@ import multer from "multer";
 import path from "path";
 import { authenticateToken, requireRole, generateToken, type AuthRequest } from "./middleware/auth";
 import { sendPasswordResetEmail } from "./services/email";
+import { initializeWebSocket, getWSManager } from "./websocket";
 import {
   registerUserSchema,
   loginSchema,
@@ -281,6 +282,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       const user = toSafeUser(result.rows[0]);
+      
+      // Broadcast update via WebSocket
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "user_created",
+          data: { user, role: user.role }
+        });
+      }
+      
       res.status(201).json(user);
     } catch (error: any) {
       if (error.code === "23505") {
@@ -372,6 +383,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = toSafeUser(result.rows[0]);
+      
+      // Broadcast update via WebSocket
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "user_updated",
+          data: { user, role: user.role }
+        });
+      }
+      
       res.json(user);
     } catch (error: any) {
       if (error.code === "23505") {
@@ -384,12 +405,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/users/:id", authenticateToken, requireRole("admin"), async (req: AuthRequest, res) => {
     try {
       const result = await pool.query(
-        "UPDATE users SET deleted = true, updated_at = NOW() WHERE id = $1 AND deleted = false RETURNING id",
+        "UPDATE users SET deleted = true, updated_at = NOW() WHERE id = $1 AND deleted = false RETURNING id, role",
         [req.params.id]
       );
 
       if (result.rows.length === 0) {
         return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      // Broadcast update via WebSocket
+      const wsManager = getWSManager();
+      if (wsManager) {
+        wsManager.broadcastToAll({
+          type: "user_deleted",
+          data: { userId: req.params.id, role: result.rows[0].role }
+        });
       }
 
       res.json({ message: "Usuário excluído com sucesso" });
@@ -409,5 +439,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // Initialize WebSocket server
+  initializeWebSocket(httpServer);
+  
   return httpServer;
 }

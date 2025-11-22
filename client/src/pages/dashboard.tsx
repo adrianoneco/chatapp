@@ -26,10 +26,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <ProtectedRoute>
       <SidebarProvider style={style as React.CSSProperties}>
-        <div className="flex h-screen w-full">
-          <AppSidebar />
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <AppHeader />
+        <div className="flex flex-col h-screen w-full">
+          <AppHeader />
+          <div className="flex flex-1 overflow-hidden">
+            <AppSidebar />
             <main className="flex-1 overflow-auto p-6 bg-gray-50 dark:bg-gray-900">
               {children}
             </main>

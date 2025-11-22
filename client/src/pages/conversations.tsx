@@ -66,17 +66,17 @@ export default function Conversations() {
   const mockProtocol = selectedConv?.protocol || "A1B2C3D4E5";
 
   return (
-    <div className="flex flex-auto">
+    <div className="flex flex-1 h-full overflow-hidden">
       {/* Left Sidebar - Conversations List */}
       <div
         className={cn(
-          "bg-card border-r transition-all duration-300 flex flex-col",
+          "bg-card border-r transition-all duration-300 flex flex-col h-full overflow-hidden",
           leftSidebarOpen ? "w-80" : "w-0"
         )}
       >
         {leftSidebarOpen && (
           <>
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 flex-shrink-0">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-lg font-semibold">Conversas</h2>
                 <Button
@@ -195,11 +195,11 @@ export default function Conversations() {
       )}
 
       {/* Center - Conversation Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
         {selectedConversation ? (
           <>
             {/* Conversation Header */}
-            <div className="p-4 border-b bg-card">
+            <div className="p-4 border-b bg-card flex-shrink-0">
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">
                   <AvatarImage src={selectedConv?.client.image} />
@@ -246,12 +246,45 @@ export default function Conversations() {
             </ScrollArea>
 
             {/* Message Input */}
-            <div className="p-4 border-t bg-card">
-              <div className="flex gap-2">
+            <div className="p-4 border-t bg-card flex-shrink-0">
+              <div className="flex gap-2 items-center">
                 <Input
                   placeholder="Digite sua mensagem..."
+                  className="flex-1"
                   data-testid="input-message"
                 />
+                <div className="flex gap-1">
+                  <Button size="icon" variant="ghost" data-testid="button-text-correction" title="Correção de texto">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </Button>
+                  <Button size="icon" variant="ghost" data-testid="button-quick-messages" title="Mensagens prontas">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
+                  </Button>
+                  <Button size="icon" variant="ghost" data-testid="button-record-audio" title="Gravar áudio">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  </Button>
+                  <Button size="icon" variant="ghost" data-testid="button-record-video" title="Gravar vídeo">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </Button>
+                  <Button size="icon" variant="ghost" data-testid="button-send-image" title="Enviar imagem">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </Button>
+                  <Button size="icon" variant="ghost" data-testid="button-send-attachment" title="Enviar anexo">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                  </Button>
+                </div>
                 <Button data-testid="button-send-message">Enviar</Button>
               </div>
             </div>

@@ -15,9 +15,9 @@ export function ConversationsLayout({ children }: ConversationsLayoutProps) {
   return (
     <ProtectedRoute allowedRoles={["admin", "attendant"]}>
       <SidebarProvider style={style as React.CSSProperties}>
-        <div className="flex flex-col h-screen w-full">
+        <div className="flex flex-col h-screen w-full overflow-hidden">
           <AppHeader />
-          <main className="flex-1 overflow-hidden">
+          <main className="flex-1 flex overflow-hidden">
             {children}
           </main>
         </div>
