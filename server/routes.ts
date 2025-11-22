@@ -166,11 +166,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/reset-password", async (req, res) => {
+    const client = await pool.connect();
+    
     try {
       const data = resetPasswordSchema.parse(req.body);
 
       // Check if token exists, is not used, and has not expired
-      const tokenResult = await pool.query(
+      const tokenResult = await client.query(
         `SELECT * FROM password_reset_tokens 
          WHERE token = $1 AND used = false AND expires_at > NOW()`,
         [data.token]
@@ -183,7 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const resetToken = tokenResult.rows[0];
 
       // Verify the user still exists
-      const userResult = await pool.query(
+      const userResult = await client.query(
         "SELECT id FROM users WHERE id = $1 AND deleted = false",
         [resetToken.user_id]
       );
@@ -194,33 +196,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const passwordHash = await bcrypt.hash(data.password, 10);
 
-      await pool.query("BEGIN");
+      await client.query("BEGIN");
 
       // Update password
-      await pool.query(
+      await client.query(
         "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2",
         [passwordHash, resetToken.user_id]
       );
 
       // Mark token as used
-      await pool.query(
+      await client.query(
         "UPDATE password_reset_tokens SET used = true WHERE id = $1",
         [resetToken.id]
       );
 
       // Invalidate all other tokens for this user
-      await pool.query(
+      await client.query(
         "UPDATE password_reset_tokens SET used = true WHERE user_id = $1 AND id != $2",
         [resetToken.user_id, resetToken.id]
       );
 
-      await pool.query("COMMIT");
+      await client.query("COMMIT");
 
       res.json({ message: "Senha redefinida com sucesso" });
     } catch (error: any) {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
       console.error("Reset password error:", error);
       res.status(400).json({ message: error.message || "Erro ao redefinir senha" });
+    } finally {
+      client.release();
     }
   });
 
@@ -288,6 +292,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/users/:id", authenticateToken, async (req: AuthRequest, res) => {
     try {
+      const currentUser = req.user!;
+
       const result = await pool.query(
         "SELECT id, email, name, image, role, deleted, created_at, updated_at FROM users WHERE id = $1 AND deleted = false",
         [req.params.id]
@@ -297,8 +303,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Usuário não encontrado" });
       }
 
-      const user = toSafeUser(result.rows[0]);
-      res.json(user);
+      const user = result.rows[0];
+
+      // Attendants can only view clients
+      if (currentUser.role === "attendant" && user.role !== "client") {
+        return res.status(403).json({ message: "Permissão negada" });
+      }
+
+      const safeUser = toSafeUser(user);
+      res.json(safeUser);
     } catch (error: any) {
       res.status(500).json({ message: "Erro ao buscar usuário" });
     }

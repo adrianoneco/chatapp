@@ -40,7 +40,7 @@ export function UserManagement({
   const [selectedUser, setSelectedUser] = useState<SafeUser | null>(null);
 
   const { data: users = [], isLoading } = useQuery<SafeUser[]>({
-    queryKey: ["/api/users", role],
+    queryKey: [`/api/users?role=${role}`],
   });
 
   const createMutation = useMutation({
