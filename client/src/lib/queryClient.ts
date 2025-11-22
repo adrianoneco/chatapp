@@ -14,20 +14,6 @@ export async function apiRequest(
 ): Promise<Response> {
   const headers: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
 
-  // Dev fallback: if a token is stored in localStorage (dev), include it
-  // as an Authorization header so requests still authenticate when cookies
-  // are not available in the environment.
-  try {
-    if (typeof window !== "undefined") {
-      const devToken = localStorage.getItem("devToken");
-      if (devToken) {
-        headers["Authorization"] = `Bearer ${devToken}`;
-      }
-    }
-  } catch (e) {
-    // ignore access errors in SSR or restricted environments
-  }
-
   const res = await fetch(url, {
     method,
     headers,
@@ -45,17 +31,8 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const headers: Record<string, string> = {};
-    try {
-      if (typeof window !== "undefined") {
-        const devToken = localStorage.getItem("devToken");
-        if (devToken) headers["Authorization"] = `Bearer ${devToken}`;
-      }
-    } catch (e) {}
-
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
-      headers,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
