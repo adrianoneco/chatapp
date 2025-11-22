@@ -1,4 +1,6 @@
 import { type Server } from "node:http";
+import path from "node:path";
+import fs from "node:fs";
 
 import express, {
   type Express,
@@ -7,7 +9,9 @@ import express, {
   NextFunction,
 } from "express";
 
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
+import { initializeDatabase } from "./database";
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -22,17 +26,28 @@ export function log(message: string, source = "express") {
 
 export const app = express();
 
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown
   }
 }
+
 app.use(express.json({
   verify: (req, _res, buf) => {
     req.rawBody = buf;
   }
 }));
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+
+// Serve uploaded files
+app.use("/uploads", express.static(uploadsDir));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -67,6 +82,14 @@ app.use((req, res, next) => {
 export default async function runApp(
   setup: (app: Express, server: Server) => Promise<void>,
 ) {
+  // Initialize database tables
+  try {
+    await initializeDatabase();
+  } catch (error) {
+    console.error("Failed to initialize database:", error);
+    process.exit(1);
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
