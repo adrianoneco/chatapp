@@ -71,6 +71,12 @@ if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET environment variable is required");
 }
 
+// Configure session cookie based on environment
+const isProduction = process.env.NODE_ENV === "production";
+const replitDomain = process.env.REPL_SLUG && process.env.REPL_OWNER 
+  ? `.${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+  : undefined;
+
 app.use(
   session({
     store: new PgSession({
@@ -79,14 +85,19 @@ app.use(
       createTableIfMissing: true,
     }),
     secret: process.env.SESSION_SECRET,
-    resave: false,
+    resave: true, // Force session to be saved back to store
     saveUninitialized: false,
+    name: "connect.sid", // Explicitly set cookie name
+    proxy: true, // Trust the proxy
     cookie: {
-      secure: false, // Set to false for development to work properly
+      secure: false, // Set to false for development
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      sameSite: "lax", // Lax works well for same-site requests
+      sameSite: "lax",
+      path: "/", // Explicitly set path
+      domain: replitDomain, // Set domain for Replit environment
     },
+    rolling: true, // Reset cookie maxAge on every response
   })
 );
 
