@@ -56,10 +56,11 @@ export default function Register() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-900/20 via-transparent to-blue-900/20" />
       <Card className="w-full max-w-md relative z-10 border-white/10 bg-black/40 backdrop-blur-xl">
         <CardHeader className="space-y-4 text-center">
-          <div className="flex justify-center">
+          <div className="flex justify-center items-center gap-3">
             <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-xl shadow-purple-500/50">
               <PiChatTeardropFill className="h-9 w-9 text-white" />
             </div>
+            <h1 className="text-3xl font-bold text-white">ChatApp</h1>
           </div>
           <div>
             <CardTitle className="text-2xl text-white">Criar Conta</CardTitle>

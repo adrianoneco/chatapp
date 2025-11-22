@@ -11,7 +11,7 @@ import {
   SidebarHeader,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { MessageSquare, Users, Headphones, Shield, LayoutDashboard } from "lucide-react";
+import { MessageSquare, Users, Headphones, Shield, LayoutDashboard, Settings } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { PiChatTeardropFill } from "react-icons/pi";
@@ -47,6 +47,12 @@ const menuItems = [
     url: "/admins",
     icon: Shield,
     roles: ["admin"],
+  },
+  {
+    title: "Configurações",
+    url: "/settings",
+    icon: Settings,
+    roles: ["admin", "attendant"],
   },
 ];
 

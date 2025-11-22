@@ -18,6 +18,7 @@ import {
   updatePreferencesSchema,
   insertConversationSchema,
   insertMessageSchema,
+  createMessageSchema,
   insertQuickMessageSchema,
   type SafeUser,
   type Conversation,
@@ -58,6 +59,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     name: row.name,
     image: row.image,
     role: row.role,
+    remoteJid: row.remote_jid,
     deleted: row.deleted,
     preferences: row.preferences || {},
     createdAt: row.created_at,
@@ -1100,7 +1102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const currentUser = req.user!;
       const { conversationId } = req.params;
-      const data = insertMessageSchema.parse(req.body);
+      const data = createMessageSchema.parse(req.body);
 
       await client.query("BEGIN");
 
@@ -1119,10 +1121,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Insert message
       const msgResult = await client.query(
-        `INSERT INTO messages (conversation_id, sender_id, content, type) 
-         VALUES ($1, $2, $3, $4) 
+        `INSERT INTO messages (conversation_id, sender_id, content, type, quoted_message_id, forwarded_from_message_id) 
+         VALUES ($1, $2, $3, $4, $5, $6) 
          RETURNING *`,
-        [conversationId, currentUser.id, data.content, data.type || "text"]
+        [conversationId, currentUser.id, data.content, data.type || "text", data.quotedMessageId || null, data.forwardedFromMessageId || null]
       );
 
       // Update conversation last message timestamp

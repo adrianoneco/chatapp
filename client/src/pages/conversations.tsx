@@ -132,6 +132,13 @@ export default function Conversations() {
     enabled: user?.role === "admin" || user?.role === "attendant",
   });
 
+  // Auto-select tab based on selected conversation status
+  useEffect(() => {
+    if (selectedConversation?.status && selectedConversation.status !== activeTab) {
+      setActiveTab(selectedConversation.status as "pending" | "attending" | "closed");
+    }
+  }, [selectedConversation?.status]);
+
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {

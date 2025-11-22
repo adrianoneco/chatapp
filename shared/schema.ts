@@ -7,6 +7,7 @@ import { z } from "zod";
 export type UserPreferences = {
   sidebarCollapsed?: boolean;
   theme?: 'light' | 'dark' | 'system';
+  conversationSidebarWidth?: number; // Width in pixels for conversation sidebar
 };
 
 // Users table with roles and soft delete
@@ -77,6 +78,7 @@ export const updateUserSchema = z.object({
 export const updatePreferencesSchema = z.object({
   sidebarCollapsed: z.boolean().optional(),
   theme: z.enum(['light', 'dark', 'system']).optional(),
+  conversationSidebarWidth: z.number().min(200).max(600).optional(),
 });
 
 // Types
@@ -121,7 +123,12 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   type: text("type").notNull().default("text"), // text, image, file, etc
   read: boolean("read").notNull().default(false),
+  quotedMessageId: uuid("quoted_message_id"), // For replies - self-referencing
+  forwardedFromMessageId: uuid("forwarded_from_message_id"), // For forwards - self-referencing
+  status: text("status").notNull().default("sent"), // sent, deleted, edited
+  reactions: jsonb("reactions").$type<Record<string, string[]>>().default(sql`'{}'::jsonb`), // emoji -> [userId1, userId2]
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Insert schemas
@@ -139,6 +146,14 @@ export const insertProtocolSchema = createInsertSchema(protocols).omit({
 export const insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
   createdAt: true,
+});
+
+// Schema for creating messages via API (conversationId and senderId come from route params and auth)
+export const createMessageSchema = z.object({
+  content: z.string().min(1, "Conteúdo é obrigatório"),
+  type: z.string().default("text"),
+  quotedMessageId: z.string().uuid().optional(),
+  forwardedFromMessageId: z.string().uuid().optional(),
 });
 
 // Quick Messages table - predefined messages with parameters
@@ -172,4 +187,5 @@ export type QuickMessage = typeof quickMessages.$inferSelect;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type InsertProtocol = z.infer<typeof insertProtocolSchema>;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type CreateMessage = z.infer<typeof createMessageSchema>;
 export type InsertQuickMessage = z.infer<typeof insertQuickMessageSchema>;
