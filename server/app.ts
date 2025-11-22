@@ -67,18 +67,27 @@ app.use(cookieParser());
 import cors from "cors";
 
 // Configure CORS to work with cookies (credentials)
-// Mirror the request origin to allow all origins (equivalent to '*' but works with credentials)
-// This is required for Replit environment where frontend and backend have different domains
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow all origins by mirroring the origin header
-      // If no origin header (same-origin requests), allow it
-      return callback(null, origin || true);
-    },
-    credentials: true,
-  }),
-);
+// If CLIENT_ORIGIN is set to '*', disable CORS entirely (allow all origins without restrictions)
+// Otherwise, mirror the request origin to allow all origins while supporting credentials
+const clientOrigin = process.env.CLIENT_ORIGIN?.trim();
+
+if (clientOrigin === '*') {
+  // Disable CORS restrictions entirely
+  app.use(cors());
+} else {
+  // Mirror the request origin to allow all origins (equivalent to '*' but works with credentials)
+  // This is required for Replit environment where frontend and backend have different domains
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        // Allow all origins by mirroring the origin header
+        // If no origin header (same-origin requests), allow it
+        return callback(null, origin || true);
+      },
+      credentials: true,
+    }),
+  );
+}
 
 // Serve uploaded files (legacy)
 app.use("/uploads", express.static(uploadsDir));
