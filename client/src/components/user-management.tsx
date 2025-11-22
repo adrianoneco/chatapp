@@ -2,16 +2,15 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { SafeUser } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { UserCard } from "./user-card";
-import { UserTable } from "./user-table";
+import { CardsManager } from "./cards-manager";
+import { TableManager } from "./table-manager";
 import { UserFilters } from "./user-filters";
 import { UserFormModal } from "./user-form-modal";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { EmptyState } from "./empty-state";
-import { LayoutGrid, List, Plus } from "lucide-react";
+import { LayoutGrid, List, Plus, type LucideIcon } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Skeleton } from "@/components/ui/skeleton";
 
 interface UserManagementProps {
   role: "client" | "attendant" | "admin";
@@ -19,7 +18,7 @@ interface UserManagementProps {
   description: string;
   emptyTitle: string;
   emptyDescription: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
 }
 
 export function UserManagement({
@@ -190,13 +189,7 @@ export function UserManagement({
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-[180px] rounded-lg" />
-          ))}
-        </div>
-      ) : filteredUsers.length === 0 ? (
+      {filteredUsers.length === 0 && !isLoading ? (
         <EmptyState
           icon={Icon}
           title={emptyTitle}
@@ -205,18 +198,14 @@ export function UserManagement({
           onAction={() => setIsFormOpen(true)}
         />
       ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredUsers.map((user) => (
-            <UserCard
-              key={user.id}
-              user={user}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
+        <CardsManager
+          users={filteredUsers}
+          isLoading={isLoading}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
       ) : (
-        <UserTable
+        <TableManager
           users={filteredUsers}
           onEdit={handleEdit}
           onDelete={handleDelete}

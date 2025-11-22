@@ -10,11 +10,13 @@ import Register from "@/pages/register";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import { DashboardLayout } from "@/pages/dashboard";
+import { ConversationsLayout } from "@/pages/conversations-layout";
 import DashboardHome from "@/pages/dashboard-home";
 import Conversations from "@/pages/conversations";
 import Contacts from "@/pages/contacts";
 import Attendants from "@/pages/attendants";
 import Admins from "@/pages/admins";
+import Settings from "@/pages/settings";
 
 function Router() {
   return (
@@ -68,6 +70,62 @@ function Router() {
         {() => (
           <DashboardLayout>
             <Admins />
+          </DashboardLayout>
+        )}
+      </Route>
+
+      <Route path="/attendants">
+        {() => (
+          <DashboardLayout>
+            <Attendants />
+          </DashboardLayout>
+        )}
+      </Route>
+      
+      <Route path="/admins">
+        {() => (
+          <DashboardLayout>
+            <Admins />
+          </DashboardLayout>
+        )}
+      </Route>
+      
+      <Route path="/contacts">
+        {() => (
+          <DashboardLayout>
+            <Contacts />
+          </DashboardLayout>
+        )}
+      </Route>
+      
+      <Route path="/conversations">
+        {() => (
+          <ConversationsLayout>
+            <Conversations />
+          </ConversationsLayout>
+        )}
+      </Route>
+      
+      <Route path="/conversations/:channelId/:conversationId">
+        {() => (
+          <ConversationsLayout>
+            <Conversations />
+          </ConversationsLayout>
+        )}
+      </Route>
+      
+      <Route path="/dashboard/settings">
+        {() => (
+          <DashboardLayout>
+            <Settings />
+          </DashboardLayout>
+        )}
+      </Route>
+      
+      <Route path="/dashboard/settings/:tab">
+        {() => (
+          <DashboardLayout>
+            <Settings />
           </DashboardLayout>
         )}
       </Route>

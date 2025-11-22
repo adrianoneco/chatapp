@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -21,12 +20,18 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { NewConversationDialog } from "@/components/new-conversation-dialog";
+import { useRoute, useLocation } from "wouter";
 
 export default function Conversations() {
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
-  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"pending" | "attending" | "closed">("pending");
+  const [newConversationOpen, setNewConversationOpen] = useState(false);
+  const [, params] = useRoute("/conversations/:channelId/:conversationId");
+  const [, setLocation] = useLocation();
+  
+  const selectedConversation = params?.conversationId || null;
 
   const mockConversations: any[] = [
     {
@@ -93,7 +98,12 @@ export default function Conversations() {
                     data-testid="input-search-conversations"
                   />
                 </div>
-                <Button size="icon" variant="default" data-testid="button-new-conversation">
+                <Button 
+                  size="icon" 
+                  variant="default" 
+                  data-testid="button-new-conversation"
+                  onClick={() => setNewConversationOpen(true)}
+                >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -135,7 +145,7 @@ export default function Conversations() {
                         "p-3 rounded-md hover-elevate cursor-pointer",
                         selectedConversation === conversation.id && "bg-sidebar-accent"
                       )}
-                      onClick={() => setSelectedConversation(conversation.id)}
+                      onClick={() => setLocation(`/conversations/webchat/${conversation.id}`)}
                       data-testid={`conversation-item-${conversation.id}`}
                     >
                       <div className="flex gap-3">
@@ -318,6 +328,11 @@ export default function Conversations() {
           </div>
         </div>
       )}
+      
+      <NewConversationDialog
+        open={newConversationOpen}
+        onOpenChange={setNewConversationOpen}
+      />
     </div>
   );
 }

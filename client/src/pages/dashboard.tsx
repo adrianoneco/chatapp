@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { AppHeader } from "@/components/app-header";
 import { ProtectedRoute } from "@/components/protected-route";
 
 interface DashboardLayoutProps {
@@ -13,7 +14,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   useEffect(() => {
     if (location === "/dashboard") {
-      setLocation("/dashboard/contacts");
+      setLocation("/contacts");
     }
   }, [location, setLocation]);
 
@@ -28,11 +29,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="flex h-screen w-full">
           <AppSidebar />
           <div className="flex flex-col flex-1 overflow-hidden">
-            <header className="flex items-center gap-4 p-4 border-b bg-background">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
-              <h2 className="text-lg font-semibold">Painel de Controle</h2>
-            </header>
-            <main className="flex-1 overflow-auto p-6">
+            <AppHeader />
+            <main className="flex-1 overflow-auto p-6 bg-gray-50 dark:bg-gray-900">
               {children}
             </main>
           </div>

@@ -1,0 +1,87 @@
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { UserAvatar } from "./user-avatar";
+import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { LogOut, Settings, User } from "lucide-react";
+import { Link } from "wouter";
+
+export function AppHeader() {
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  return (
+    <header className="flex items-center justify-between gap-4 px-4 py-3 border-b bg-gradient-to-r from-purple-950 via-purple-900/50 to-blue-950 text-white sticky top-0 z-50">
+      <div className="flex items-center gap-4">
+        <SidebarTrigger className="text-white hover:bg-white/10" data-testid="button-sidebar-toggle" />
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center">
+            <img 
+              src="/logo.svg" 
+              alt="Logo" 
+              className="h-5 w-5"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <span className="hidden text-lg font-bold">SC</span>
+          </div>
+          <div>
+            <h1 className="text-base font-semibold">Sistema de Atendimento</h1>
+          </div>
+        </div>
+      </div>
+      
+      {user && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="flex items-center gap-3 hover:bg-white/10" data-testid="button-user-menu">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-medium">{user.name}</p>
+                <p className="text-xs text-white/70">{user.email}</p>
+              </div>
+              <UserAvatar name={user.name} image={user.image} className="h-9 w-9" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium">{user.name}</p>
+                <p className="text-xs text-muted-foreground">{user.email}</p>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/profile">
+                <User className="mr-2 h-4 w-4" />
+                <span>Perfil</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <a href="/dashboard/settings">
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Configurações</span>
+              </a>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} data-testid="button-logout">
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Sair</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </header>
+  );
+}
