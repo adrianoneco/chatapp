@@ -75,6 +75,85 @@ import { cn } from "@/lib/utils";
 import { getRelativeDate, getTime, getDateDivider, isSameDay } from "@/lib/date-utils";
 import { NewConversationDialog } from "@/components/new-conversation-dialog";
 import { useRoute, useLocation } from "wouter";
+import { Card } from "@/components/ui/card";
+
+// Online Status Indicator Component
+function OnlineStatusIndicator({ isOnline }: { isOnline: boolean }) {
+  return (
+    <div className={cn(
+      "absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card",
+      isOnline ? "bg-green-500" : "bg-gray-400"
+    )} />
+  );
+}
+
+// Conversation History Component
+function ConversationHistory({ clientId, currentConversationId }: { clientId?: string; currentConversationId: string }) {
+  const { data: history, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/conversations/history", clientId],
+    enabled: !!clientId,
+  });
+
+  if (!clientId) return null;
+
+  if (isLoading) {
+    return (
+      <div>
+        <p className="text-xs text-muted-foreground mb-2">Histórico de Conversas</p>
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  const filteredHistory = history?.filter(conv => conv.id !== currentConversationId) || [];
+
+  if (filteredHistory.length === 0) {
+    return (
+      <div>
+        <p className="text-xs text-muted-foreground mb-2">Histórico de Conversas</p>
+        <p className="text-sm text-muted-foreground">Nenhuma conversa anterior</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground mb-2">Histórico de Conversas</p>
+      <div className="space-y-2">
+        {filteredHistory.slice(0, 5).map((conv) => (
+          <Card key={conv.id} className="p-3 hover-elevate cursor-pointer" data-testid={`history-conversation-${conv.id}`}>
+            <div className="flex items-start gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant="secondary" className="text-xs">
+                    {conv.status === "pending" ? "Pendente" : 
+                     conv.status === "attending" ? "Atendendo" : "Encerrada"}
+                  </Badge>
+                  {conv.protocol && (
+                    <span className="text-xs font-mono text-muted-foreground">
+                      #{conv.protocol}
+                    </span>
+                  )}
+                </div>
+                {conv.attendant && (
+                  <p className="text-xs text-muted-foreground">
+                    Atendente: {conv.attendant.name}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  {new Date(conv.created_at).toLocaleDateString("pt-BR")} às{" "}
+                  {new Date(conv.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Conversations() {
   const { user } = useAuth();
@@ -494,10 +573,13 @@ export default function Conversations() {
                           data-testid={`conversation-item-${conversation.id}`}
                         >
                           <div className="flex gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={conversation.client?.image} />
-                              <AvatarFallback>{conversation.client?.name?.[0] || "C"}</AvatarFallback>
-                            </Avatar>
+                            <div className="relative">
+                              <Avatar className="h-10 w-10">
+                                <AvatarImage src={conversation.client?.image} />
+                                <AvatarFallback>{conversation.client?.name?.[0] || "C"}</AvatarFallback>
+                              </Avatar>
+                              <OnlineStatusIndicator isOnline={conversation.client?.isOnline || false} />
+                            </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between gap-2">
                                 <p className="font-medium text-sm truncate">
@@ -1085,10 +1167,13 @@ export default function Conversations() {
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Cliente</p>
                 <div className="flex items-center gap-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={selectedConversation.client?.image} />
-                    <AvatarFallback>{selectedConversation.client?.name?.[0] || "C"}</AvatarFallback>
-                  </Avatar>
+                  <div className="relative">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={selectedConversation.client?.image} />
+                      <AvatarFallback>{selectedConversation.client?.name?.[0] || "C"}</AvatarFallback>
+                    </Avatar>
+                    <OnlineStatusIndicator isOnline={selectedConversation.client?.isOnline || false} />
+                  </div>
                   <div>
                     <p className="text-sm font-medium">{selectedConversation.client?.name || "Cliente"}</p>
                     <p className="text-xs text-muted-foreground">{selectedConversation.client?.email || ""}</p>
@@ -1121,6 +1206,9 @@ export default function Conversations() {
                   </p>
                 </div>
               )}
+
+              {/* Conversation History */}
+              <ConversationHistory clientId={selectedConversation.client?.id} currentConversationId={selectedConversation.id} />
             </div>
           </ScrollArea>
         </div>

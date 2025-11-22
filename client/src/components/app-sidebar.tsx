@@ -50,7 +50,7 @@ const menuItems = [
   },
   {
     title: "Configurações",
-    url: "/settings",
+    url: "/dashboard/settings",
     icon: Settings,
     roles: ["admin", "attendant"],
   },
