@@ -15,11 +15,18 @@ export interface AuthRequest extends Request {
 
 // Middleware to check if user is authenticated
 export function authenticateUser(req: AuthRequest, res: Response, next: NextFunction) {
+  // Debug: log session info
+  console.log('[Auth] Session ID:', req.sessionID);
+  console.log('[Auth] Session userId:', req.session.userId);
+  console.log('[Auth] Cookie:', req.headers.cookie);
+  
   if (!req.session.userId || !req.session.user) {
+    console.log('[Auth] Authentication failed - no session data');
     return res.status(401).json({ message: "Autenticação necessária" });
   }
 
   req.user = req.session.user;
+  console.log('[Auth] Authenticated as:', req.user.email);
   next();
 }
 
