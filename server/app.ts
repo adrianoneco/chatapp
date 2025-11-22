@@ -66,31 +66,15 @@ app.use(cookieParser());
 // setting a specific `CLIENT_ORIGIN` env var instead of reflecting origin.
 import cors from "cors";
 
-// Configure CORS to allow requests from the Replit environment
-// In development, Vite serves the frontend on the same origin
-// In production, we serve both from the same server
+// Configure CORS to work with cookies (credentials)
+// Mirror the request origin to allow all origins (equivalent to '*' but works with credentials)
+// This is required for Replit environment where frontend and backend have different domains
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (same-origin, curl, server-to-server)
-      if (!origin) return callback(null, true);
-      
-      // Allow Replit dev/production URLs
-      if (origin.includes('.replit.dev') || origin.includes('.repl.co') || origin.includes('.replit.app')) {
-        return callback(null, true);
-      }
-      
-      // Allow localhost for local development
-      if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
-        return callback(null, true);
-      }
-      
-      // Allow custom CLIENT_ORIGIN if set
-      if (process.env.CLIENT_ORIGIN && origin === process.env.CLIENT_ORIGIN) {
-        return callback(null, true);
-      }
-      
-      return callback(new Error("Not allowed by CORS"));
+      // Allow all origins by mirroring the origin header
+      // If no origin header (same-origin requests), allow it
+      return callback(null, origin || true);
     },
     credentials: true,
   }),

@@ -169,24 +169,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const safeUser = toSafeUser(user);
       const token = generateToken(safeUser);
 
-      // Cookie options: allow configuring cross-site behavior via CLIENT_ORIGIN.
-      // If `CLIENT_ORIGIN` is set (typical when frontend is served from a different origin),
-      // we set `SameSite=None` so browsers will accept the cookie from cross-site responses.
-      // Note: modern browsers require `Secure` when `SameSite=None`. We therefore set
-      // `secure` to true in production. For local development over HTTP, consider using
-      // the dev server proxy (same origin) or run via HTTPS if you need cross-site cookies.
+      // Cookie options: In Replit environment, frontend (.replit.dev) and backend (.repl.co)
+      // are on different domains, which browsers treat as cross-site. We need SameSite=none
+      // and secure=true for cookies to work properly. Detect Replit or use CLIENT_ORIGIN env.
+      const origin = req.get('origin') || '';
+      const host = req.get('host') || '';
+      const isReplit = origin.includes('.replit.dev') || origin.includes('.repl.co') || 
+                       host.includes('.replit.dev') || host.includes('.repl.co');
+      const isCrossSite = process.env.CLIENT_ORIGIN || isReplit;
+
       const cookieOptions: any = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: isCrossSite || process.env.NODE_ENV === "production",
         maxAge: 24 * 60 * 60 * 1000, // 1 day
         path: "/",
+        sameSite: isCrossSite ? "none" : "lax",
       };
-
-      if (process.env.CLIENT_ORIGIN) {
-        cookieOptions.sameSite = "none";
-      } else {
-        cookieOptions.sameSite = "lax";
-      }
 
       res.cookie("token", token, cookieOptions);
 

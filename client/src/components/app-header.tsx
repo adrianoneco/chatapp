@@ -26,10 +26,10 @@ export function AppHeader() {
       <div className="flex items-center gap-4">
         <SidebarTrigger className="text-white hover:bg-white/10" data-testid="button-sidebar-toggle" />
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-xl shadow-purple-500/50">
-            <PiChatTeardropFill className="h-5 w-5 text-white" />
+          <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-slate-800 via-slate-900 to-black flex items-center justify-center shadow-xl shadow-black/50 border border-slate-700/50">
+            <PiChatTeardropFill className="h-5 w-5 text-purple-400" />
           </div>
-          <h1 className="text-lg font-semibold">ChatApp</h1>
+          <h1 className="text-xl font-bold tracking-tight" style={{ fontFamily: "'Poppins', sans-serif" }}>Evolution Chat</h1>
         </div>
       </div>
       

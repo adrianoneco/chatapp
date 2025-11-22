@@ -149,12 +149,12 @@ export function AppSidebar() {
       <SidebarHeader className="p-6">
         {!isCollapsed && (
           <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-lg">
-              <PiChatTeardropFill className="h-6 w-6 text-white" />
+            <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-slate-800 via-slate-900 to-black flex items-center justify-center shadow-lg border border-slate-700/50">
+              <PiChatTeardropFill className="h-6 w-6 text-purple-400" />
             </div>
             <div>
-              <h2 className="font-semibold text-base">Sistema</h2>
-              <p className="text-xs text-muted-foreground">Atendimento</p>
+              <h2 className="font-bold text-base" style={{ fontFamily: "'Poppins', sans-serif" }}>Evolution</h2>
+              <p className="text-xs text-muted-foreground">Chat Platform</p>
             </div>
           </div>
         )}
