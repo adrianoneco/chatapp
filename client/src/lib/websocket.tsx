@@ -27,7 +27,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated) {
       return;
     }
-
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
 
@@ -59,7 +58,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
           console.log(`Reconnecting in ${delay}ms...`);
           reconnectAttemptsRef.current++;
-          
+
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
           }, delay);

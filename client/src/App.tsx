@@ -19,6 +19,7 @@ import Attendants from "@/pages/attendants";
 import Admins from "@/pages/admins";
 import Settings from "@/pages/settings";
 import ApiDocs from "@/pages/api-docs";
+import DebugSession from "@/pages/debug-session";
 
 function Router() {
   return (
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/docs" component={ApiDocs} />
+      <Route path="/debug/session" component={DebugSession} />
 
 
 

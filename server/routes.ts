@@ -167,55 +167,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const safeUser = toSafeUser(user);
-      
-      // Store user in session
-      req.session.userId = safeUser.id;
-      req.session.user = safeUser;
 
-      // Save session and return user
-      req.session.save((err) => {
-        if (err) {
-          console.error("Error saving session:", err);
-          return res.status(500).json({ message: "Erro ao criar sessão" });
-        }
-        res.json(safeUser);
+      // Issue JWT access + refresh tokens and set them as HttpOnly cookies.
+      const { signAccessToken, signRefreshToken, cookieOptions } = await import("./lib/jwt");
+      const accessToken = signAccessToken(safeUser);
+      const refreshToken = signRefreshToken(safeUser);
+
+      const opts = cookieOptions();
+      const accessMaxAge = parseInt(process.env.ACCESS_COOKIE_MAXAGE || String(15 * 60 * 1000), 10); // 15m default in ms
+
+      const accessName = process.env.ACCESS_COOKIE_NAME || "chatapp_access";
+      const refreshName = process.env.REFRESH_COOKIE_NAME || "chatapp_refresh";
+
+      res.cookie(accessName, accessToken, {
+        httpOnly: true,
+        sameSite: opts.sameSite,
+        domain: opts.domain,
+        secure: !!opts.secure,
+        maxAge: accessMaxAge,
+        path: "/",
       });
+
+      // Use path '/' so the refresh cookie is available to the refresh endpoint
+      // regardless of minor path differences and simplifies client behavior.
+      res.cookie(refreshName, refreshToken, {
+        httpOnly: true,
+        sameSite: opts.sameSite,
+        domain: opts.domain,
+        secure: !!opts.secure,
+        maxAge: opts.maxAge,
+        path: "/",
+      });
+
+      // In development, expose the Set-Cookie header for debugging
+      if (process.env.NODE_ENV !== "production") {
+        try {
+          const setCookie = res.getHeader("Set-Cookie");
+          if (setCookie) {
+            res.setHeader("X-Debug-Set-Cookie", Array.isArray(setCookie) ? setCookie.join("; ") : String(setCookie));
+          }
+        } catch (e) {}
+      }
+
+      res.json(safeUser);
     } catch (error: any) {
       res.status(400).json({ message: error.message || "Erro ao fazer login" });
     }
   });
 
   app.post("/api/auth/logout", (req: AuthRequest, res) => {
-    req.session.destroy((err) => {
-      if (err) {
-        console.error("Error destroying session:", err);
-        return res.status(500).json({ message: "Erro ao fazer logout" });
+    try {
+      const accessName = process.env.ACCESS_COOKIE_NAME || "chatapp_access";
+      const refreshName = process.env.REFRESH_COOKIE_NAME || "chatapp_refresh";
+      res.clearCookie(accessName, { path: "/" });
+      // refresh cookie now uses path '/'
+      res.clearCookie(refreshName, { path: "/" });
+      return res.json({ message: "Logout realizado com sucesso" });
+    } catch (e) {
+      console.error("Error during logout:", e);
+      return res.status(500).json({ message: "Erro ao fazer logout" });
+    }
+  });
+
+  app.post("/api/auth/refresh", async (req, res) => {
+    try {
+      const refreshName = process.env.REFRESH_COOKIE_NAME || "chatapp_refresh";
+      const cookies = req.cookies || {};
+
+      // Verbose debug logging to diagnose missing refresh token issues.
+      // This will log the raw Cookie header and the parsed cookies the server
+      // sees when /api/auth/refresh is called.
+      try {
+        const rawCookie = String(req.get("cookie") || "");
+        console.log(`[auth-refresh] rawCookieHeader=${rawCookie}`);
+        console.log(`[auth-refresh] parsedCookies=${JSON.stringify(cookies)}`);
+      } catch (e) {
+        console.error("[auth-refresh] failed to log cookies", e);
       }
-      res.clearCookie("connect.sid");
-      res.json({ message: "Logout realizado com sucesso" });
-    });
+
+      let token = cookies[refreshName];
+
+      // Dev fallback: if cookie is missing (e.g. cross-origin/local dev issues),
+      // allow the refresh token to be provided via Authorization header or
+      // request body **only in non-production** environments so local setups
+      // can work without HTTPS. In production the cookie MUST be used.
+      if (!token && process.env.NODE_ENV !== "production") {
+        const auth = req.get("authorization") || "";
+        const m = auth.match(/^Bearer\s+(.+)$/i);
+        if (m) token = m[1];
+        if (!token && (req.body as any)?.refreshToken) token = (req.body as any).refreshToken;
+      }
+
+      if (!token) return res.status(401).json({ message: "Refresh token missing" });
+
+      const { verifyToken, signAccessToken, cookieOptions } = await import("./lib/jwt");
+      let payload: any;
+      try {
+        payload = verifyToken(token as string);
+      } catch (e) {
+        return res.status(401).json({ message: "Refresh token inválido" });
+      }
+
+      const userId = payload.id;
+      const result = await pool.query(
+        "SELECT id, email, name, image, role, remote_jid, deleted, preferences, created_at, updated_at FROM users WHERE id = $1 AND deleted = false",
+        [userId]
+      );
+
+      if (result.rows.length === 0) return res.status(404).json({ message: "Usuário não encontrado" });
+
+      const safeUser = toSafeUser(result.rows[0]);
+      const accessToken = signAccessToken(safeUser);
+      const opts = cookieOptions();
+      const accessName = process.env.ACCESS_COOKIE_NAME || "chatapp_access";
+      const accessMaxAge = parseInt(process.env.ACCESS_COOKIE_MAXAGE || String(15 * 60 * 1000), 10);
+
+      res.cookie(accessName, accessToken, {
+        httpOnly: true,
+        sameSite: opts.sameSite,
+        domain: opts.domain,
+        secure: !!opts.secure,
+        maxAge: accessMaxAge,
+        path: "/",
+      });
+
+      res.json({ ok: true });
+    } catch (error: any) {
+      console.error("Refresh error:", error);
+      res.status(500).json({ message: "Erro ao renovar token" });
+    }
   });
 
   app.get("/api/auth/me", authenticateUser, async (req: AuthRequest, res) => {
     try {
-      // Session already verified by authenticateUser middleware
-      // Re-fetch user from database to ensure fresh data
+      // User id available from authenticateUser (JWT payload)
       const result = await pool.query(
         "SELECT id, email, name, image, role, remote_jid, deleted, preferences, created_at, updated_at FROM users WHERE id = $1 AND deleted = false",
         [req.user!.id]
       );
 
       if (result.rows.length === 0) {
-        // User was deleted, destroy session
-        req.session.destroy(() => {});
         return res.status(404).json({ message: "Usuário não encontrado" });
       }
 
       const safeUser = toSafeUser(result.rows[0]);
-      
-      // Update session with fresh user data
-      req.session.user = safeUser;
-      
       res.json(safeUser);
     } catch (error: any) {
       res.status(500).json({ message: "Erro ao buscar usuário" });

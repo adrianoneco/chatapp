@@ -32,6 +32,11 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+      credentials: true,
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],

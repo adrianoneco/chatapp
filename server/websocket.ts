@@ -1,11 +1,11 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "http";
-import jwt from "jsonwebtoken";
 import type { IncomingMessage } from "http";
 import cookie from "cookie";
+import { verifyToken } from "./lib/jwt";
 
 interface ExtendedWebSocket extends WebSocket {
-  userId?: number;
+  userId?: string;
   isAlive?: boolean;
 }
 
@@ -16,7 +16,7 @@ interface WebSocketMessage {
 
 export class WSManager {
   private wss: WebSocketServer;
-  private clients: Map<number, Set<ExtendedWebSocket>> = new Map();
+  private clients: Map<string, Set<ExtendedWebSocket>> = new Map();
 
   constructor(server: Server) {
     this.wss = new WebSocketServer({ 
@@ -25,7 +25,8 @@ export class WSManager {
     });
 
     server.on("upgrade", (request: IncomingMessage, socket, head) => {
-      if (request.url === "/ws") {
+      // Accept any path that starts with /ws to support querystring tokens
+      if (request.url && request.url.startsWith("/ws")) {
         this.handleUpgrade(request, socket, head);
       }
     });
@@ -34,10 +35,16 @@ export class WSManager {
   }
 
   private handleUpgrade(request: IncomingMessage, socket: any, head: Buffer) {
-    // Parse cookies from the request
+    // Parse cookies and optional ?token param
     const cookies = request.headers.cookie ? cookie.parse(request.headers.cookie) : {};
-    const COOKIE_NAME = process.env.APP_COOKIE_NAME || "token";
-    const token = cookies[COOKIE_NAME];
+    const accessName = process.env.ACCESS_COOKIE_NAME || "chatapp_access";
+    let token = cookies[accessName];
+
+    try {
+      const url = new URL(request.url || "", "http://localhost");
+      const qsToken = url.searchParams.get("token");
+      if (!token && qsToken) token = qsToken;
+    } catch (e) {}
 
     if (!token) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
@@ -45,25 +52,21 @@ export class WSManager {
       return;
     }
 
-    try {
-      // Verify JWT token using SESSION_SECRET (same as auth middleware)
-      const jwtSecret = process.env.SESSION_SECRET;
-      if (!jwtSecret) {
-        throw new Error("SESSION_SECRET not configured");
-      }
-      const decoded = jwt.verify(token, jwtSecret) as any;
-      
-      // Authentication successful
+    const finalizeWithUserId = (userId: string) => {
       this.wss.handleUpgrade(request, socket, head, (ws) => {
         const extWs = ws as ExtendedWebSocket;
-        extWs.userId = decoded.id;
+        extWs.userId = userId;
         extWs.isAlive = true;
-        
+
         this.wss.emit("connection", extWs, request);
         this.handleConnection(extWs);
       });
+    };
+
+    try {
+      const decoded = verifyToken<{ id: string }>(token as string);
+      finalizeWithUserId(decoded.id);
     } catch (error) {
-      // Authentication failed
       console.error("WebSocket authentication failed:", error);
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();

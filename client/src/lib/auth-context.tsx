@@ -16,6 +16,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [location] = useLocation();
 
   // Save last visited page
@@ -27,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Force revalidation on mount and treat 401 as null so the auth state
   // is correctly reset when the cookie is present but invalid/expired.
-  const { data: user, isLoading, isFetching } = useQuery<SafeUser>({
+  const { data: user, isLoading, isFetching, dataUpdatedAt } = useQuery<SafeUser | null>({
     queryKey: ["/api/auth/me"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     retry: false,
@@ -38,23 +39,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refetchOnWindowFocus: true,
   });
 
+  // Mark initial load as complete once we have data (user or null)
+  useEffect(() => {
+    if (dataUpdatedAt > 0 && isInitialLoad) {
+      setIsInitialLoad(false);
+    }
+  }, [dataUpdatedAt, isInitialLoad]);
+
   // Consider the auth state loading while the query is loading OR fetching
-  // so that UI (ProtectedRoute, WebSocket) doesn't treat the user as
-  // unauthenticated while a background refetch is happening.
-  const isLoadingAuth = isLoading || isFetching;
+  // OR during initial load to prevent premature redirects
+  const isLoadingAuth = isLoading || isFetching || isInitialLoad;
 
   useEffect(() => {
     setIsAuthenticated(!!user);
   }, [user]);
 
+  // Temporary debug logging to observe auth state transitions in the browser
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line no-console
+      console.debug("[AuthProvider] auth change", {
+        user: user ? { id: user.id, email: user.email, role: user.role } : null,
+        isLoading: isLoadingAuth,
+        isInitialLoad,
+        isFetching,
+        isAuthenticated
+      });
+    } catch (e) { }
+  }, [user, isLoadingAuth, isInitialLoad, isFetching, isAuthenticated]);
+
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      await apiRequest("POST", "/api/auth/login", { email, password });
+      const res = await apiRequest("POST", "/api/auth/login", { email, password });
+      // server returns the SafeUser on successful login; parse and return it
+      try {
+        const body = await res.json();
+        return body as unknown as SafeUser;
+      } catch (e) {
+        return null;
+      }
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
-    },
+    // Don't use onSuccess here - let the login() method control the flow
+    // to avoid race conditions with setQueryData
   });
 
   const logoutMutation = useMutation({
@@ -77,7 +103,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const login = async (email: string, password: string) => {
-    await loginMutation.mutateAsync({ email, password });
+    console.debug("[AuthProvider] login starting");
+    const user = await loginMutation.mutateAsync({ email, password });
+    console.debug("[AuthProvider] login response received", user ? { id: user.id, email: user.email } : null);
+
+    // If server returned the user, populate the auth query cache immediately
+    // so components depending on auth don't see a transient unauthenticated state.
+    if (user) {
+      queryClient.setQueryData(["/api/auth/me"], user);
+      // Mark initial load as complete since we have user data
+      setIsInitialLoad(false);
+      console.debug("[AuthProvider] user set in cache, isInitialLoad set to false");
+    }
+
+    // Don't refetch immediately - let the natural refetchOnMount handle validation
+    // after the browser has time to apply the Set-Cookie headers.
+    // Immediate refetch can cause race conditions where the cookie isn't yet available.
   };
 
   const logout = async () => {

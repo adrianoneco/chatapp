@@ -105,8 +105,12 @@ export function AppSidebar() {
       return { previousState };
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(["/api/auth/me"], data);
-      lastSavedStateRef.current = data.preferences?.sidebarCollapsed;
+      // Merge returned preferences into the existing auth user data
+      queryClient.setQueryData(["/api/auth/me"], (old: any) => {
+        if (!old) return old;
+        return { ...old, preferences: { ...(old.preferences || {}), ...(data.preferences || data) } };
+      });
+      lastSavedStateRef.current = (data.preferences?.sidebarCollapsed ?? data.sidebarCollapsed) as any;
     },
     onError: (_, __, context) => {
       if (context?.previousState !== undefined) {

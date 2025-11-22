@@ -10,8 +10,6 @@ import express, {
 } from "express";
 
 import cookieParser from "cookie-parser";
-import session from "express-session";
-import connectPg from "connect-pg-simple";
 import { pool } from "./database";
 import { registerRoutes } from "./routes";
 import { initializeDatabase } from "./database";
@@ -61,62 +59,30 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
+// CORS: allow the client origin to send credentials (cookies).
+// Use `CORS_ORIGIN` env var in development; in production set this to your front-end origin.
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
+import * as cors from "cors";
+
+// `cors` package may be a CommonJS export; normalize to a callable function
+const corsMiddleware = (cors as any)?.default ?? (cors as any);
+app.use(corsMiddleware({ origin: CORS_ORIGIN, credentials: true }));
+
+// Ensure other modules see the chosen CORS origin (helps cookie logic)
+process.env.CORS_ORIGIN = process.env.CORS_ORIGIN || CORS_ORIGIN;
+
+// Debug endpoint: returns incoming headers and parsed cookies so a browser
+// request can show what cookies were sent to the server.
+app.get("/api/debug/echo-cookies", (req, res) => {
+  try {
+    return res.json({ headers: req.headers, cookies: req.cookies || {} });
+  } catch (e) {
+    return res.status(500).json({ message: "debug error" });
+  }
+});
+
 // Trust proxy - Required for secure cookies to work behind Replit's proxy
 app.set('trust proxy', 1);
-
-// Session configuration with PostgreSQL store
-const PgSession = connectPg(session);
-
-if (!process.env.SESSION_SECRET) {
-  throw new Error("SESSION_SECRET environment variable is required");
-}
-
-// Configure session cookie based on environment
-const isProduction = process.env.NODE_ENV === "production";
-const replitDomain = process.env.REPL_SLUG && process.env.REPL_OWNER 
-  ? `.${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-  : undefined;
-
-app.use(
-  session({
-    store: new PgSession({
-      pool: pool,
-      tableName: "user_sessions",
-      createTableIfMissing: true,
-    }),
-    secret: process.env.SESSION_SECRET,
-    resave: true, // Force session to be saved back to store
-    saveUninitialized: false,
-    name: "connect.sid", // Explicitly set cookie name
-    proxy: true, // Trust the proxy
-    cookie: {
-      secure: false, // Set to false for development
-      httpOnly: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      sameSite: "lax",
-      path: "/", // Explicitly set path
-      domain: replitDomain, // Set domain for Replit environment
-    },
-    rolling: true, // Reset cookie maxAge on every response
-  })
-);
-
-// Enable CORS with credentials so cookies (HttpOnly session token) are allowed
-// When behind a proxy or using a separate client origin, browsers will only
-// include cookies if Access-Control-Allow-Credentials is true and the
-// Access-Control-Allow-Origin is not '*'. We reflect the incoming origin
-// to allow same-site and cross-site dev setups. For production consider
-// setting a specific `CLIENT_ORIGIN` env var instead of reflecting origin.
-import cors from "cors";
-
-// Configure CORS to work with cookies (credentials)
-// Allow all origins and enable credentials to support cookies
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  }),
-);
 
 // Serve uploaded files (legacy)
 app.use("/uploads", express.static(uploadsDir));
@@ -188,6 +154,8 @@ export default async function runApp(
     port,
     host: "0.0.0.0",
     reusePort: true,
+    cors: true,
+    credentials: true,
   }, () => {
     log(`serving on port ${port}`);
   });
