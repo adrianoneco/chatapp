@@ -10,6 +10,7 @@ import Conversations from "@/pages/conversations";
 import Contacts from "@/pages/contacts";
 import Attendants from "@/pages/attendants";
 import Settings from "@/pages/settings";
+import Notifications from "@/pages/notifications";
 
 function Router() {
   return (
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/contacts" component={Contacts} />
       <Route path="/attendants" component={Attendants} />
       <Route path="/settings" component={Settings} />
+      <Route path="/notifications" component={Notifications} />
       
       <Route component={NotFound} />
     </Switch>

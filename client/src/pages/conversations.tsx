@@ -1,15 +1,16 @@
 import { MainLayout } from "@/components/layout/main-layout";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Reply } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
+import { Slider } from "@/components/ui/slider";
 
 const contacts = [
   { id: 1, name: "Ana Silva", status: "Online", lastMessage: "Combinado! Até logo.", time: "10:42", unread: 2, avatar: "https://i.pravatar.cc/150?u=1" },
@@ -21,17 +22,21 @@ const contacts = [
 ];
 
 const allMessages = [
-  { id: 1, conversationId: 1, sender: "me", content: "Oi Ana, tudo bem?", time: "10:30" },
-  { id: 2, conversationId: 1, sender: "other", content: "Oii! Tudo ótimo por aqui e com você?", time: "10:32" },
-  { id: 3, conversationId: 1, sender: "me", content: "Tudo certo. Viu o projeto novo?", time: "10:33" },
-  { id: 4, conversationId: 1, sender: "other", content: "Sim! Ficou incrível o design.", time: "10:35" },
-  { id: 5, conversationId: 1, sender: "other", content: "Acho que só precisamos ajustar aquele detalhe no header.", time: "10:35", replyTo: 3 },
-  { id: 6, conversationId: 1, sender: "me", content: "Verdade. Vou mexer nisso agora.", time: "10:40", replyTo: 5 },
-  { id: 7, conversationId: 1, sender: "other", content: "Combinado! Até logo.", time: "10:42" },
-  { id: 8, conversationId: 1, sender: "other", content: "Encaminhando o orçamento que você pediu.", time: "10:45", forwarded: true },
+  { id: 1, conversationId: 1, sender: "me", content: "Oi Ana, tudo bem?", time: "10:30", type: "text" },
+  { id: 2, conversationId: 1, sender: "other", content: "Oii! Tudo ótimo por aqui e com você?", time: "10:32", type: "text" },
+  { id: 3, conversationId: 1, sender: "me", content: "Tudo certo. Viu o projeto novo?", time: "10:33", type: "text" },
+  { id: 4, conversationId: 1, sender: "other", content: "Sim! Ficou incrível o design.", time: "10:35", type: "text" },
+  { id: 5, conversationId: 1, sender: "other", content: "Acho que só precisamos ajustar aquele detalhe no header.", time: "10:35", replyTo: 3, type: "text" },
+  { id: 6, conversationId: 1, sender: "me", content: "Verdade. Vou mexer nisso agora.", time: "10:40", replyTo: 5, type: "text" },
+  { id: 7, conversationId: 1, sender: "other", content: "Combinado! Até logo.", time: "10:42", type: "text" },
+  { id: 8, conversationId: 1, sender: "other", content: "Encaminhando o orçamento que você pediu.", time: "10:45", forwarded: true, type: "text" },
+  { id: 9, conversationId: 1, sender: "me", content: "Mensagem apagada", time: "10:46", deleted: true, type: "text" },
+  { id: 10, conversationId: 1, sender: "other", content: "", time: "10:48", type: "image", mediaUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8d29ya3xlbnwwfHwwfHx8MA%3D%3D", caption: "Olha essa referência" },
+  { id: 11, conversationId: 1, sender: "me", content: "", time: "10:50", type: "audio", duration: "0:15" },
+  { id: 12, conversationId: 1, sender: "other", content: "", time: "10:52", type: "video", mediaUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", duration: "10:34" },
   
-  { id: 101, conversationId: 2, sender: "other", content: "Você viu o novo layout?", time: "Ontem" },
-  { id: 102, conversationId: 2, sender: "me", content: "Ainda não, vou olhar agora!", time: "Ontem" },
+  { id: 101, conversationId: 2, sender: "other", content: "Você viu o novo layout?", time: "Ontem", type: "text" },
+  { id: 102, conversationId: 2, sender: "me", content: "Ainda não, vou olhar agora!", time: "Ontem", type: "text" },
 ];
 
 export default function Conversations() {
@@ -43,8 +48,6 @@ export default function Conversations() {
   
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Filter messages for current conversation
-  // In a real app this would be fetched from an API
   const messages = allMessages.filter(m => m.conversationId === (conversationId || 1));
 
   useEffect(() => {
@@ -68,7 +71,8 @@ export default function Conversations() {
 
   return (
     <MainLayout>
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 h-[calc(100vh-8rem)]">
+      {/* Changed grid columns to 5 on large screens to widen chat area */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 h-[calc(100vh-8rem)]">
         {/* Contacts List - Hidden on mobile if chat is open */}
         <Card className={cn(
           "md:col-span-1 flex flex-col h-full border-border/50 bg-card/50 backdrop-blur",
@@ -120,9 +124,9 @@ export default function Conversations() {
           </ScrollArea>
         </Card>
 
-        {/* Chat Area */}
+        {/* Chat Area - Increased col-span to 4 on large screens */}
         <Card className={cn(
-          "md:col-span-2 lg:col-span-3 flex flex-col h-full border-border/50 bg-card/50 backdrop-blur overflow-hidden",
+          "md:col-span-2 lg:col-span-4 flex flex-col h-full border-border/50 bg-card/50 backdrop-blur overflow-hidden",
           !isChatOpen ? "hidden md:flex" : "flex"
         )}>
           {isChatOpen ? (
@@ -163,15 +167,25 @@ export default function Conversations() {
                 <div className="space-y-6">
                   {messages.map((msg, index) => {
                     const replyMsg = msg.replyTo ? getReplyMessage(msg.replyTo) : null;
-                    const isLast = index === messages.length - 1;
                     
+                    if (msg.deleted) {
+                      return (
+                        <div key={msg.id} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground italic border border-dashed border-border px-3 py-2 rounded-lg">
+                            <Trash2 className="h-3 w-3" />
+                            Mensagem apagada
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
                       <div
                         key={msg.id}
                         id={`message-${msg.id}`}
                         className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}
                       >
-                        <div className="flex flex-col max-w-[70%]">
+                        <div className="flex flex-col max-w-[85%] md:max-w-[70%]">
                           {/* Forwarded Label */}
                           {msg.forwarded && (
                             <div className="flex items-center text-xs text-muted-foreground mb-1 italic">
@@ -182,7 +196,7 @@ export default function Conversations() {
 
                           <div
                             className={cn(
-                              "relative rounded-2xl px-4 py-2.5 shadow-sm",
+                              "relative rounded-2xl px-4 py-2.5 shadow-sm overflow-hidden",
                               msg.sender === "me"
                                 ? "bg-primary text-primary-foreground rounded-br-none"
                                 : "bg-secondary text-secondary-foreground rounded-bl-none"
@@ -203,12 +217,63 @@ export default function Conversations() {
                                   <Quote className="h-3 w-3" />
                                   {replyMsg.sender === "me" ? "Você" : currentContact.name}
                                 </div>
-                                <p className="truncate opacity-90">{replyMsg.content}</p>
+                                <p className="truncate opacity-90">{replyMsg.content || (replyMsg.type === 'image' ? '📷 Imagem' : replyMsg.type === 'audio' ? '🎤 Áudio' : 'Arquivo')}</p>
                               </div>
                             )}
 
-                            {/* Message Content */}
-                            <p className="text-sm leading-relaxed">{msg.content}</p>
+                            {/* Message Content Based on Type */}
+                            
+                            {msg.type === 'text' && (
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                            )}
+
+                            {msg.type === 'image' && (
+                              <div className="space-y-2">
+                                <img 
+                                  src={msg.mediaUrl} 
+                                  alt="Imagem enviada" 
+                                  className="rounded-lg max-h-[300px] w-full object-cover cursor-pointer hover:opacity-95 transition-opacity" 
+                                />
+                                {msg.caption && <p className="text-sm">{msg.caption}</p>}
+                              </div>
+                            )}
+
+                            {msg.type === 'video' && (
+                              <div className="space-y-2">
+                                <div className="relative bg-black/20 rounded-lg overflow-hidden aspect-video flex items-center justify-center group cursor-pointer">
+                                  <Film className="h-8 w-8 opacity-50" />
+                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Play className="fill-white text-white h-12 w-12" />
+                                  </div>
+                                </div>
+                                <p className="text-xs flex items-center gap-1 opacity-80"><Video className="h-3 w-3" /> Vídeo • {msg.duration}</p>
+                              </div>
+                            )}
+
+                            {msg.type === 'audio' && (
+                              <div className="flex items-center gap-3 min-w-[200px]">
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost" 
+                                  className={cn("h-8 w-8 rounded-full", msg.sender === "me" ? "hover:bg-primary-foreground/20" : "hover:bg-background/20")}
+                                >
+                                  <Play className="h-4 w-4 fill-current" />
+                                </Button>
+                                <div className="flex-1 space-y-1">
+                                   <Slider 
+                                    defaultValue={[33]} 
+                                    max={100} 
+                                    step={1} 
+                                    className={cn("w-full", msg.sender === "me" ? "[&_.bg-primary]:bg-white" : "")}
+                                   />
+                                   <div className="flex justify-between text-[10px] opacity-70">
+                                     <span>0:05</span>
+                                     <span>{msg.duration}</span>
+                                   </div>
+                                </div>
+                                <Mic className="h-4 w-4 opacity-50" />
+                              </div>
+                            )}
                             
                             {/* Timestamp */}
                             <p className={`text-[10px] mt-1 text-right ${msg.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
@@ -226,9 +291,19 @@ export default function Conversations() {
               {/* Input Area */}
               <div className="p-4 border-t border-border bg-card/30">
                 <div className="flex items-end gap-2">
-                  <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
-                    <Paperclip className="h-5 w-5" />
-                  </Button>
+                   <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
+                        <Paperclip className="h-5 w-5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem><ImageIcon className="mr-2 h-4 w-4" /> Foto</DropdownMenuItem>
+                      <DropdownMenuItem><Video className="mr-2 h-4 w-4" /> Vídeo</DropdownMenuItem>
+                      <DropdownMenuItem><File className="mr-2 h-4 w-4" /> Documento</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
                   <div className="relative flex-1">
                     <Input 
                       placeholder="Digite sua mensagem..." 
@@ -242,6 +317,11 @@ export default function Conversations() {
                       <Smile className="h-5 w-5" />
                     </Button>
                   </div>
+                  
+                  <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
+                    <Mic className="h-5 w-5" />
+                  </Button>
+
                   <Button size="icon" className="shrink-0 bg-primary hover:bg-primary/90">
                     <Send className="h-5 w-5" />
                   </Button>
@@ -261,3 +341,6 @@ export default function Conversations() {
     </MainLayout>
   );
 }
+
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { File } from "lucide-react";
