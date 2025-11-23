@@ -1,19 +1,24 @@
 import { MainLayout } from "@/components/layout/main-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Download } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { useRef, useEffect, useState } from "react";
 import { Slider } from "@/components/ui/slider";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
+// Assets
+import mp3File from "@assets/13. Behind Enemy Lines_1763919687567.mp3";
+import videoFile from "@assets/9312ac4fd6cf30b9cabb0eb07b5bc517_1763919709453.mp4";
 
 const contacts = [
-  { id: 1, name: "Ana Silva", status: "Online", lastMessage: "Combinado! Até logo.", time: "10:42", unread: 2, avatar: "https://i.pravatar.cc/150?u=1" },
+  { id: 1, name: "Ana Silva", status: "Online", lastMessage: "Enviando o vídeo...", time: "10:42", unread: 2, avatar: "https://i.pravatar.cc/150?u=1" },
   { id: 2, name: "Carlos Oliveira", status: "Offline", lastMessage: "Você viu o novo layout?", time: "Ontem", unread: 0, avatar: "https://i.pravatar.cc/150?u=2" },
   { id: 3, name: "Equipe de Design", status: "Online", lastMessage: "João: Precisamos aprovar o...", time: "Segunda", unread: 5, avatar: "https://i.pravatar.cc/150?u=3" },
   { id: 4, name: "Mariana Costa", status: "Online", lastMessage: "Te envio o arquivo já.", time: "10:05", unread: 0, avatar: "https://i.pravatar.cc/150?u=4" },
@@ -31,10 +36,39 @@ const allMessages = [
   { id: 7, conversationId: 1, sender: "other", content: "Combinado! Até logo.", time: "10:42", type: "text" },
   { id: 8, conversationId: 1, sender: "other", content: "Encaminhando o orçamento que você pediu.", time: "10:45", forwarded: true, type: "text" },
   { id: 9, conversationId: 1, sender: "me", content: "Mensagem apagada", time: "10:46", deleted: true, type: "text" },
-  { id: 10, conversationId: 1, sender: "other", content: "", time: "10:48", type: "image", mediaUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8d29ya3xlbnwwfHwwfHx8MA%3D%3D", caption: "Olha essa referência" },
-  { id: 11, conversationId: 1, sender: "me", content: "", time: "10:50", type: "audio", duration: "0:15" },
-  { id: 12, conversationId: 1, sender: "other", content: "", time: "10:52", type: "video", mediaUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", duration: "10:34" },
   
+  // Image Message
+  { id: 10, conversationId: 1, sender: "other", content: "", time: "10:48", type: "image", mediaUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8d29ya3xlbnwwfHwwfHx8MA%3D%3D", caption: "Olha essa referência" },
+  
+  // Recorded Audio
+  { id: 11, conversationId: 1, sender: "me", content: "", time: "10:50", type: "audio", duration: "0:15", recorded: true },
+  
+  // Recorded Video
+  { id: 12, conversationId: 1, sender: "other", content: "", time: "10:52", type: "video", mediaUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", duration: "0:30", recorded: true },
+  
+  // Uploaded Video (The one provided)
+  { id: 13, conversationId: 1, sender: "me", content: "", time: "10:55", type: "video", mediaUrl: videoFile, duration: "0:12", caption: "Vídeo do projeto finalizado" },
+  
+  // Uploaded MP3 with ID3 (The one provided)
+  { 
+    id: 14, 
+    conversationId: 1, 
+    sender: "other", 
+    content: "", 
+    time: "10:58", 
+    type: "audio", 
+    mediaUrl: mp3File, 
+    duration: "3:42",
+    metadata: {
+      title: "Behind Enemy Lines",
+      artist: "Unknown Artist",
+      cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100&auto=format&fit=crop&q=60"
+    }
+  },
+  
+  // Uploaded MP3 without ID3
+  { id: 15, conversationId: 1, sender: "me", content: "", time: "11:00", type: "audio", mediaUrl: "#", duration: "2:15", caption: "Audio_sem_tags.mp3" },
+
   { id: 101, conversationId: 2, sender: "other", content: "Você viu o novo layout?", time: "Ontem", type: "text" },
   { id: 102, conversationId: 2, sender: "me", content: "Ainda não, vou olhar agora!", time: "Ontem", type: "text" },
 ];
@@ -71,12 +105,12 @@ export default function Conversations() {
 
   return (
     <MainLayout>
-      {/* Changed grid columns to 5 on large screens to widen chat area */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 h-[calc(100vh-8rem)]">
-        {/* Contacts List - Hidden on mobile if chat is open */}
+      {/* Using Flexbox instead of Grid for better sidebar control */}
+      <div className="flex h-[calc(100vh-8rem)] gap-6 overflow-hidden">
+        {/* Contacts List - Fixed width, responsive */}
         <Card className={cn(
-          "md:col-span-1 flex flex-col h-full border-border/50 bg-card/50 backdrop-blur",
-          isChatOpen ? "hidden md:flex" : "flex"
+          "flex flex-col h-full border-border/50 bg-card/50 backdrop-blur shrink-0 transition-all duration-300",
+          isChatOpen ? "hidden md:flex md:w-80 lg:w-96" : "flex w-full md:w-80 lg:w-96"
         )}>
           <div className="p-4 space-y-4">
             <div className="relative">
@@ -92,7 +126,7 @@ export default function Conversations() {
                     "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
                     conversationId === contact.id ? "bg-accent/60" : ""
                   )}>
-                    <div className="relative">
+                    <div className="relative shrink-0">
                       <Avatar>
                         <AvatarImage src={contact.avatar} />
                         <AvatarFallback>{contact.name.substring(0, 2)}</AvatarFallback>
@@ -101,17 +135,17 @@ export default function Conversations() {
                         <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
                       )}
                     </div>
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium truncate">{contact.name}</span>
-                        <span className="text-xs text-muted-foreground">{contact.time}</span>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">{contact.time}</span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground truncate max-w-[85%] group-hover:text-foreground transition-colors">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-muted-foreground truncate group-hover:text-foreground transition-colors">
                           {contact.lastMessage}
                         </span>
                         {contact.unread > 0 && (
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
                             {contact.unread}
                           </span>
                         )}
@@ -124,15 +158,15 @@ export default function Conversations() {
           </ScrollArea>
         </Card>
 
-        {/* Chat Area - Increased col-span to 4 on large screens */}
+        {/* Chat Area - Flexible width */}
         <Card className={cn(
-          "md:col-span-2 lg:col-span-4 flex flex-col h-full border-border/50 bg-card/50 backdrop-blur overflow-hidden",
+          "flex-1 flex-col h-full border-border/50 bg-card/50 backdrop-blur overflow-hidden",
           !isChatOpen ? "hidden md:flex" : "flex"
         )}>
           {isChatOpen ? (
             <>
               {/* Chat Header */}
-              <div className="p-4 border-b border-border flex items-center justify-between bg-card/30">
+              <div className="p-4 border-b border-border flex items-center justify-between bg-card/30 shrink-0">
                 <div className="flex items-center gap-3">
                   <Link href="/conversations">
                     <Button variant="ghost" size="icon" className="md:hidden">
@@ -171,7 +205,7 @@ export default function Conversations() {
                     if (msg.deleted) {
                       return (
                         <div key={msg.id} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground italic border border-dashed border-border px-3 py-2 rounded-lg">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground italic border border-dashed border-border px-3 py-2 rounded-lg select-none">
                             <Trash2 className="h-3 w-3" />
                             Mensagem apagada
                           </div>
@@ -186,11 +220,17 @@ export default function Conversations() {
                         className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}
                       >
                         <div className="flex flex-col max-w-[85%] md:max-w-[70%]">
-                          {/* Forwarded Label */}
+                          {/* Labels */}
                           {msg.forwarded && (
                             <div className="flex items-center text-xs text-muted-foreground mb-1 italic">
                               <CornerDownRight className="h-3 w-3 mr-1" />
                               Encaminhada
+                            </div>
+                          )}
+                          {msg.replyTo && !replyMsg && (
+                             <div className="flex items-center text-xs text-muted-foreground mb-1 italic">
+                              <Quote className="h-3 w-3 mr-1" />
+                              Respondendo
                             </div>
                           )}
 
@@ -239,46 +279,106 @@ export default function Conversations() {
                             )}
 
                             {msg.type === 'video' && (
-                              <div className="space-y-2">
-                                <div className="relative bg-black/20 rounded-lg overflow-hidden aspect-video flex items-center justify-center group cursor-pointer">
-                                  <Film className="h-8 w-8 opacity-50" />
-                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Play className="fill-white text-white h-12 w-12" />
+                              <div className="space-y-2 min-w-[250px]">
+                                {msg.recorded ? (
+                                   <div className="relative bg-black rounded-lg overflow-hidden aspect-[9/16] max-h-[300px] flex items-center justify-center border-2 border-white/20">
+                                      <video src={msg.mediaUrl} controls className="w-full h-full object-cover" />
+                                      <div className="absolute top-2 right-2 bg-red-500/80 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> REC
+                                      </div>
+                                   </div>
+                                ) : (
+                                  <div className="rounded-lg overflow-hidden bg-black/20">
+                                     <video src={msg.mediaUrl} controls className="w-full max-h-[400px]" poster="https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=500&auto=format&fit=crop&q=60" />
                                   </div>
-                                </div>
-                                <p className="text-xs flex items-center gap-1 opacity-80"><Video className="h-3 w-3" /> Vídeo • {msg.duration}</p>
+                                )}
+                                {(msg.caption || !msg.recorded) && <p className="text-sm flex items-center gap-1"><Film className="h-3 w-3" /> {msg.caption || "Vídeo"}</p>}
                               </div>
                             )}
 
                             {msg.type === 'audio' && (
-                              <div className="flex items-center gap-3 min-w-[200px]">
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost" 
-                                  className={cn("h-8 w-8 rounded-full", msg.sender === "me" ? "hover:bg-primary-foreground/20" : "hover:bg-background/20")}
-                                >
-                                  <Play className="h-4 w-4 fill-current" />
-                                </Button>
-                                <div className="flex-1 space-y-1">
-                                   <Slider 
-                                    defaultValue={[33]} 
-                                    max={100} 
-                                    step={1} 
-                                    className={cn("w-full", msg.sender === "me" ? "[&_.bg-primary]:bg-white" : "")}
-                                   />
-                                   <div className="flex justify-between text-[10px] opacity-70">
-                                     <span>0:05</span>
-                                     <span>{msg.duration}</span>
-                                   </div>
+                              <div className="min-w-[240px]">
+                                {msg.metadata ? (
+                                  // ID3 Tag Style
+                                  <div className="flex gap-3 items-center bg-black/20 p-2 rounded-lg mb-2">
+                                    <div className="h-12 w-12 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0 relative">
+                                      {msg.metadata.cover ? (
+                                        <img src={msg.metadata.cover} alt="Cover" className="h-full w-full object-cover" />
+                                      ) : (
+                                        <Music className="h-6 w-6 opacity-50" />
+                                      )}
+                                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
+                                         <Play className="h-6 w-6 fill-white text-white" />
+                                      </div>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-semibold text-sm truncate">{msg.metadata.title}</p>
+                                      <p className="text-xs opacity-70 truncate">{msg.metadata.artist}</p>
+                                    </div>
+                                  </div>
+                                ) : msg.recorded ? (
+                                  // Recorded Audio Style
+                                  <div className="flex items-center gap-2 mb-1 text-xs opacity-80">
+                                    <Mic className="h-3 w-3" /> Mensagem de Voz
+                                  </div>
+                                ) : (
+                                  // Generic File Style
+                                  <div className="flex items-center gap-2 mb-2">
+                                     <div className="h-8 w-8 rounded bg-primary-foreground/20 flex items-center justify-center">
+                                       <Disc className="h-4 w-4" />
+                                     </div>
+                                     <div className="flex-1 min-w-0">
+                                       <p className="text-sm truncate">{msg.caption || "Arquivo de Áudio"}</p>
+                                       <p className="text-[10px] opacity-70">MP3</p>
+                                     </div>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center gap-3">
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost" 
+                                    className={cn("h-8 w-8 rounded-full shrink-0", msg.sender === "me" ? "hover:bg-primary-foreground/20" : "hover:bg-background/20")}
+                                  >
+                                    <Play className="h-4 w-4 fill-current" />
+                                  </Button>
+                                  <div className="flex-1 space-y-1">
+                                     {msg.recorded ? (
+                                       <div className="h-6 flex items-center gap-0.5 opacity-80">
+                                          {[...Array(20)].map((_, i) => (
+                                            <div 
+                                              key={i} 
+                                              className={cn(
+                                                "w-1 rounded-full transition-all duration-300", 
+                                                msg.sender === "me" ? "bg-primary-foreground" : "bg-primary",
+                                                i < 8 ? "h-2 opacity-50" : i < 15 ? "h-4" : "h-3 opacity-70"
+                                              )}
+                                            />
+                                          ))}
+                                       </div>
+                                     ) : (
+                                       <Slider 
+                                        defaultValue={[0]} 
+                                        max={100} 
+                                        step={1} 
+                                        className={cn("w-full", msg.sender === "me" ? "[&_.bg-primary]:bg-white" : "")}
+                                       />
+                                     )}
+                                     <div className="flex justify-between text-[10px] opacity-70">
+                                       <span>0:00</span>
+                                       <span>{msg.duration}</span>
+                                     </div>
+                                  </div>
                                 </div>
-                                <Mic className="h-4 w-4 opacity-50" />
                               </div>
                             )}
                             
                             {/* Timestamp */}
-                            <p className={`text-[10px] mt-1 text-right ${msg.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                              {msg.time}
-                            </p>
+                            <div className={`flex items-center justify-end gap-1 mt-1`}>
+                              <p className={`text-[10px] text-right ${msg.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                                {msg.time}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -289,7 +389,7 @@ export default function Conversations() {
               </ScrollArea>
 
               {/* Input Area */}
-              <div className="p-4 border-t border-border bg-card/30">
+              <div className="p-4 border-t border-border bg-card/30 shrink-0">
                 <div className="flex items-end gap-2">
                    <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -341,6 +441,3 @@ export default function Conversations() {
     </MainLayout>
   );
 }
-
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { File } from "lucide-react";
