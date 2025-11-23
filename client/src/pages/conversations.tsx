@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Download } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
@@ -12,10 +12,32 @@ import { cn } from "@/lib/utils";
 import { useRef, useEffect, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import jsmediatags from "jsmediatags";
 
 // Assets
 import mp3File from "@assets/13. Behind Enemy Lines_1763919687567.mp3";
 import videoFile from "@assets/9312ac4fd6cf30b9cabb0eb07b5bc517_1763919709453.mp4";
+
+interface Message {
+  id: number;
+  conversationId: number;
+  sender: string;
+  content: string;
+  time: string;
+  type: 'text' | 'image' | 'video' | 'audio';
+  mediaUrl?: string;
+  duration?: string;
+  caption?: string;
+  recorded?: boolean;
+  forwarded?: boolean;
+  deleted?: boolean;
+  replyTo?: number;
+  metadata?: {
+    title: string;
+    artist: string;
+    cover: string | null;
+  } | null;
+}
 
 const contacts = [
   { id: 1, name: "Ana Silva", status: "Online", lastMessage: "Enviando o vídeo...", time: "10:42", unread: 2, avatar: "https://i.pravatar.cc/150?u=1" },
@@ -26,7 +48,7 @@ const contacts = [
   { id: 6, name: "Julia Pereira", status: "Online", lastMessage: "Vamos almoçar?", time: "09:15", unread: 1, avatar: "https://i.pravatar.cc/150?u=6" },
 ];
 
-const allMessages = [
+const initialMessages: Message[] = [
   { id: 1, conversationId: 1, sender: "me", content: "Oi Ana, tudo bem?", time: "10:30", type: "text" },
   { id: 2, conversationId: 1, sender: "other", content: "Oii! Tudo ótimo por aqui e com você?", time: "10:32", type: "text" },
   { id: 3, conversationId: 1, sender: "me", content: "Tudo certo. Viu o projeto novo?", time: "10:33", type: "text" },
@@ -59,11 +81,8 @@ const allMessages = [
     type: "audio", 
     mediaUrl: mp3File, 
     duration: "3:42",
-    metadata: {
-      title: "Behind Enemy Lines",
-      artist: "Unknown Artist",
-      cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100&auto=format&fit=crop&q=60"
-    }
+    // Metadata initially null, will be fetched
+    metadata: null
   },
   
   // Uploaded MP3 without ID3
@@ -81,14 +100,112 @@ export default function Conversations() {
   const currentContact = contacts.find(c => c.id === conversationId) || contacts[0];
   
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  
+  // Audio Player State
+  const [playingId, setPlayingId] = useState<number | null>(null);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const messages = allMessages.filter(m => m.conversationId === (conversationId || 1));
+  const filteredMessages = messages.filter(m => m.conversationId === (conversationId || 1));
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, conversationId]);
+  }, [filteredMessages, conversationId]);
+
+  // Fetch ID3 Tags
+  useEffect(() => {
+    const fetchTags = async () => {
+      // Work with a deep copy if necessary, or just map
+      const newMessages = [...messages];
+      let hasUpdates = false;
+
+      for (let i = 0; i < newMessages.length; i++) {
+        const msg = newMessages[i];
+        if (msg.type === 'audio' && msg.mediaUrl && !msg.metadata && !msg.recorded && msg.mediaUrl.startsWith('/assets/')) {
+           // Attempt to read tags for local assets
+           try {
+             const response = await fetch(msg.mediaUrl);
+             const blob = await response.blob();
+             
+             await new Promise((resolve) => {
+               // @ts-ignore - jsmediatags types might be tricky with import
+               jsmediatags.read(blob, {
+                 onSuccess: (tag: any) => {
+                   const { tags } = tag;
+                   let cover = null;
+                   if (tags.picture) {
+                     const { data, format } = tags.picture;
+                     let base64String = "";
+                     for (let j = 0; j < data.length; j++) {
+                       base64String += String.fromCharCode(data[j]);
+                     }
+                     cover = `data:${format};base64,${window.btoa(base64String)}`;
+                   }
+                   
+                   newMessages[i] = {
+                     ...msg,
+                     metadata: {
+                       title: tags.title || "Sem título",
+                       artist: tags.artist || "Desconhecido",
+                       cover: cover
+                     }
+                   };
+                   hasUpdates = true;
+                   resolve(true);
+                 },
+                 onError: (error: any) => {
+                   console.log("Error reading tags:", error);
+                   resolve(false);
+                 }
+               });
+             });
+           } catch (e) {
+             console.log("Error fetching audio file:", e);
+           }
+        }
+      }
+      
+      if (hasUpdates) {
+        setMessages(newMessages);
+      }
+    };
+
+    fetchTags();
+  }, []);
+
+  const togglePlay = (msg: Message) => {
+    if (!msg.mediaUrl) return;
+
+    if (playingId === msg.id) {
+      audioRef.current?.pause();
+      setPlayingId(null);
+    } else {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      setPlayingId(msg.id);
+      setAudioProgress(0);
+      
+      const audio = new Audio(msg.mediaUrl);
+      audioRef.current = audio;
+      
+      audio.addEventListener('timeupdate', () => {
+        if (audio.duration) {
+          setAudioProgress((audio.currentTime / audio.duration) * 100);
+        }
+      });
+      
+      audio.addEventListener('ended', () => {
+        setPlayingId(null);
+        setAudioProgress(0);
+      });
+      
+      audio.play().catch(e => console.log("Playback error", e));
+    }
+  };
 
   const scrollToMessage = (messageId: number) => {
     const element = document.getElementById(`message-${messageId}`);
@@ -100,14 +217,13 @@ export default function Conversations() {
   };
 
   const getReplyMessage = (replyId: number) => {
-    return allMessages.find(m => m.id === replyId);
+    return messages.find(m => m.id === replyId);
   };
 
   return (
     <MainLayout>
-      {/* Using Flexbox instead of Grid for better sidebar control */}
       <div className="flex h-[calc(100vh-8rem)] gap-6 overflow-hidden">
-        {/* Contacts List - Fixed width, responsive */}
+        {/* Contacts List */}
         <Card className={cn(
           "flex flex-col h-full border-border/50 bg-card/50 backdrop-blur shrink-0 transition-all duration-300",
           isChatOpen ? "hidden md:flex md:w-80 lg:w-96" : "flex w-full md:w-80 lg:w-96"
@@ -158,7 +274,7 @@ export default function Conversations() {
           </ScrollArea>
         </Card>
 
-        {/* Chat Area - Flexible width */}
+        {/* Chat Area */}
         <Card className={cn(
           "flex-1 flex-col h-full border-border/50 bg-card/50 backdrop-blur overflow-hidden",
           !isChatOpen ? "hidden md:flex" : "flex"
@@ -199,7 +315,7 @@ export default function Conversations() {
               {/* Messages */}
               <ScrollArea className="flex-1 p-4 bg-background/20">
                 <div className="space-y-6">
-                  {messages.map((msg, index) => {
+                  {filteredMessages.map((msg, index) => {
                     const replyMsg = msg.replyTo ? getReplyMessage(msg.replyTo) : null;
                     
                     if (msg.deleted) {
@@ -238,8 +354,8 @@ export default function Conversations() {
                             className={cn(
                               "relative rounded-2xl px-4 py-2.5 shadow-sm overflow-hidden",
                               msg.sender === "me"
-                                ? "bg-primary text-primary-foreground rounded-br-none"
-                                : "bg-secondary text-secondary-foreground rounded-bl-none"
+                                ? "bg-violet-900/90 text-white rounded-br-none" // Darker purple for sender
+                                : "bg-slate-800/90 text-white rounded-bl-none"  // Dark slate for receiver
                             )}
                           >
                             {/* Reply Preview */}
@@ -248,8 +364,8 @@ export default function Conversations() {
                                 className={cn(
                                   "mb-2 p-2 rounded text-xs cursor-pointer border-l-4 relative overflow-hidden group",
                                   msg.sender === "me" 
-                                    ? "bg-primary-foreground/10 border-primary-foreground/50 hover:bg-primary-foreground/20" 
-                                    : "bg-background/10 border-foreground/20 hover:bg-background/20"
+                                    ? "bg-black/20 border-white/50 hover:bg-black/30" 
+                                    : "bg-black/20 border-white/50 hover:bg-black/30"
                                 )}
                                 onClick={() => scrollToMessage(replyMsg.id)}
                               >
@@ -307,8 +423,8 @@ export default function Conversations() {
                                       ) : (
                                         <Music className="h-6 w-6 opacity-50" />
                                       )}
-                                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
-                                         <Play className="h-6 w-6 fill-white text-white" />
+                                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity cursor-pointer" onClick={() => togglePlay(msg)}>
+                                         {playingId === msg.id ? <Pause className="h-6 w-6 fill-white text-white" /> : <Play className="h-6 w-6 fill-white text-white" />}
                                       </div>
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -325,7 +441,7 @@ export default function Conversations() {
                                 ) : (
                                   // Generic File Style
                                   <div className="flex gap-3 items-center bg-black/20 p-2 rounded-lg mb-2">
-                                     <div className="h-12 w-12 rounded bg-primary-foreground/20 flex items-center justify-center shrink-0">
+                                     <div className="h-12 w-12 rounded bg-white/10 flex items-center justify-center shrink-0">
                                        <Disc className="h-6 w-6 opacity-80" />
                                      </div>
                                      <div className="flex-1 min-w-0">
@@ -339,9 +455,10 @@ export default function Conversations() {
                                   <Button 
                                     size="icon" 
                                     variant="ghost" 
-                                    className={cn("h-8 w-8 rounded-full shrink-0", msg.sender === "me" ? "hover:bg-primary-foreground/20" : "hover:bg-background/20")}
+                                    className="h-8 w-8 rounded-full shrink-0 hover:bg-white/10"
+                                    onClick={() => togglePlay(msg)}
                                   >
-                                    <Play className="h-4 w-4 fill-current" />
+                                    {playingId === msg.id ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
                                   </Button>
                                   <div className="flex-1 space-y-1">
                                      {msg.recorded ? (
@@ -350,23 +467,23 @@ export default function Conversations() {
                                             <div 
                                               key={i} 
                                               className={cn(
-                                                "w-1 rounded-full transition-all duration-300", 
-                                                msg.sender === "me" ? "bg-primary-foreground" : "bg-primary",
-                                                i < 8 ? "h-2 opacity-50" : i < 15 ? "h-4" : "h-3 opacity-70"
+                                                "w-1 rounded-full transition-all duration-300 bg-white", 
+                                                i < 8 ? "h-2 opacity-50" : i < 15 ? "h-4" : "h-3 opacity-70",
+                                                playingId === msg.id && "animate-pulse"
                                               )}
                                             />
                                           ))}
                                        </div>
                                      ) : (
                                        <Slider 
-                                        defaultValue={[0]} 
+                                        value={[playingId === msg.id ? audioProgress : 0]} 
                                         max={100} 
                                         step={1} 
-                                        className={cn("w-full", msg.sender === "me" ? "[&_.bg-primary]:bg-white" : "")}
+                                        className="w-full [&_.bg-primary]:bg-white"
                                        />
                                      )}
                                      <div className="flex justify-between text-[10px] opacity-70">
-                                       <span>0:00</span>
+                                       <span>{playingId === msg.id ? "Reproduzindo" : "0:00"}</span>
                                        <span>{msg.duration}</span>
                                      </div>
                                   </div>
@@ -375,8 +492,8 @@ export default function Conversations() {
                             )}
                             
                             {/* Timestamp */}
-                            <div className={`flex items-center justify-end gap-1 mt-1`}>
-                              <p className={`text-[10px] text-right ${msg.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                            <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
+                              <p className="text-[10px] text-right">
                                 {msg.time}
                               </p>
                             </div>
