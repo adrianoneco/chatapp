@@ -24,6 +24,13 @@ import mp3File2 from "@assets/05. Demi Lovato & Joe Jonas - Wouldn't Change A Th
 import mp3File3 from "@assets/10. Give Your Heart A Break_1763921733934.mp3";
 import mp3File4 from "@assets/12. Back Around_1763921733934.mp3";
 
+// Album Covers
+import cover14 from "@assets/covers/cover-14.jpg";
+import cover16 from "@assets/covers/cover-16.jpg";
+import cover17 from "@assets/covers/cover-17.jpg";
+import cover18 from "@assets/covers/cover-18.jpg";
+import cover19 from "@assets/covers/cover-19.jpg";
+
 interface Message {
   id: number;
   conversationId: number;
@@ -40,9 +47,11 @@ interface Message {
   replyTo?: number;
   reactions?: { emoji: string; count: number }[];
   metadata?: {
-    title: string;
-    artist: string;
-    cover: string | null;
+    audio_tags?: {
+      title: string;
+      artist: string;
+      cover: string | null;
+    }
   } | null;
 }
 
@@ -90,9 +99,11 @@ const initialMessages: Message[] = [
     mediaUrl: mp3File, 
     duration: "3:42",
     metadata: {
-      title: "Behind Enemy Lines",
-      artist: "Demi Lovato",
-      cover: null
+      audio_tags: {
+        title: "Behind Enemy Lines",
+        artist: "Demi Lovato",
+        cover: cover14
+      }
     }
   },
   
@@ -110,9 +121,11 @@ const initialMessages: Message[] = [
     mediaUrl: mp3File1, 
     duration: "3:48",
     metadata: {
-      title: "Here We Go Again",
-      artist: "Demi Lovato",
-      cover: null
+      audio_tags: {
+        title: "Here We Go Again",
+        artist: "Demi Lovato",
+        cover: cover16
+      }
     }
   },
   { 
@@ -125,9 +138,11 @@ const initialMessages: Message[] = [
     mediaUrl: mp3File2, 
     duration: "3:28",
     metadata: {
-      title: "Wouldn't Change A Thing",
-      artist: "Demi Lovato & Joe Jonas",
-      cover: null
+      audio_tags: {
+        title: "Wouldn't Change A Thing",
+        artist: "Demi Lovato & Joe Jonas",
+        cover: cover17
+      }
     }
   },
   { 
@@ -140,9 +155,11 @@ const initialMessages: Message[] = [
     mediaUrl: mp3File3, 
     duration: "3:27",
     metadata: {
-      title: "Give Your Heart A Break",
-      artist: "Demi Lovato",
-      cover: null
+      audio_tags: {
+        title: "Give Your Heart A Break",
+        artist: "Demi Lovato",
+        cover: cover18
+      }
     }
   },
   { 
@@ -155,9 +172,11 @@ const initialMessages: Message[] = [
     mediaUrl: mp3File4, 
     duration: "3:12",
     metadata: {
-      title: "Back Around",
-      artist: "Demi Lovato",
-      cover: null
+      audio_tags: {
+        title: "Back Around",
+        artist: "Demi Lovato",
+        cover: cover19
+      }
     }
   },
 
@@ -969,11 +988,11 @@ export default function Conversations() {
 
                             {msg.type === 'audio' && (
                               <div className="min-w-[240px]">
-                                {msg.metadata ? (
+                                {msg.metadata?.audio_tags ? (
                                   <div className="flex gap-3 items-center bg-black/20 p-2 rounded-lg mb-2">
                                     <div className="h-12 w-12 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0 relative">
-                                      {msg.metadata.cover ? (
-                                        <img src={msg.metadata.cover} alt="Cover" className="h-full w-full object-cover" />
+                                      {msg.metadata.audio_tags.cover ? (
+                                        <img src={msg.metadata.audio_tags.cover} alt="Cover" className="h-full w-full object-cover" />
                                       ) : (
                                         <Music className="h-6 w-6 opacity-50" />
                                       )}
@@ -982,8 +1001,8 @@ export default function Conversations() {
                                       </div>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <p className="font-semibold text-sm truncate">{msg.metadata.title}</p>
-                                      <p className="text-xs opacity-70 truncate">{msg.metadata.artist}</p>
+                                      <p className="font-semibold text-sm truncate">{msg.metadata.audio_tags.title}</p>
+                                      <p className="text-xs opacity-70 truncate">{msg.metadata.audio_tags.artist}</p>
                                     </div>
                                   </div>
                                 ) : msg.recorded ? (
