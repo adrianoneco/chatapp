@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize, PanelLeftClose, PanelLeft, Reply, Forward, Laugh } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
@@ -328,6 +328,7 @@ export default function Conversations() {
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Audio Player State
   const [playingId, setPlayingId] = useState<number | null>(null);
@@ -437,13 +438,26 @@ export default function Conversations() {
       <div className="flex h-[calc(100vh-8rem)] gap-6 overflow-hidden">
         {/* Contacts List */}
         <Card className={cn(
-          "flex flex-col h-full border-border/50 bg-card/50 backdrop-blur shrink-0 transition-all duration-300",
-          isChatOpen ? "hidden md:flex md:w-80 lg:w-96" : "flex w-full md:w-80 lg:w-96"
+          "flex flex-col h-full border-border/50 bg-card/50 backdrop-blur shrink-0 transition-all duration-300 relative",
+          isChatOpen ? "hidden md:flex" : "flex w-full",
+          sidebarCollapsed ? "md:w-20" : "md:w-80 lg:w-96"
         )}>
           <div className="p-4 space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar conversas..." className="pl-9 bg-background/50" data-testid="input-search-conversations" />
+            <div className="flex items-center gap-2">
+              {!sidebarCollapsed && (
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Buscar conversas..." className="pl-9 bg-background/50" data-testid="input-search-conversations" />
+                </div>
+              )}
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className={cn("shrink-0", sidebarCollapsed && "mx-auto")}
+              >
+                {sidebarCollapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+              </Button>
             </div>
           </div>
           <ScrollArea className="flex-1">
@@ -453,7 +467,8 @@ export default function Conversations() {
                   <div 
                     className={cn(
                       "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
-                      conversationId === contact.id ? "bg-accent/60" : ""
+                      conversationId === contact.id ? "bg-accent/60" : "",
+                      sidebarCollapsed && "justify-center"
                     )}
                     data-testid={`link-contact-${contact.id}`}
                   >
@@ -465,23 +480,30 @@ export default function Conversations() {
                       {contact.status === "Online" && (
                         <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
                       )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium truncate">{contact.name}</span>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">{contact.time}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-muted-foreground truncate group-hover:text-foreground transition-colors">
-                          {contact.lastMessage}
+                      {contact.unread > 0 && sidebarCollapsed && (
+                        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
+                          {contact.unread}
                         </span>
-                        {contact.unread > 0 && (
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
-                            {contact.unread}
-                          </span>
-                        )}
-                      </div>
+                      )}
                     </div>
+                    {!sidebarCollapsed && (
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium truncate">{contact.name}</span>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">{contact.time}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm text-muted-foreground truncate group-hover:text-foreground transition-colors">
+                            {contact.lastMessage}
+                          </span>
+                          {contact.unread > 0 && (
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
+                              {contact.unread}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </Link>
               ))}
