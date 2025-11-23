@@ -44,7 +44,7 @@ export function AppSidebar() {
         <nav className="space-y-2 px-2">
           {navItems.map((item) => (
             <Link key={item.href} href={item.href}>
-              <a className={cn(
+              <div className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors group cursor-pointer",
                 isActive(item.href) && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
               )}>
@@ -54,7 +54,7 @@ export function AppSidebar() {
                     {item.label}
                   </span>
                 )}
-              </a>
+              </div>
             </Link>
           ))}
         </nav>
