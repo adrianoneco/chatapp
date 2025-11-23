@@ -553,7 +553,7 @@ export default function Conversations() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [detailsSidebarOpen, setDetailsSidebarOpen] = useState(true);
+  const [detailsSidebarOpen, setDetailsSidebarOpen] = useState(false);
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [hoveredMessage, setHoveredMessage] = useState<number | null>(null);
   
@@ -563,6 +563,25 @@ export default function Conversations() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const filteredMessages = messages.filter(m => m.conversationId === (conversationId || 1));
+
+  // Expandir sidebar direita automaticamente em telas grandes
+  useEffect(() => {
+    const handleResize = () => {
+      const isLargeScreen = window.matchMedia('(min-width: 1024px)').matches;
+      if (isLargeScreen && isChatOpen) {
+        setDetailsSidebarOpen(true);
+      } else if (!isLargeScreen) {
+        setDetailsSidebarOpen(false);
+      }
+    };
+
+    // Verificar na montagem
+    handleResize();
+
+    // Adicionar listener para mudanças de tamanho
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isChatOpen]);
 
   useEffect(() => {
     // Scroll to bottom when entering a conversation or when messages update
@@ -787,7 +806,7 @@ export default function Conversations() {
 
         {/* Chat Area */}
         <Card className={cn(
-          "flex-1 flex-col h-full border-border/50 bg-card/50 backdrop-blur overflow-hidden",
+          "flex-1 flex-col h-full border-border/50 bg-background overflow-hidden",
           !isChatOpen ? "hidden md:flex" : "flex"
         )}>
           {isChatOpen ? (
