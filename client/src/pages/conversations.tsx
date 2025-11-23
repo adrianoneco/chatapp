@@ -93,12 +93,14 @@ const initialMessages: Message[] = [
 // Custom Video Player Component
 function CustomVideoPlayer({ src, poster, recorded }: { src: string, poster?: string, recorded?: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -116,6 +118,21 @@ function CustomVideoPlayer({ src, poster, recorded }: { src: string, poster?: st
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('ended', handleEnded);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+      // Always show controls in fullscreen
+      if (document.fullscreenElement) {
+        setShowControls(true);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
 
@@ -153,23 +170,25 @@ function CustomVideoPlayer({ src, poster, recorded }: { src: string, poster?: st
   };
 
   const toggleFullscreen = () => {
-    if (videoRef.current) {
+    if (containerRef.current) {
       if (document.fullscreenElement) {
         document.exitFullscreen();
       } else {
-        videoRef.current.requestFullscreen();
+        containerRef.current.requestFullscreen();
       }
     }
   };
 
   return (
     <div 
+      ref={containerRef}
       className={cn(
         "relative rounded-lg overflow-hidden bg-black group",
-        recorded ? "aspect-[9/16] max-h-[300px]" : "w-full max-h-[400px]"
+        recorded ? "aspect-[9/16] max-h-[300px]" : "w-full max-h-[400px]",
+        isFullscreen && "!max-h-screen w-screen h-screen aspect-auto"
       )}
       onMouseEnter={() => setShowControls(true)}
-      onMouseLeave={() => setShowControls(isPlaying ? false : true)}
+      onMouseLeave={() => !isFullscreen && setShowControls(isPlaying ? false : true)}
     >
       <video
         ref={videoRef}
@@ -483,20 +502,6 @@ export default function Conversations() {
                         data-testid={`message-${msg.id}`}
                       >
                         <div className="flex flex-col max-w-[85%] md:max-w-[70%]">
-                          {/* Labels */}
-                          {msg.forwarded && (
-                            <div className="flex items-center text-xs text-muted-foreground mb-1 italic">
-                              <CornerDownRight className="h-3 w-3 mr-1" />
-                              Encaminhada
-                            </div>
-                          )}
-                          {msg.replyTo && !replyMsg && (
-                             <div className="flex items-center text-xs text-muted-foreground mb-1 italic">
-                              <Quote className="h-3 w-3 mr-1" />
-                              Respondendo
-                            </div>
-                          )}
-
                           <div
                             className={cn(
                               "relative rounded-2xl px-4 py-2.5 shadow-sm overflow-hidden",
@@ -505,7 +510,7 @@ export default function Conversations() {
                                 : "bg-slate-700/90 text-white rounded-bl-none"
                             )}
                           >
-                            {/* Reply Preview */}
+                            {/* Reply Preview with optional forwarded indicator */}
                             {replyMsg && (
                               <div 
                                 className={cn(
@@ -516,11 +521,33 @@ export default function Conversations() {
                                 )}
                                 onClick={() => scrollToMessage(replyMsg.id)}
                               >
-                                <div className="font-semibold mb-0.5 flex items-center gap-1">
-                                  <Quote className="h-3 w-3" />
-                                  {replyMsg.sender === "me" ? "Você" : currentContact.name}
+                                <div className="font-semibold mb-0.5 flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1 flex-1 min-w-0">
+                                    <Quote className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">{replyMsg.sender === "me" ? "Você" : currentContact.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[10px] opacity-70 shrink-0">
+                                    {msg.forwarded && (
+                                      <div className="flex items-center gap-0.5">
+                                        <CornerDownRight className="h-2.5 w-2.5" />
+                                        <span>Encaminhada</span>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-0.5">
+                                      <Quote className="h-2.5 w-2.5" />
+                                      <span>Resposta</span>
+                                    </div>
+                                  </div>
                                 </div>
                                 <p className="truncate opacity-90">{replyMsg.content || (replyMsg.type === 'image' ? 'Imagem' : replyMsg.type === 'audio' ? 'Áudio' : replyMsg.type === 'video' ? 'Vídeo' : 'Arquivo')}</p>
+                              </div>
+                            )}
+                            
+                            {/* Forwarded indicator in message header (only when no reply) */}
+                            {msg.forwarded && !msg.replyTo && (
+                              <div className="mb-2 flex items-center justify-end gap-1 text-[10px] opacity-70">
+                                <CornerDownRight className="h-2.5 w-2.5" />
+                                <span>Encaminhada</span>
                               </div>
                             )}
 
