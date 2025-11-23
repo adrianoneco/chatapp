@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import { useRef, useEffect, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import jsmediatags from "jsmediatags";
 
 // Assets
 import mp3File from "@assets/13. Behind Enemy Lines_1763919687567.mp3";
@@ -115,66 +114,7 @@ export default function Conversations() {
     }
   }, [filteredMessages, conversationId]);
 
-  // Fetch ID3 Tags
-  useEffect(() => {
-    const fetchTags = async () => {
-      // Work with a deep copy if necessary, or just map
-      const newMessages = [...messages];
-      let hasUpdates = false;
-
-      for (let i = 0; i < newMessages.length; i++) {
-        const msg = newMessages[i];
-        if (msg.type === 'audio' && msg.mediaUrl && !msg.metadata && !msg.recorded && msg.mediaUrl.startsWith('/assets/')) {
-           // Attempt to read tags for local assets
-           try {
-             const response = await fetch(msg.mediaUrl);
-             const blob = await response.blob();
-             
-             await new Promise((resolve) => {
-               // @ts-ignore - jsmediatags types might be tricky with import
-               jsmediatags.read(blob, {
-                 onSuccess: (tag: any) => {
-                   const { tags } = tag;
-                   let cover = null;
-                   if (tags.picture) {
-                     const { data, format } = tags.picture;
-                     let base64String = "";
-                     for (let j = 0; j < data.length; j++) {
-                       base64String += String.fromCharCode(data[j]);
-                     }
-                     cover = `data:${format};base64,${window.btoa(base64String)}`;
-                   }
-                   
-                   newMessages[i] = {
-                     ...msg,
-                     metadata: {
-                       title: tags.title || "Sem título",
-                       artist: tags.artist || "Desconhecido",
-                       cover: cover
-                     }
-                   };
-                   hasUpdates = true;
-                   resolve(true);
-                 },
-                 onError: (error: any) => {
-                   console.log("Error reading tags:", error);
-                   resolve(false);
-                 }
-               });
-             });
-           } catch (e) {
-             console.log("Error fetching audio file:", e);
-           }
-        }
-      }
-      
-      if (hasUpdates) {
-        setMessages(newMessages);
-      }
-    };
-
-    fetchTags();
-  }, []);
+  // Removed ID3 tag fetching to fix build error
 
   const togglePlay = (msg: Message) => {
     if (!msg.mediaUrl) return;
@@ -461,101 +401,107 @@ export default function Conversations() {
                                     {playingId === msg.id ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
                                   </Button>
                                   <div className="flex-1 space-y-1">
-                                     {msg.recorded ? (
-                                       <div className="h-6 flex items-center gap-0.5 opacity-80">
-                                          {[...Array(20)].map((_, i) => (
-                                            <div 
-                                              key={i} 
-                                              className={cn(
-                                                "w-1 rounded-full transition-all duration-300 bg-white", 
-                                                i < 8 ? "h-2 opacity-50" : i < 15 ? "h-4" : "h-3 opacity-70",
-                                                playingId === msg.id && "animate-pulse"
-                                              )}
-                                            />
-                                          ))}
-                                       </div>
-                                     ) : (
-                                       <Slider 
-                                        value={[playingId === msg.id ? audioProgress : 0]} 
-                                        max={100} 
-                                        step={1} 
-                                        className="w-full [&_.bg-primary]:bg-white"
-                                       />
-                                     )}
-                                     <div className="flex justify-between text-[10px] opacity-70">
-                                       <span>{playingId === msg.id ? "Reproduzindo" : "0:00"}</span>
-                                       <span>{msg.duration}</span>
-                                     </div>
+                                    <Slider 
+                                      value={[playingId === msg.id ? audioProgress : 0]} 
+                                      max={100} 
+                                      step={1}
+                                      className="cursor-pointer"
+                                      onValueChange={(val) => {
+                                        if (playingId === msg.id && audioRef.current && audioRef.current.duration) {
+                                          audioRef.current.currentTime = (val[0] / 100) * audioRef.current.duration;
+                                          setAudioProgress(val[0]);
+                                        }
+                                      }}
+                                    />
+                                    <div className="flex justify-between text-[10px] opacity-70 font-mono">
+                                      <span>{playingId === msg.id && audioRef.current ? formatTime(audioRef.current.currentTime) : "0:00"}</span>
+                                      <span>{msg.duration}</span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
                             )}
-                            
-                            {/* Timestamp */}
-                            <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
-                              <p className="text-[10px] text-right">
-                                {msg.time}
-                              </p>
+
+                            {/* Footer */}
+                            <div className="flex items-center justify-end gap-1 mt-1 opacity-70 text-[10px]">
+                              <span>{msg.time}</span>
+                              {msg.sender === "me" && (
+                                <span className="text-blue-300">✓✓</span>
+                              )}
                             </div>
                           </div>
                         </div>
                       </div>
                     );
                   })}
-                  <div ref={scrollRef} />
                 </div>
               </ScrollArea>
 
               {/* Input Area */}
-              <div className="p-4 border-t border-border bg-card/30 shrink-0">
-                <div className="flex items-end gap-2">
-                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
-                        <Paperclip className="h-5 w-5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem><ImageIcon className="mr-2 h-4 w-4" /> Foto</DropdownMenuItem>
-                      <DropdownMenuItem><Video className="mr-2 h-4 w-4" /> Vídeo</DropdownMenuItem>
-                      <DropdownMenuItem><File className="mr-2 h-4 w-4" /> Documento</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <div className="relative flex-1">
-                    <Input 
-                      placeholder="Digite sua mensagem..." 
-                      className="pr-10 bg-background/50 border-border focus-visible:ring-primary" 
-                    />
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="absolute right-0 top-0 text-muted-foreground hover:text-foreground"
-                    >
-                      <Smile className="h-5 w-5" />
-                    </Button>
-                  </div>
-                  
-                  <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
-                    <Mic className="h-5 w-5" />
+              <div className="p-4 bg-card/30 border-t border-border shrink-0">
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                    <Smile className="h-6 w-6" />
                   </Button>
-
-                  <Button size="icon" className="shrink-0 bg-primary hover:bg-primary/90">
-                    <Send className="h-5 w-5" />
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                    <Paperclip className="h-6 w-6" />
+                  </Button>
+                  <div className="flex-1 relative">
+                    <Input 
+                      placeholder="Digite uma mensagem..." 
+                      className="bg-background/50 pr-10 py-6"
+                    />
+                  </div>
+                  {/* Mic or Send Button logic would go here */}
+                  <Button size="icon" className="h-12 w-12 rounded-full shadow-lg hover-elevate active-elevate-2">
+                    <Mic className="h-6 w-6" />
                   </Button>
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4">
-              <div className="h-20 w-20 rounded-full bg-accent/30 flex items-center justify-center">
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 text-center bg-card/20">
+              <div className="h-24 w-24 rounded-full bg-accent/20 flex items-center justify-center mb-6">
                 <MessageSquare className="h-10 w-10 opacity-50" />
               </div>
-              <p className="text-lg font-medium">Selecione uma conversa para começar</p>
+              <h2 className="text-xl font-semibold mb-2 text-foreground">WebChat for Business</h2>
+              <p className="max-w-md text-sm mb-8">
+                Selecione uma conversa para começar a atender. O histórico de mensagens será carregado aqui.
+              </p>
+              <div className="flex items-center gap-2 text-xs opacity-50">
+                <LockIcon className="h-3 w-3" />
+                Mensagens protegidas com criptografia de ponta a ponta
+              </div>
             </div>
           )}
         </Card>
       </div>
     </MainLayout>
   );
+}
+
+function formatTime(seconds: number) {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+function LockIcon(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
 }
