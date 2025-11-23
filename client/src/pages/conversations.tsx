@@ -866,10 +866,10 @@ export default function Conversations() {
                       return (
                         <div key={msg.id} id={`message-${msg.id}`} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}>
                           <div className={cn(
-                            "flex items-start gap-2 p-3 rounded-lg border max-w-[85%] md:max-w-[70%]",
+                            "flex items-start gap-2 p-3 rounded-lg border max-w-[85%] md:max-w-[70%] backdrop-blur-md shadow-lg",
                             msg.sender === "me"
-                              ? "bg-slate-800/50 border-slate-700/50"
-                              : "bg-slate-700/50 border-slate-600/50"
+                              ? "bg-black/30 border-white/10"
+                              : "bg-black/20 border-white/10"
                           )}>
                             <Quote className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
@@ -901,10 +901,10 @@ export default function Conversations() {
 
                             <div
                               className={cn(
-                                "relative rounded-2xl px-4 py-2.5 shadow-sm overflow-hidden",
+                                "relative rounded-2xl px-4 py-2.5 shadow-lg overflow-hidden backdrop-blur-md",
                                 msg.sender === "me"
-                                  ? "bg-slate-800/90 text-white rounded-br-none"
-                                  : "bg-slate-700/90 text-white rounded-bl-none"
+                                  ? "bg-black/40 border border-white/10 text-white rounded-br-none"
+                                  : "bg-black/30 border border-white/10 text-white rounded-bl-none"
                               )}
                             >
                             {/* Reply Preview with optional forwarded indicator */}

@@ -13,7 +13,7 @@ import logo from "@assets/generated_images/abstract_chat_bubble_icon_with_gradie
 
 export function Header() {
   return (
-    <header className="h-16 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6 flex items-center justify-between sticky top-0 z-50">
+    <header className="h-16 border-b border-white/10 bg-black/40 backdrop-blur-md shadow-2xl px-6 flex items-center justify-between sticky top-0 z-50">
       <div className="flex items-center gap-3">
         <img src={logo} alt="Logo" className="h-8 w-8 object-contain" />
         <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70 font-[Outfit]">
