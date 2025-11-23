@@ -35,6 +35,7 @@ interface Message {
   forwarded?: boolean;
   deleted?: boolean;
   replyTo?: number;
+  reactions?: { emoji: string; count: number }[];
   metadata?: {
     title: string;
     artist: string;
@@ -52,15 +53,16 @@ const contacts = [
 ];
 
 const initialMessages: Message[] = [
-  { id: 1, conversationId: 1, sender: "me", content: "Oi Ana, tudo bem?", time: "10:30", type: "text" },
+  { id: 1, conversationId: 1, sender: "me", content: "Oi Ana, tudo bem?", time: "10:30", type: "text", reactions: [{ emoji: "👋", count: 1 }] },
   { id: 2, conversationId: 1, sender: "other", content: "Oii! Tudo ótimo por aqui e com você?", time: "10:32", type: "text" },
   { id: 3, conversationId: 1, sender: "me", content: "Tudo certo. Viu o projeto novo?", time: "10:33", type: "text" },
-  { id: 4, conversationId: 1, sender: "other", content: "Sim! Ficou incrível o design.", time: "10:35", type: "text" },
+  { id: 4, conversationId: 1, sender: "other", content: "Sim! Ficou incrível o design.", time: "10:35", type: "text", reactions: [{ emoji: "❤️", count: 2 }, { emoji: "👍", count: 1 }] },
   { id: 5, conversationId: 1, sender: "other", content: "Acho que só precisamos ajustar aquele detalhe no header.", time: "10:35", replyTo: 3, type: "text" },
   { id: 6, conversationId: 1, sender: "me", content: "Verdade. Vou mexer nisso agora.", time: "10:40", replyTo: 5, type: "text" },
   { id: 7, conversationId: 1, sender: "other", content: "Combinado! Até logo.", time: "10:42", type: "text" },
   { id: 8, conversationId: 1, sender: "other", content: "Encaminhando o orçamento que você pediu.", time: "10:45", forwarded: true, type: "text" },
   { id: 9, conversationId: 1, sender: "me", content: "Mensagem apagada", time: "10:46", deleted: true, type: "text" },
+  { id: 20, conversationId: 1, sender: "other", content: "Desculpa, não vi essa mensagem!", time: "10:47", replyTo: 9, type: "text" },
   
   // Image Message
   { id: 10, conversationId: 1, sender: "other", content: "", time: "10:48", type: "image", mediaUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8d29ya3xlbnwwfHwwfHx8MA%3D%3D", caption: "Olha essa referência" },
@@ -329,6 +331,8 @@ export default function Conversations() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const [hoveredMessage, setHoveredMessage] = useState<number | null>(null);
   
   // Audio Player State
   const [playingId, setPlayingId] = useState<number | null>(null);
@@ -433,6 +437,52 @@ export default function Conversations() {
     return messages.find(m => m.id === replyId);
   };
 
+  const handleDeleteMessage = (messageId: number) => {
+    setMessages(messages.map(m => 
+      m.id === messageId ? { ...m, deleted: true, content: "Mensagem apagada" } : m
+    ));
+  };
+
+  const handleReactToMessage = (messageId: number, emoji: string) => {
+    setMessages(messages.map(m => {
+      if (m.id === messageId) {
+        const reactions = m.reactions || [];
+        const existingReaction = reactions.find(r => r.emoji === emoji);
+        
+        if (existingReaction) {
+          return {
+            ...m,
+            reactions: reactions.map(r => 
+              r.emoji === emoji ? { ...r, count: r.count + 1 } : r
+            )
+          };
+        } else {
+          return {
+            ...m,
+            reactions: [...reactions, { emoji, count: 1 }]
+          };
+        }
+      }
+      return m;
+    }));
+  };
+
+  const handleForwardMessage = (messageId: number) => {
+    const msg = messages.find(m => m.id === messageId);
+    if (msg) {
+      const newMessage: Message = {
+        ...msg,
+        id: Math.max(...messages.map(m => m.id)) + 1,
+        sender: "me",
+        forwarded: true,
+        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        reactions: undefined,
+        replyTo: undefined
+      };
+      setMessages([...messages, newMessage]);
+    }
+  };
+
   return (
     <MainLayout>
       <div className="flex h-[calc(100vh-8rem)] gap-6 overflow-hidden">
@@ -455,6 +505,7 @@ export default function Conversations() {
                 size="icon"
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
                 className={cn("shrink-0", sidebarCollapsed && "mx-auto")}
+                data-testid="button-toggle-sidebar"
               >
                 {sidebarCollapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
               </Button>
@@ -570,18 +621,22 @@ export default function Conversations() {
                       <div
                         key={msg.id}
                         id={`message-${msg.id}`}
-                        className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}
+                        className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1 group/message`}
                         data-testid={`message-${msg.id}`}
+                        onMouseEnter={() => setHoveredMessage(msg.id)}
+                        onMouseLeave={() => setHoveredMessage(null)}
                       >
-                        <div className="flex flex-col max-w-[85%] md:max-w-[70%]">
-                          <div
-                            className={cn(
-                              "relative rounded-2xl px-4 py-2.5 shadow-sm overflow-hidden",
-                              msg.sender === "me"
-                                ? "bg-slate-800/90 text-white rounded-br-none"
-                                : "bg-slate-700/90 text-white rounded-bl-none"
-                            )}
-                          >
+                        <div className="flex items-start gap-2 max-w-[85%] md:max-w-[70%]">
+                          <div className="flex flex-col flex-1 relative">
+
+                            <div
+                              className={cn(
+                                "relative rounded-2xl px-4 py-2.5 shadow-sm overflow-hidden",
+                                msg.sender === "me"
+                                  ? "bg-slate-800/90 text-white rounded-br-none"
+                                  : "bg-slate-700/90 text-white rounded-bl-none"
+                              )}
+                            >
                             {/* Reply Preview with optional forwarded indicator */}
                             {replyMsg && (
                               <div 
@@ -611,7 +666,16 @@ export default function Conversations() {
                                     </div>
                                   </div>
                                 </div>
-                                <p className="truncate opacity-90">{replyMsg.content || (replyMsg.type === 'image' ? 'Imagem' : replyMsg.type === 'audio' ? 'Áudio' : replyMsg.type === 'video' ? 'Vídeo' : 'Arquivo')}</p>
+                                <p className="truncate opacity-90">
+                                  {replyMsg.deleted ? (
+                                    <span className="italic flex items-center gap-1">
+                                      <Trash2 className="h-2.5 w-2.5" />
+                                      Mensagem apagada
+                                    </span>
+                                  ) : (
+                                    replyMsg.content || (replyMsg.type === 'image' ? 'Imagem' : replyMsg.type === 'audio' ? 'Áudio' : replyMsg.type === 'video' ? 'Vídeo' : 'Arquivo')
+                                  )}
+                                </p>
                               </div>
                             )}
                             
@@ -728,6 +792,74 @@ export default function Conversations() {
                               )}
                             </div>
                           </div>
+
+                          {/* Reactions */}
+                          {msg.reactions && msg.reactions.length > 0 && (
+                            <div className={cn(
+                              "flex flex-wrap gap-1 mt-1",
+                              msg.sender === "me" ? "justify-end" : "justify-start"
+                            )}>
+                              {msg.reactions.map((reaction, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center gap-1 bg-card/90 border border-border rounded-full px-2 py-0.5 text-xs"
+                                >
+                                  <span>{reaction.emoji}</span>
+                                  <span className="text-[10px] text-muted-foreground">{reaction.count}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          </div>
+
+                          {/* Persistent Action Menu (accessible via keyboard and touch) */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0"
+                                data-testid={`button-message-menu-${msg.id}`}
+                                aria-label="Ações da mensagem"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align={msg.sender === "me" ? "end" : "start"}>
+                              <DropdownMenuItem onClick={() => setReplyingTo(msg.id)} data-testid={`menu-reply-${msg.id}`}>
+                                <Reply className="h-4 w-4 mr-2" />
+                                Responder
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleForwardMessage(msg.id)} data-testid={`menu-forward-${msg.id}`}>
+                                <Forward className="h-4 w-4 mr-2" />
+                                Encaminhar
+                              </DropdownMenuItem>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <div className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50">
+                                    <Smile className="h-4 w-4 mr-2" />
+                                    Reagir
+                                  </div>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent side="right">
+                                  {['❤️', '👍', '😂', '😮', '😢', '🙏'].map(emoji => (
+                                    <DropdownMenuItem
+                                      key={emoji}
+                                      onClick={() => handleReactToMessage(msg.id, emoji)}
+                                      className="text-xl cursor-pointer justify-center"
+                                      data-testid={`emoji-${emoji}-${msg.id}`}
+                                    >
+                                      {emoji}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                              <DropdownMenuItem onClick={() => handleDeleteMessage(msg.id)} className="text-destructive" data-testid={`menu-delete-${msg.id}`}>
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Apagar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     );
