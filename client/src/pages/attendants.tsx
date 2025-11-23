@@ -5,19 +5,136 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, UserPlus, MoreHorizontal, Shield, Headset, LayoutGrid, List } from "lucide-react";
+import { Search, UserPlus, MoreHorizontal, Shield, Headset, LayoutGrid, List, Edit2, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useState } from "react";
+import { useUsers, useRegister, useUpdateUser, useDeleteUser, useUploadAvatar } from "@/lib/api";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
 
-const attendants = [
-  { id: 1, name: "João Suporte", email: "joao@empresa.com", department: "Vendas", role: "Supervisor", status: "Online", activeChats: 3 },
-  { id: 2, name: "Maria Atendimento", email: "maria@empresa.com", department: "Suporte", role: "Atendente", status: "Busy", activeChats: 5 },
-  { id: 3, name: "Pedro Técnico", email: "pedro@empresa.com", department: "Técnico", role: "Atendente", status: "Offline", activeChats: 0 },
-  { id: 4, name: "Lucas Vendas", email: "lucas@empresa.com", department: "Vendas", role: "Atendente", status: "Online", activeChats: 2 },
-];
+const userSchema = z.object({
+  displayName: z.string().min(2, "Nome muito curto"),
+  email: z.string().email("Email inválido"),
+  phone: z.string().optional(),
+  password: z.string().min(6, "Mínimo 6 caracteres").optional(),
+});
 
 export default function Attendants() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [search, setSearch] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+
+  const { data, isLoading } = useUsers("attendant", search);
+  const registerMutation = useRegister();
+  const updateMutation = useUpdateUser();
+  const deleteMutation = useDeleteUser();
+  const uploadAvatarMutation = useUploadAvatar();
+
+  const form = useForm<z.infer<typeof userSchema>>({
+    resolver: zodResolver(userSchema),
+    defaultValues: {
+      displayName: "",
+      email: "",
+      phone: "",
+      password: "",
+    },
+  });
+
+  const handleOpenDialog = (user?: any) => {
+    if (user) {
+      setEditingUser(user);
+      form.reset({
+        displayName: user.displayName,
+        email: user.email,
+        phone: user.phone || "",
+        password: "",
+      });
+    } else {
+      setEditingUser(null);
+      form.reset();
+    }
+    setIsDialogOpen(true);
+  };
+
+  const handleSubmit = async (values: z.infer<typeof userSchema>) => {
+    try {
+      if (editingUser) {
+        await updateMutation.mutateAsync({
+          id: editingUser.id,
+          data: {
+            displayName: values.displayName,
+            email: values.email,
+            phone: values.phone,
+          },
+        });
+
+        if (avatarFile) {
+          await uploadAvatarMutation.mutateAsync({
+            id: editingUser.id,
+            file: avatarFile,
+          });
+        }
+
+        toast.success("Atendente atualizado com sucesso!");
+      } else {
+        if (!values.password) {
+          toast.error("Senha é obrigatória para novos usuários");
+          return;
+        }
+
+        const result = await registerMutation.mutateAsync({
+          email: values.email,
+          password: values.password,
+          displayName: values.displayName,
+          role: "attendant",
+        });
+
+        if (avatarFile && result.user) {
+          await uploadAvatarMutation.mutateAsync({
+            id: result.user.id,
+            file: avatarFile,
+          });
+        }
+
+        toast.success("Atendente criado com sucesso!");
+      }
+
+      setIsDialogOpen(false);
+      setAvatarFile(null);
+      form.reset();
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao salvar atendente");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Tem certeza que deseja excluir este atendente?")) {
+      try {
+        await deleteMutation.mutateAsync(id);
+        toast.success("Atendente excluído com sucesso!");
+      } catch (error: any) {
+        toast.error(error.message || "Erro ao excluir atendente");
+      }
+    }
+  };
+
+  const attendants = data?.users || [];
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -46,7 +163,7 @@ export default function Attendants() {
                 <LayoutGrid className="h-4 w-4" />
               </Button>
             </div>
-            <Button className="bg-primary hover:bg-primary/90">
+            <Button className="bg-primary hover:bg-primary/90" onClick={() => handleOpenDialog()}>
               <UserPlus className="mr-2 h-4 w-4" /> Novo Atendente
             </Button>
           </div>
@@ -59,25 +176,7 @@ export default function Attendants() {
               <Headset className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">12</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-green-500/10 border-green-500/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-green-500">Online Agora</CardTitle>
-              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-500">8</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-blue-500/10 border-blue-500/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-blue-500">Atendimentos Ativos</CardTitle>
-              <Shield className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-500">34</div>
+              <div className="text-2xl font-bold">{attendants.length}</div>
             </CardContent>
           </Card>
         </div>
@@ -85,10 +184,15 @@ export default function Attendants() {
         <Card className="border-border/50 bg-card/50 backdrop-blur">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle>Equipe</CardTitle>
+              <CardTitle>Equipe ({attendants.length})</CardTitle>
               <div className="relative w-64">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar atendente..." className="pl-9 bg-background/50" />
+                <Input 
+                  placeholder="Buscar atendente..." 
+                  className="pl-9 bg-background/50"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
               </div>
             </div>
           </CardHeader>
@@ -98,9 +202,7 @@ export default function Attendants() {
                 <TableHeader>
                   <TableRow className="hover:bg-transparent border-border">
                     <TableHead className="w-[300px]">Nome</TableHead>
-                    <TableHead>Departamento</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Chats Ativos</TableHead>
+                    <TableHead>Email</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -110,41 +212,16 @@ export default function Attendants() {
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9">
-                            <AvatarImage src={`https://i.pravatar.cc/150?u=${attendant.id + 20}`} />
-                            <AvatarFallback>{attendant.name.substring(0, 2)}</AvatarFallback>
+                            <AvatarImage src={attendant.avatarUrl || undefined} />
+                            <AvatarFallback>{attendant.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
                           </Avatar>
                           <div className="flex flex-col">
-                            <span className="font-medium flex items-center gap-2">
-                              {attendant.name}
-                              {attendant.role === "Supervisor" && (
-                                <Shield className="h-3 w-3 text-yellow-500" />
-                              )}
-                            </span>
+                            <span className="font-medium">{attendant.displayName}</span>
                             <span className="text-xs text-muted-foreground">{attendant.email}</span>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="border-border bg-background/50">
-                          {attendant.department}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant="secondary" 
-                          className={
-                            attendant.status === "Online" ? "bg-green-500/10 text-green-500 hover:bg-green-500/20" :
-                            attendant.status === "Busy" ? "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20" :
-                            "bg-slate-500/10 text-slate-500 hover:bg-slate-500/20"
-                          }
-                        >
-                          {attendant.status === "Online" ? "Disponível" : 
-                           attendant.status === "Busy" ? "Ocupado" : "Offline"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm font-medium">{attendant.activeChats}</div>
-                      </TableCell>
+                      <TableCell>{attendant.phone || "-"}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -153,9 +230,15 @@ export default function Attendants() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>Ver Perfil</DropdownMenuItem>
-                            <DropdownMenuItem>Alterar Permissões</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">Remover</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleOpenDialog(attendant)}>
+                              <Edit2 className="mr-2 h-4 w-4" /> Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => handleDelete(attendant.id)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -164,23 +247,18 @@ export default function Attendants() {
                 </TableBody>
               </Table>
             ) : (
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {attendants.map((attendant) => (
                   <div key={attendant.id} className="p-4 rounded-xl bg-background/50 border border-border hover:bg-accent/20 transition-colors space-y-4 relative">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={`https://i.pravatar.cc/150?u=${attendant.id + 20}`} />
-                          <AvatarFallback>{attendant.name.substring(0, 2)}</AvatarFallback>
+                          <AvatarImage src={attendant.avatarUrl || undefined} />
+                          <AvatarFallback>{attendant.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div>
-                           <span className="font-medium flex items-center gap-2">
-                              {attendant.name}
-                              {attendant.role === "Supervisor" && (
-                                <Shield className="h-3 w-3 text-yellow-500" />
-                              )}
-                            </span>
-                          <p className="text-xs text-muted-foreground">{attendant.department}</p>
+                          <p className="font-medium">{attendant.displayName}</p>
+                          <p className="text-xs text-muted-foreground">{attendant.email}</p>
                         </div>
                       </div>
                       <DropdownMenu>
@@ -190,33 +268,17 @@ export default function Attendants() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Ver Perfil</DropdownMenuItem>
-                          <DropdownMenuItem>Alterar Permissões</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">Remover</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenDialog(attendant)}>
+                            <Edit2 className="mr-2 h-4 w-4" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-destructive"
+                            onClick={() => handleDelete(attendant.id)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </div>
-                    
-                    <div className="flex flex-col gap-2">
-                       <div className="flex items-center justify-between text-sm bg-muted/30 p-2 rounded">
-                         <span className="text-muted-foreground">Chats Ativos</span>
-                         <span className="font-bold">{attendant.activeChats}</span>
-                       </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-border">
-                       <Badge 
-                          variant="secondary" 
-                          className={
-                            attendant.status === "Online" ? "bg-green-500/10 text-green-500" :
-                            attendant.status === "Busy" ? "bg-orange-500/10 text-orange-500" :
-                            "bg-slate-500/10 text-slate-500"
-                          }
-                        >
-                          {attendant.status === "Online" ? "Disponível" : 
-                           attendant.status === "Busy" ? "Ocupado" : "Offline"}
-                        </Badge>
-                      <span className="text-xs text-muted-foreground">{attendant.email}</span>
                     </div>
                   </div>
                 ))}
@@ -225,6 +287,93 @@ export default function Attendants() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingUser ? "Editar Atendente" : "Novo Atendente"}</DialogTitle>
+            <DialogDescription>
+              {editingUser ? "Atualize as informações do atendente" : "Adicione um novo atendente ao sistema"}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="displayName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Telefone (opcional)</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {!editingUser && (
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Senha</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              <div>
+                <FormLabel>Avatar (opcional)</FormLabel>
+                <div className="mt-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? "Salvando..." : editingUser ? "Atualizar" : "Criar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }

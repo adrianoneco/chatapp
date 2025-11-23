@@ -5,20 +5,136 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, UserPlus, MoreHorizontal, Mail, Phone, LayoutGrid, List } from "lucide-react";
+import { Search, UserPlus, MoreHorizontal, Mail, Phone, LayoutGrid, List, Upload, Edit2, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useState } from "react";
+import { useUsers, useRegister, useUpdateUser, useDeleteUser, useUploadAvatar } from "@/lib/api";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
 
-const clients = [
-  { id: 1, name: "Ana Silva", email: "ana.silva@email.com", phone: "+55 11 99999-9999", status: "Active", lastActive: "Hoje, 10:42" },
-  { id: 2, name: "Carlos Oliveira", email: "carlos.o@email.com", phone: "+55 11 98888-8888", status: "Inactive", lastActive: "Ontem" },
-  { id: 3, name: "Mariana Costa", email: "mari.costa@email.com", phone: "+55 21 97777-7777", status: "Active", lastActive: "Segunda" },
-  { id: 4, name: "Roberto Santos", email: "roberto.s@email.com", phone: "+55 31 96666-6666", status: "Active", lastActive: "Hoje, 09:30" },
-  { id: 5, name: "Julia Pereira", email: "julia.p@email.com", phone: "+55 41 95555-5555", status: "Blocked", lastActive: "Semana passada" },
-];
+const userSchema = z.object({
+  displayName: z.string().min(2, "Nome muito curto"),
+  email: z.string().email("Email inválido"),
+  phone: z.string().optional(),
+  password: z.string().min(6, "Mínimo 6 caracteres").optional(),
+});
 
 export default function Contacts() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [search, setSearch] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+
+  const { data, isLoading } = useUsers("client", search);
+  const registerMutation = useRegister();
+  const updateMutation = useUpdateUser();
+  const deleteMutation = useDeleteUser();
+  const uploadAvatarMutation = useUploadAvatar();
+
+  const form = useForm<z.infer<typeof userSchema>>({
+    resolver: zodResolver(userSchema),
+    defaultValues: {
+      displayName: "",
+      email: "",
+      phone: "",
+      password: "",
+    },
+  });
+
+  const handleOpenDialog = (user?: any) => {
+    if (user) {
+      setEditingUser(user);
+      form.reset({
+        displayName: user.displayName,
+        email: user.email,
+        phone: user.phone || "",
+        password: "",
+      });
+    } else {
+      setEditingUser(null);
+      form.reset();
+    }
+    setIsDialogOpen(true);
+  };
+
+  const handleSubmit = async (values: z.infer<typeof userSchema>) => {
+    try {
+      if (editingUser) {
+        await updateMutation.mutateAsync({
+          id: editingUser.id,
+          data: {
+            displayName: values.displayName,
+            email: values.email,
+            phone: values.phone,
+          },
+        });
+
+        if (avatarFile) {
+          await uploadAvatarMutation.mutateAsync({
+            id: editingUser.id,
+            file: avatarFile,
+          });
+        }
+
+        toast.success("Contato atualizado com sucesso!");
+      } else {
+        if (!values.password) {
+          toast.error("Senha é obrigatória para novos usuários");
+          return;
+        }
+
+        const result = await registerMutation.mutateAsync({
+          email: values.email,
+          password: values.password,
+          displayName: values.displayName,
+          role: "client",
+        });
+
+        if (avatarFile && result.user) {
+          await uploadAvatarMutation.mutateAsync({
+            id: result.user.id,
+            file: avatarFile,
+          });
+        }
+
+        toast.success("Contato criado com sucesso!");
+      }
+
+      setIsDialogOpen(false);
+      setAvatarFile(null);
+      form.reset();
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao salvar contato");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Tem certeza que deseja excluir este contato?")) {
+      try {
+        await deleteMutation.mutateAsync(id);
+        toast.success("Contato excluído com sucesso!");
+      } catch (error: any) {
+        toast.error(error.message || "Erro ao excluir contato");
+      }
+    }
+  };
+
+  const clients = data?.users || [];
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -47,7 +163,7 @@ export default function Contacts() {
                 <LayoutGrid className="h-4 w-4" />
               </Button>
             </div>
-            <Button className="bg-primary hover:bg-primary/90">
+            <Button className="bg-primary hover:bg-primary/90" onClick={() => handleOpenDialog()}>
               <UserPlus className="mr-2 h-4 w-4" /> Novo Contato
             </Button>
           </div>
@@ -56,10 +172,15 @@ export default function Contacts() {
         <Card className="border-border/50 bg-card/50 backdrop-blur">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle>Todos os Contatos</CardTitle>
+              <CardTitle>Todos os Contatos ({clients.length})</CardTitle>
               <div className="relative w-64">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar cliente..." className="pl-9 bg-background/50" />
+                <Input 
+                  placeholder="Buscar cliente..." 
+                  className="pl-9 bg-background/50"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
               </div>
             </div>
           </CardHeader>
@@ -70,8 +191,6 @@ export default function Contacts() {
                   <TableRow className="hover:bg-transparent border-border">
                     <TableHead className="w-[300px]">Nome</TableHead>
                     <TableHead>Contato</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Última Atividade</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -81,12 +200,12 @@ export default function Contacts() {
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9">
-                            <AvatarImage src={`https://i.pravatar.cc/150?u=${client.id}`} />
-                            <AvatarFallback>{client.name.substring(0, 2)}</AvatarFallback>
+                            <AvatarImage src={client.avatarUrl || undefined} />
+                            <AvatarFallback>{client.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
                           </Avatar>
                           <div className="flex flex-col">
-                            <span className="font-medium">{client.name}</span>
-                            <span className="text-xs text-muted-foreground">Cliente #{client.id}</span>
+                            <span className="font-medium">{client.displayName}</span>
+                            <span className="text-xs text-muted-foreground">ID: {client.id.substring(0, 8)}</span>
                           </div>
                         </div>
                       </TableCell>
@@ -95,26 +214,12 @@ export default function Contacts() {
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Mail className="h-3 w-3" /> {client.email}
                           </div>
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Phone className="h-3 w-3" /> {client.phone}
-                          </div>
+                          {client.phone && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Phone className="h-3 w-3" /> {client.phone}
+                            </div>
+                          )}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant="secondary" 
-                          className={
-                            client.status === "Active" ? "bg-green-500/10 text-green-500 hover:bg-green-500/20" :
-                            client.status === "Inactive" ? "bg-slate-500/10 text-slate-500 hover:bg-slate-500/20" :
-                            "bg-red-500/10 text-red-500 hover:bg-red-500/20"
-                          }
-                        >
-                          {client.status === "Active" ? "Ativo" : 
-                           client.status === "Inactive" ? "Inativo" : "Bloqueado"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {client.lastActive}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -124,9 +229,15 @@ export default function Contacts() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>Ver Detalhes</DropdownMenuItem>
-                            <DropdownMenuItem>Editar</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">Excluir</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleOpenDialog(client)}>
+                              <Edit2 className="mr-2 h-4 w-4" /> Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => handleDelete(client.id)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -141,12 +252,12 @@ export default function Contacts() {
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={`https://i.pravatar.cc/150?u=${client.id}`} />
-                          <AvatarFallback>{client.name.substring(0, 2)}</AvatarFallback>
+                          <AvatarImage src={client.avatarUrl || undefined} />
+                          <AvatarFallback>{client.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="font-medium">{client.name}</p>
-                          <p className="text-xs text-muted-foreground">#{client.id}</p>
+                          <p className="font-medium">{client.displayName}</p>
+                          <p className="text-xs text-muted-foreground">#{client.id.substring(0, 8)}</p>
                         </div>
                       </div>
                       <DropdownMenu>
@@ -156,9 +267,15 @@ export default function Contacts() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Ver Detalhes</DropdownMenuItem>
-                          <DropdownMenuItem>Editar</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">Excluir</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenDialog(client)}>
+                            <Edit2 className="mr-2 h-4 w-4" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-destructive"
+                            onClick={() => handleDelete(client.id)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -167,24 +284,11 @@ export default function Contacts() {
                       <div className="flex items-center gap-2 text-muted-foreground truncate">
                         <Mail className="h-3 w-3 shrink-0" /> {client.email}
                       </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="h-3 w-3 shrink-0" /> {client.phone}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-border">
-                      <Badge 
-                        variant="secondary" 
-                        className={
-                          client.status === "Active" ? "bg-green-500/10 text-green-500" :
-                          client.status === "Inactive" ? "bg-slate-500/10 text-slate-500" :
-                          "bg-red-500/10 text-red-500"
-                        }
-                      >
-                        {client.status === "Active" ? "Ativo" : 
-                         client.status === "Inactive" ? "Inativo" : "Bloqueado"}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">{client.lastActive}</span>
+                      {client.phone && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Phone className="h-3 w-3 shrink-0" /> {client.phone}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -193,6 +297,93 @@ export default function Contacts() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingUser ? "Editar Contato" : "Novo Contato"}</DialogTitle>
+            <DialogDescription>
+              {editingUser ? "Atualize as informações do contato" : "Adicione um novo contato ao sistema"}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="displayName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Telefone (opcional)</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {!editingUser && (
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Senha</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              <div>
+                <FormLabel>Avatar (opcional)</FormLabel>
+                <div className="mt-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? "Salvando..." : editingUser ? "Atualizar" : "Criar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }

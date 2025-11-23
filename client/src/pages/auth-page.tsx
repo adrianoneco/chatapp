@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Separator } from "@/components/ui/separator";
 import { Github, Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
 import logo from "@assets/generated_images/abstract_chat_bubble_icon_with_gradient.png";
+import { useLogin, useRegister, useRecoverPassword } from "@/lib/api";
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -51,29 +52,49 @@ export default function AuthPage() {
     defaultValues: { email: "" },
   });
 
+  const loginMutation = useLogin();
+  const registerMutation = useRegister();
+  const recoverMutation = useRecoverPassword();
+
   const onLogin = async (values: z.infer<typeof loginSchema>) => {
     setIsLoading(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    console.log("Login:", values);
-    setIsLoading(false);
-    window.location.href = "/"; // Mock redirect
+    try {
+      await loginMutation.mutateAsync(values);
+      window.location.href = "/";
+    } catch (error: any) {
+      loginForm.setError("root", { message: error.message || "Erro ao fazer login" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const onRegister = async (values: z.infer<typeof registerSchema>) => {
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    console.log("Register:", values);
-    setIsLoading(false);
-    setActiveTab("login");
+    try {
+      await registerMutation.mutateAsync({
+        email: values.email,
+        password: values.password,
+        displayName: values.name,
+      });
+      window.location.href = "/";
+    } catch (error: any) {
+      registerForm.setError("root", { message: error.message || "Erro ao criar conta" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const onRecover = async (values: z.infer<typeof recoverSchema>) => {
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    console.log("Recover:", values);
-    setIsLoading(false);
-    setShowRecover(false);
+    try {
+      await recoverMutation.mutateAsync(values);
+      setShowRecover(false);
+      setActiveTab("login");
+    } catch (error: any) {
+      recoverForm.setError("root", { message: error.message || "Erro ao recuperar senha" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
