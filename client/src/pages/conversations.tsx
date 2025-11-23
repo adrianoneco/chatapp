@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
@@ -80,7 +80,6 @@ const initialMessages: Message[] = [
     type: "audio", 
     mediaUrl: mp3File, 
     duration: "3:42",
-    // Metadata initially null, will be fetched
     metadata: null
   },
   
@@ -90,6 +89,166 @@ const initialMessages: Message[] = [
   { id: 101, conversationId: 2, sender: "other", content: "Você viu o novo layout?", time: "Ontem", type: "text" },
   { id: 102, conversationId: 2, sender: "me", content: "Ainda não, vou olhar agora!", time: "Ontem", type: "text" },
 ];
+
+// Custom Video Player Component
+function CustomVideoPlayer({ src, poster, recorded }: { src: string, poster?: string, recorded?: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleTimeUpdate = () => setCurrentTime(video.currentTime);
+    const handleLoadedMetadata = () => setDuration(video.duration);
+    const handleEnded = () => setIsPlaying(false);
+
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('ended', handleEnded);
+
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('ended', handleEnded);
+    };
+  }, []);
+
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleSeek = (value: number[]) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = value[0];
+      setCurrentTime(value[0]);
+    }
+  };
+
+  const handleVolumeChange = (value: number[]) => {
+    if (videoRef.current) {
+      videoRef.current.volume = value[0];
+      setVolume(value[0]);
+      setIsMuted(value[0] === 0);
+    }
+  };
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (videoRef.current) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        videoRef.current.requestFullscreen();
+      }
+    }
+  };
+
+  return (
+    <div 
+      className={cn(
+        "relative rounded-lg overflow-hidden bg-black group",
+        recorded ? "aspect-[9/16] max-h-[300px]" : "w-full max-h-[400px]"
+      )}
+      onMouseEnter={() => setShowControls(true)}
+      onMouseLeave={() => setShowControls(isPlaying ? false : true)}
+    >
+      <video
+        ref={videoRef}
+        src={src}
+        poster={poster}
+        className="w-full h-full object-cover cursor-pointer"
+        onClick={togglePlay}
+      />
+      
+      {recorded && (
+        <div className="absolute top-2 right-2 bg-red-500/80 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 z-10">
+          <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> REC
+        </div>
+      )}
+
+      {/* Custom Controls */}
+      <div className={cn(
+        "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-3 transition-opacity duration-200",
+        showControls ? "opacity-100" : "opacity-0"
+      )}>
+        {/* Progress Bar */}
+        <Slider
+          value={[currentTime]}
+          max={duration || 100}
+          step={0.1}
+          className="mb-2 cursor-pointer"
+          onValueChange={handleSeek}
+        />
+
+        {/* Control Buttons */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 text-white hover:bg-white/20"
+              onClick={togglePlay}
+            >
+              {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
+            </Button>
+
+            <div className="flex items-center gap-1 group/volume">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-white hover:bg-white/20"
+                onClick={toggleMute}
+              >
+                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </Button>
+              <div className="w-0 group-hover/volume:w-16 transition-all overflow-hidden">
+                <Slider
+                  value={[isMuted ? 0 : volume]}
+                  max={1}
+                  step={0.1}
+                  className="cursor-pointer"
+                  onValueChange={handleVolumeChange}
+                />
+              </div>
+            </div>
+
+            <span className="text-xs text-white font-mono ml-1">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+          </div>
+
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 text-white hover:bg-white/20"
+            onClick={toggleFullscreen}
+          >
+            <Maximize className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Conversations() {
   const [location, setLocation] = useLocation();
@@ -114,7 +273,41 @@ export default function Conversations() {
     }
   }, [filteredMessages, conversationId]);
 
-  // Removed ID3 tag fetching to fix build error
+  // Fetch ID3 Tags for audio files
+  useEffect(() => {
+    const fetchID3Tags = async () => {
+      const updatedMessages = [...messages];
+      let hasUpdates = false;
+
+      for (let i = 0; i < updatedMessages.length; i++) {
+        const msg = updatedMessages[i];
+        
+        if (msg.type === 'audio' && msg.mediaUrl && !msg.metadata && !msg.recorded && msg.mediaUrl !== '#') {
+          try {
+            const response = await fetch(msg.mediaUrl);
+            const blob = await response.blob();
+            
+            const tags = await readID3Tags(blob);
+            if (tags) {
+              updatedMessages[i] = {
+                ...msg,
+                metadata: tags
+              };
+              hasUpdates = true;
+            }
+          } catch (error) {
+            console.log('Error reading ID3 tags:', error);
+          }
+        }
+      }
+
+      if (hasUpdates) {
+        setMessages(updatedMessages);
+      }
+    };
+
+    fetchID3Tags();
+  }, []);
 
   const togglePlay = (msg: Message) => {
     if (!msg.mediaUrl) return;
@@ -171,17 +364,20 @@ export default function Conversations() {
           <div className="p-4 space-y-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar conversas..." className="pl-9 bg-background/50" />
+              <Input placeholder="Buscar conversas..." className="pl-9 bg-background/50" data-testid="input-search-conversations" />
             </div>
           </div>
           <ScrollArea className="flex-1">
             <div className="space-y-1 p-2">
               {contacts.map((contact) => (
                 <Link key={contact.id} href={`/conversations/webchat/${contact.id}`}>
-                  <a className={cn(
-                    "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
-                    conversationId === contact.id ? "bg-accent/60" : ""
-                  )}>
+                  <a 
+                    className={cn(
+                      "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
+                      conversationId === contact.id ? "bg-accent/60" : ""
+                    )}
+                    data-testid={`link-contact-${contact.id}`}
+                  >
                     <div className="relative shrink-0">
                       <Avatar>
                         <AvatarImage src={contact.avatar} />
@@ -225,7 +421,7 @@ export default function Conversations() {
               <div className="p-4 border-b border-border flex items-center justify-between bg-card/30 shrink-0">
                 <div className="flex items-center gap-3">
                   <Link href="/conversations">
-                    <Button variant="ghost" size="icon" className="md:hidden">
+                    <Button variant="ghost" size="icon" className="md:hidden" data-testid="button-back">
                       <ArrowLeft className="h-5 w-5" />
                     </Button>
                   </Link>
@@ -245,10 +441,10 @@ export default function Conversations() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon"><Phone className="h-5 w-5" /></Button>
-                  <Button variant="ghost" size="icon"><Video className="h-5 w-5" /></Button>
+                  <Button variant="ghost" size="icon" data-testid="button-call"><Phone className="h-5 w-5" /></Button>
+                  <Button variant="ghost" size="icon" data-testid="button-video"><Video className="h-5 w-5" /></Button>
                   <Separator orientation="vertical" className="h-6 mx-1" />
-                  <Button variant="ghost" size="icon"><MoreVertical className="h-5 w-5" /></Button>
+                  <Button variant="ghost" size="icon" data-testid="button-more"><MoreVertical className="h-5 w-5" /></Button>
                 </div>
               </div>
 
@@ -274,6 +470,7 @@ export default function Conversations() {
                         key={msg.id}
                         id={`message-${msg.id}`}
                         className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}
+                        data-testid={`message-${msg.id}`}
                       >
                         <div className="flex flex-col max-w-[85%] md:max-w-[70%]">
                           {/* Labels */}
@@ -294,8 +491,8 @@ export default function Conversations() {
                             className={cn(
                               "relative rounded-2xl px-4 py-2.5 shadow-sm overflow-hidden",
                               msg.sender === "me"
-                                ? "bg-violet-900/90 text-white rounded-br-none" // Darker purple for sender
-                                : "bg-slate-800/90 text-white rounded-bl-none"  // Dark slate for receiver
+                                ? "bg-slate-800/90 text-white rounded-br-none"
+                                : "bg-slate-700/90 text-white rounded-bl-none"
                             )}
                           >
                             {/* Reply Preview */}
@@ -313,7 +510,7 @@ export default function Conversations() {
                                   <Quote className="h-3 w-3" />
                                   {replyMsg.sender === "me" ? "Você" : currentContact.name}
                                 </div>
-                                <p className="truncate opacity-90">{replyMsg.content || (replyMsg.type === 'image' ? '📷 Imagem' : replyMsg.type === 'audio' ? '🎤 Áudio' : 'Arquivo')}</p>
+                                <p className="truncate opacity-90">{replyMsg.content || (replyMsg.type === 'image' ? 'Imagem' : replyMsg.type === 'audio' ? 'Áudio' : replyMsg.type === 'video' ? 'Vídeo' : 'Arquivo')}</p>
                               </div>
                             )}
 
@@ -329,6 +526,7 @@ export default function Conversations() {
                                   src={msg.mediaUrl} 
                                   alt="Imagem enviada" 
                                   className="rounded-lg max-h-[300px] w-full object-cover cursor-pointer hover:opacity-95 transition-opacity" 
+                                  data-testid={`img-message-${msg.id}`}
                                 />
                                 {msg.caption && <p className="text-sm">{msg.caption}</p>}
                               </div>
@@ -336,18 +534,11 @@ export default function Conversations() {
 
                             {msg.type === 'video' && (
                               <div className="space-y-2 min-w-[250px]">
-                                {msg.recorded ? (
-                                   <div className="relative bg-black rounded-lg overflow-hidden aspect-[9/16] max-h-[300px] flex items-center justify-center border-2 border-white/20">
-                                      <video src={msg.mediaUrl} controls className="w-full h-full object-cover" />
-                                      <div className="absolute top-2 right-2 bg-red-500/80 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> REC
-                                      </div>
-                                   </div>
-                                ) : (
-                                  <div className="rounded-lg overflow-hidden bg-black/20">
-                                     <video src={msg.mediaUrl} controls className="w-full max-h-[400px]" poster="https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=500&auto=format&fit=crop&q=60" />
-                                  </div>
-                                )}
+                                <CustomVideoPlayer 
+                                  src={msg.mediaUrl!} 
+                                  poster={msg.recorded ? undefined : "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=500&auto=format&fit=crop&q=60"}
+                                  recorded={msg.recorded}
+                                />
                                 {(msg.caption || !msg.recorded) && <p className="text-sm flex items-center gap-1"><Film className="h-3 w-3" /> {msg.caption || "Vídeo"}</p>}
                               </div>
                             )}
@@ -355,7 +546,6 @@ export default function Conversations() {
                             {msg.type === 'audio' && (
                               <div className="min-w-[240px]">
                                 {msg.metadata ? (
-                                  // ID3 Tag Style
                                   <div className="flex gap-3 items-center bg-black/20 p-2 rounded-lg mb-2">
                                     <div className="h-12 w-12 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0 relative">
                                       {msg.metadata.cover ? (
@@ -373,13 +563,11 @@ export default function Conversations() {
                                     </div>
                                   </div>
                                 ) : msg.recorded ? (
-                                  // Recorded Audio Style
                                   <div className="flex items-center gap-2 mb-2 bg-black/20 p-2 rounded-lg">
                                     <Mic className="h-4 w-4 opacity-80" />
                                     <span className="text-xs font-medium opacity-90">Mensagem de Voz</span>
                                   </div>
                                 ) : (
-                                  // Generic File Style
                                   <div className="flex gap-3 items-center bg-black/20 p-2 rounded-lg mb-2">
                                      <div className="h-12 w-12 rounded bg-white/10 flex items-center justify-center shrink-0">
                                        <Disc className="h-6 w-6 opacity-80" />
@@ -397,6 +585,7 @@ export default function Conversations() {
                                     variant="ghost" 
                                     className="h-8 w-8 rounded-full shrink-0 hover:bg-white/10"
                                     onClick={() => togglePlay(msg)}
+                                    data-testid={`button-play-audio-${msg.id}`}
                                   >
                                     {playingId === msg.id ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
                                   </Button>
@@ -434,26 +623,27 @@ export default function Conversations() {
                       </div>
                     );
                   })}
+                  <div ref={scrollRef} />
                 </div>
               </ScrollArea>
 
               {/* Input Area */}
               <div className="p-4 bg-card/30 border-t border-border shrink-0">
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="button-emoji">
                     <Smile className="h-6 w-6" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="button-attach">
                     <Paperclip className="h-6 w-6" />
                   </Button>
                   <div className="flex-1 relative">
                     <Input 
                       placeholder="Digite uma mensagem..." 
                       className="bg-background/50 pr-10 py-6"
+                      data-testid="input-message"
                     />
                   </div>
-                  {/* Mic or Send Button logic would go here */}
-                  <Button size="icon" className="h-12 w-12 rounded-full shadow-lg hover-elevate active-elevate-2">
+                  <Button size="icon" className="h-12 w-12 rounded-full shadow-lg hover-elevate active-elevate-2" data-testid="button-send">
                     <Mic className="h-6 w-6" />
                   </Button>
                 </div>
@@ -504,4 +694,95 @@ function LockIcon(props: any) {
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   )
+}
+
+// Simple ID3 tag reader using browser APIs
+async function readID3Tags(blob: Blob): Promise<{ title: string; artist: string; cover: string | null } | null> {
+  try {
+    const arrayBuffer = await blob.arrayBuffer();
+    const view = new DataView(arrayBuffer);
+    
+    // Check for ID3v2 header
+    if (String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2)) !== 'ID3') {
+      return null;
+    }
+    
+    const version = view.getUint8(3);
+    const flags = view.getUint8(5);
+    
+    // Get tag size (synchsafe integer)
+    const size = (view.getUint8(6) << 21) | (view.getUint8(7) << 14) | (view.getUint8(8) << 7) | view.getUint8(9);
+    
+    let offset = 10;
+    let title = "Sem título";
+    let artist = "Desconhecido";
+    let cover: string | null = null;
+    
+    // Parse frames
+    while (offset < size + 10) {
+      const frameId = String.fromCharCode(
+        view.getUint8(offset),
+        view.getUint8(offset + 1),
+        view.getUint8(offset + 2),
+        view.getUint8(offset + 3)
+      );
+      
+      if (frameId === '\0\0\0\0') break;
+      
+      const frameSize = version === 4
+        ? (view.getUint8(offset + 4) << 21) | (view.getUint8(offset + 5) << 14) | (view.getUint8(offset + 6) << 7) | view.getUint8(offset + 7)
+        : (view.getUint8(offset + 4) << 24) | (view.getUint8(offset + 5) << 16) | (view.getUint8(offset + 6) << 8) | view.getUint8(offset + 7);
+      
+      offset += 10; // Skip frame header
+      
+      if (frameId === 'TIT2' || frameId === 'TT2') {
+        // Title
+        const encoding = view.getUint8(offset);
+        offset++;
+        title = readString(view, offset, frameSize - 1, encoding);
+      } else if (frameId === 'TPE1' || frameId === 'TP1') {
+        // Artist
+        const encoding = view.getUint8(offset);
+        offset++;
+        artist = readString(view, offset, frameSize - 1, encoding);
+      } else if (frameId === 'APIC' || frameId === 'PIC') {
+        // Album art
+        offset++; // Skip encoding
+        const mimeEnd = findNullTerminator(view, offset, offset + frameSize);
+        const mime = readString(view, offset, mimeEnd - offset, 0);
+        offset = mimeEnd + 1;
+        offset++; // Skip picture type
+        const descEnd = findNullTerminator(view, offset, offset + frameSize);
+        offset = descEnd + 1;
+        
+        const imageData = new Uint8Array(arrayBuffer.slice(offset, offset + frameSize - (offset - (offset - frameSize))));
+        const base64 = btoa(String.fromCharCode(...Array.from(imageData)));
+        cover = `data:${mime};base64,${base64}`;
+      }
+      
+      offset += frameSize - (frameId === 'APIC' || frameId === 'PIC' ? 0 : 1);
+    }
+    
+    return { title, artist, cover };
+  } catch (error) {
+    console.error('Error reading ID3 tags:', error);
+    return null;
+  }
+}
+
+function readString(view: DataView, offset: number, length: number, encoding: number): string {
+  const bytes = new Uint8Array(length);
+  for (let i = 0; i < length; i++) {
+    bytes[i] = view.getUint8(offset + i);
+  }
+  
+  const decoder = new TextDecoder(encoding === 1 ? 'utf-16' : 'utf-8');
+  return decoder.decode(bytes).replace(/\0/g, '').trim();
+}
+
+function findNullTerminator(view: DataView, start: number, end: number): number {
+  for (let i = start; i < end; i++) {
+    if (view.getUint8(i) === 0) return i;
+  }
+  return end;
 }
