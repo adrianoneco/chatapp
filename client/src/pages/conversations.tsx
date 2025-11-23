@@ -16,6 +16,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 // Assets
 import mp3File from "@assets/13. Behind Enemy Lines_1763919687567.mp3";
 import videoFile from "@assets/9312ac4fd6cf30b9cabb0eb07b5bc517_1763919709453.mp4";
+import mp3File1 from "@assets/01. Here We Go Again_1763921733934.mp3";
+import mp3File2 from "@assets/05. Demi Lovato & Joe Jonas - Wouldn't Change A Thing_1763921733934.mp3";
+import mp3File3 from "@assets/10. Give Your Heart A Break_1763921733934.mp3";
+import mp3File4 from "@assets/12. Back Around_1763921733934.mp3";
 
 interface Message {
   id: number;
@@ -85,6 +89,52 @@ const initialMessages: Message[] = [
   
   // Uploaded MP3 without ID3
   { id: 15, conversationId: 1, sender: "me", content: "", time: "11:00", type: "audio", mediaUrl: "#", duration: "2:15", caption: "Audio_sem_tags.mp3" },
+
+  // New uploaded audio files
+  { 
+    id: 16, 
+    conversationId: 1, 
+    sender: "other", 
+    content: "", 
+    time: "11:02", 
+    type: "audio", 
+    mediaUrl: mp3File1, 
+    duration: "3:48",
+    metadata: null
+  },
+  { 
+    id: 17, 
+    conversationId: 1, 
+    sender: "me", 
+    content: "", 
+    time: "11:05", 
+    type: "audio", 
+    mediaUrl: mp3File2, 
+    duration: "3:28",
+    metadata: null
+  },
+  { 
+    id: 18, 
+    conversationId: 1, 
+    sender: "other", 
+    content: "", 
+    time: "11:08", 
+    type: "audio", 
+    mediaUrl: mp3File3, 
+    duration: "3:27",
+    metadata: null
+  },
+  { 
+    id: 19, 
+    conversationId: 1, 
+    sender: "me", 
+    content: "", 
+    time: "11:10", 
+    type: "audio", 
+    mediaUrl: mp3File4, 
+    duration: "3:12",
+    metadata: null
+  },
 
   { id: 101, conversationId: 2, sender: "other", content: "Você viu o novo layout?", time: "Ontem", type: "text" },
   { id: 102, conversationId: 2, sender: "me", content: "Ainda não, vou olhar agora!", time: "Ontem", type: "text" },
@@ -400,7 +450,7 @@ export default function Conversations() {
             <div className="space-y-1 p-2">
               {contacts.map((contact) => (
                 <Link key={contact.id} href={`/conversations/webchat/${contact.id}`}>
-                  <a 
+                  <div 
                     className={cn(
                       "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
                       conversationId === contact.id ? "bg-accent/60" : ""
@@ -432,7 +482,7 @@ export default function Conversations() {
                         )}
                       </div>
                     </div>
-                  </a>
+                  </div>
                 </Link>
               ))}
             </div>
