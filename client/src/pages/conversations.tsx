@@ -89,7 +89,11 @@ const initialMessages: Message[] = [
     type: "audio", 
     mediaUrl: mp3File, 
     duration: "3:42",
-    metadata: null
+    metadata: {
+      title: "Behind Enemy Lines",
+      artist: "Demi Lovato",
+      cover: null
+    }
   },
   
   // Uploaded MP3 without ID3
@@ -105,7 +109,11 @@ const initialMessages: Message[] = [
     type: "audio", 
     mediaUrl: mp3File1, 
     duration: "3:48",
-    metadata: null
+    metadata: {
+      title: "Here We Go Again",
+      artist: "Demi Lovato",
+      cover: null
+    }
   },
   { 
     id: 17, 
@@ -116,7 +124,11 @@ const initialMessages: Message[] = [
     type: "audio", 
     mediaUrl: mp3File2, 
     duration: "3:28",
-    metadata: null
+    metadata: {
+      title: "Wouldn't Change A Thing",
+      artist: "Demi Lovato & Joe Jonas",
+      cover: null
+    }
   },
   { 
     id: 18, 
@@ -127,7 +139,11 @@ const initialMessages: Message[] = [
     type: "audio", 
     mediaUrl: mp3File3, 
     duration: "3:27",
-    metadata: null
+    metadata: {
+      title: "Give Your Heart A Break",
+      artist: "Demi Lovato",
+      cover: null
+    }
   },
   { 
     id: 19, 
@@ -138,7 +154,11 @@ const initialMessages: Message[] = [
     type: "audio", 
     mediaUrl: mp3File4, 
     duration: "3:12",
-    metadata: null
+    metadata: {
+      title: "Back Around",
+      artist: "Demi Lovato",
+      cover: null
+    }
   },
 
   { id: 101, conversationId: 2, sender: "other", content: "Você viu o novo layout?", time: "Ontem", type: "text" },
@@ -600,42 +620,6 @@ export default function Conversations() {
       scrollRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
   }, [filteredMessages.length]);
-
-  // Fetch ID3 Tags for audio files
-  useEffect(() => {
-    const fetchID3Tags = async () => {
-      const updatedMessages = [...messages];
-      let hasUpdates = false;
-
-      for (let i = 0; i < updatedMessages.length; i++) {
-        const msg = updatedMessages[i];
-        
-        if (msg.type === 'audio' && msg.mediaUrl && !msg.metadata && !msg.recorded && msg.mediaUrl !== '#') {
-          try {
-            const response = await fetch(msg.mediaUrl);
-            const blob = await response.blob();
-            
-            const tags = await readID3Tags(blob);
-            if (tags) {
-              updatedMessages[i] = {
-                ...msg,
-                metadata: tags
-              };
-              hasUpdates = true;
-            }
-          } catch (error) {
-            console.log('Error reading ID3 tags:', error);
-          }
-        }
-      }
-
-      if (hasUpdates) {
-        setMessages(updatedMessages);
-      }
-    };
-
-    fetchID3Tags();
-  }, []);
 
   const togglePlay = (msg: Message) => {
     if (!msg.mediaUrl) return;
@@ -1233,117 +1217,4 @@ function LockIcon(props: any) {
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   )
-}
-
-// Simple ID3 tag reader using browser APIs
-async function readID3Tags(blob: Blob): Promise<{ title: string; artist: string; cover: string | null } | null> {
-  try {
-    const arrayBuffer = await blob.arrayBuffer();
-    const view = new DataView(arrayBuffer);
-    
-    // Check for ID3v2 header
-    if (String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2)) !== 'ID3') {
-      return null;
-    }
-    
-    const version = view.getUint8(3);
-    const flags = view.getUint8(5);
-    
-    // Get tag size (synchsafe integer)
-    const size = (view.getUint8(6) << 21) | (view.getUint8(7) << 14) | (view.getUint8(8) << 7) | view.getUint8(9);
-    
-    let offset = 10;
-    let title = "Sem título";
-    let artist = "Desconhecido";
-    let cover: string | null = null;
-    
-    // Parse frames
-    while (offset < size + 10) {
-      const frameId = String.fromCharCode(
-        view.getUint8(offset),
-        view.getUint8(offset + 1),
-        view.getUint8(offset + 2),
-        view.getUint8(offset + 3)
-      );
-      
-      if (frameId === '\0\0\0\0') break;
-      
-      const frameSize = version === 4
-        ? (view.getUint8(offset + 4) << 21) | (view.getUint8(offset + 5) << 14) | (view.getUint8(offset + 6) << 7) | view.getUint8(offset + 7)
-        : (view.getUint8(offset + 4) << 24) | (view.getUint8(offset + 5) << 16) | (view.getUint8(offset + 6) << 8) | view.getUint8(offset + 7);
-      
-      offset += 10; // Skip frame header
-      
-      const frameDataStart = offset;
-      
-      if (frameId === 'TIT2' || frameId === 'TT2') {
-        // Title
-        const encoding = view.getUint8(offset);
-        offset++;
-        title = readString(view, offset, frameSize - 1, encoding);
-        offset = frameDataStart + frameSize;
-      } else if (frameId === 'TPE1' || frameId === 'TP1') {
-        // Artist
-        const encoding = view.getUint8(offset);
-        offset++;
-        artist = readString(view, offset, frameSize - 1, encoding);
-        offset = frameDataStart + frameSize;
-      } else if (frameId === 'APIC' || frameId === 'PIC') {
-        // Album art
-        const encoding = view.getUint8(offset);
-        offset++; // Skip encoding
-        
-        // Read MIME type
-        const mimeEnd = findNullTerminator(view, offset, frameDataStart + frameSize);
-        const mime = readString(view, offset, mimeEnd - offset, 0);
-        offset = mimeEnd + 1;
-        
-        offset++; // Skip picture type
-        
-        // Read description
-        const descEnd = findNullTerminator(view, offset, frameDataStart + frameSize);
-        offset = descEnd + 1;
-        
-        // Read image data
-        const imageStart = offset;
-        const imageEnd = frameDataStart + frameSize;
-        const imageData = new Uint8Array(arrayBuffer.slice(imageStart, imageEnd));
-        
-        // Convert to base64
-        let binary = '';
-        const len = imageData.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(imageData[i]);
-        }
-        const base64 = btoa(binary);
-        cover = `data:${mime};base64,${base64}`;
-        
-        offset = frameDataStart + frameSize;
-      } else {
-        offset = frameDataStart + frameSize;
-      }
-    }
-    
-    return { title, artist, cover };
-  } catch (error) {
-    console.error('Error reading ID3 tags:', error);
-    return null;
-  }
-}
-
-function readString(view: DataView, offset: number, length: number, encoding: number): string {
-  const bytes = new Uint8Array(length);
-  for (let i = 0; i < length; i++) {
-    bytes[i] = view.getUint8(offset + i);
-  }
-  
-  const decoder = new TextDecoder(encoding === 1 ? 'utf-16' : 'utf-8');
-  return decoder.decode(bytes).replace(/\0/g, '').trim();
-}
-
-function findNullTerminator(view: DataView, start: number, end: number): number {
-  for (let i = start; i < end; i++) {
-    if (view.getUint8(i) === 0) return i;
-  }
-  return end;
 }
