@@ -187,7 +187,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await updatePasswordResetToken(email, token, expires);
 
-      res.json({ message: "Se o email existir, você receberá instruções para recuperação", token });
+      // TODO: Integrar com serviço de email para enviar token de forma segura
+      // Exemplo: await emailService.sendPasswordResetEmail(email, token);
+
+      res.json({ message: "Se o email existir, você receberá instruções para recuperação" });
     } catch (error) {
       res.status(500).json({ message: "Erro ao solicitar recuperação" });
     }
