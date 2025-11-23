@@ -318,23 +318,24 @@ export default function Conversations() {
                                   </div>
                                 ) : msg.recorded ? (
                                   // Recorded Audio Style
-                                  <div className="flex items-center gap-2 mb-1 text-xs opacity-80">
-                                    <Mic className="h-3 w-3" /> Mensagem de Voz
+                                  <div className="flex items-center gap-2 mb-2 bg-black/20 p-2 rounded-lg">
+                                    <Mic className="h-4 w-4 opacity-80" />
+                                    <span className="text-xs font-medium opacity-90">Mensagem de Voz</span>
                                   </div>
                                 ) : (
                                   // Generic File Style
-                                  <div className="flex items-center gap-2 mb-2">
-                                     <div className="h-8 w-8 rounded bg-primary-foreground/20 flex items-center justify-center">
-                                       <Disc className="h-4 w-4" />
+                                  <div className="flex gap-3 items-center bg-black/20 p-2 rounded-lg mb-2">
+                                     <div className="h-12 w-12 rounded bg-primary-foreground/20 flex items-center justify-center shrink-0">
+                                       <Disc className="h-6 w-6 opacity-80" />
                                      </div>
                                      <div className="flex-1 min-w-0">
-                                       <p className="text-sm truncate">{msg.caption || "Arquivo de Áudio"}</p>
+                                       <p className="text-sm truncate font-medium">{msg.caption || "Arquivo de Áudio"}</p>
                                        <p className="text-[10px] opacity-70">MP3</p>
                                      </div>
                                   </div>
                                 )}
 
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3 mt-1">
                                   <Button 
                                     size="icon" 
                                     variant="ghost" 
