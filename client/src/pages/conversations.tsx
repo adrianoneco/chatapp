@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize, PanelLeftClose, PanelLeft, Reply, Forward, Laugh } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize, PanelLeftClose, PanelLeft, Reply, Forward, Laugh, X, MapPin, Clock, Hash, User, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
@@ -12,6 +12,9 @@ import { cn } from "@/lib/utils";
 import { useRef, useEffect, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 // Assets
 import mp3File from "@assets/13. Behind Enemy Lines_1763919687567.mp3";
@@ -321,16 +324,236 @@ function CustomVideoPlayer({ src, poster, recorded }: { src: string, poster?: st
   );
 }
 
+// Emoji list for reactions
+const EMOJI_LIST = [
+  '❤️', '👍', '👏', '😂', '😮', '😢', '🙏', '🔥', '🎉', '💯',
+  '👎', '😍', '🤔', '😊', '😎', '💪', '✨', '🙌', '👌', '💖'
+];
+
+// Emoji Picker Component
+function EmojiPicker({ onSelect, messageId }: { onSelect: (emoji: string) => void; messageId: number }) {
+  const [open, setOpen] = useState(false);
+
+  const handleSelect = (emoji: string) => {
+    onSelect(emoji);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+          aria-label="Reagir com emoji"
+          data-testid={`button-emoji-picker-${messageId}`}
+        >
+          <Smile className="h-4 w-4 mr-2" />
+          Reagir
+        </button>
+      </PopoverTrigger>
+      <PopoverContent 
+        className="w-auto p-2" 
+        side="right" 
+        align="start"
+        role="dialog"
+        aria-label="Seletor de emojis"
+      >
+        <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-5 gap-1 max-w-xs">
+          {EMOJI_LIST.map((emoji) => (
+            <Button
+              key={emoji}
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 sm:h-10 sm:w-10 text-xl sm:text-2xl hover:bg-accent"
+              onClick={() => handleSelect(emoji)}
+              data-testid={`emoji-${emoji}-${messageId}`}
+              aria-label={`Reagir com ${emoji}`}
+            >
+              {emoji}
+            </Button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// Mock conversation details
+interface ConversationDetails {
+  protocol: string;
+  date: string;
+  client: {
+    name: string;
+    avatar: string;
+    ip: string;
+    location: string;
+  };
+  attendant: {
+    name: string;
+    avatar: string;
+  };
+  previousConversations: Array<{
+    id: number;
+    protocol: string;
+    date: string;
+    status: 'completed' | 'pending' | 'closed';
+    attendant: string;
+  }>;
+}
+
+// Conversation Details Content Component
+function ConversationDetailsContent({ currentDetails }: { currentDetails: ConversationDetails }) {
+  return (
+    <div className="p-4 space-y-6">
+      {/* Protocol and Date */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-sm">
+          <Hash className="h-4 w-4 text-muted-foreground" />
+          <div className="flex-1">
+            <p className="text-xs text-muted-foreground">Protocolo</p>
+            <p className="font-mono font-medium">{currentDetails.protocol}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <Clock className="h-4 w-4 text-muted-foreground" />
+          <div className="flex-1">
+            <p className="text-xs text-muted-foreground">Data/Hora</p>
+            <p className="font-medium">{currentDetails.date}</p>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Client Info */}
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold flex items-center gap-2">
+          <User className="h-4 w-4" />
+          Cliente
+        </h4>
+        <div className="flex items-center gap-3 p-3 bg-background/50 rounded-lg">
+          <Avatar className="h-12 w-12">
+            <AvatarImage src={currentDetails.client.avatar} />
+            <AvatarFallback>{currentDetails.client.name.substring(0, 2)}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium truncate">{currentDetails.client.name}</p>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+              <MapPin className="h-3 w-3" />
+              <span className="truncate">{currentDetails.client.location}</span>
+            </div>
+          </div>
+        </div>
+        <div className="text-xs space-y-1">
+          <p className="text-muted-foreground">IP: <span className="font-mono text-foreground">{currentDetails.client.ip}</span></p>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Attendant Info */}
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold flex items-center gap-2">
+          <User className="h-4 w-4" />
+          Atendente
+        </h4>
+        <div className="flex items-center gap-3 p-3 bg-background/50 rounded-lg">
+          <Avatar className="h-10 w-10">
+            <AvatarImage src={currentDetails.attendant.avatar} />
+            <AvatarFallback>{currentDetails.attendant.name.substring(0, 2)}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium truncate">{currentDetails.attendant.name}</p>
+            <p className="text-xs text-muted-foreground">Atendente responsável</p>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Previous Conversations */}
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold">Conversas Anteriores</h4>
+        <div className="space-y-2">
+          {currentDetails.previousConversations.map((conv) => (
+            <div 
+              key={conv.id}
+              className="p-3 bg-background/50 rounded-lg hover:bg-background/70 transition-colors cursor-pointer"
+              data-testid={`previous-conversation-${conv.id}`}
+            >
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <span className="font-mono text-xs text-muted-foreground">{conv.protocol}</span>
+                <Badge 
+                  variant={conv.status === 'completed' ? 'default' : conv.status === 'pending' ? 'secondary' : 'outline'}
+                  className="text-[10px] h-5"
+                >
+                  {conv.status === 'completed' && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                  {conv.status === 'pending' && <Loader2 className="h-3 w-3 mr-1" />}
+                  {conv.status === 'closed' && <XCircle className="h-3 w-3 mr-1" />}
+                  {conv.status === 'completed' ? 'Concluída' : conv.status === 'pending' ? 'Pendente' : 'Fechada'}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">{conv.date}</p>
+              <p className="text-xs mt-1">Atendente: <span className="font-medium">{conv.attendant}</span></p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const conversationDetails: Record<number, ConversationDetails> = {
+  1: {
+    protocol: "WEB-2024-001234",
+    date: "23/11/2024 15:30",
+    client: {
+      name: "Ana Silva",
+      avatar: "https://i.pravatar.cc/150?u=1",
+      ip: "177.45.123.89",
+      location: "São Paulo, SP"
+    },
+    attendant: {
+      name: "João Atendente",
+      avatar: "https://i.pravatar.cc/150?u=10"
+    },
+    previousConversations: [
+      { id: 1, protocol: "WEB-2024-001100", date: "20/11/2024", status: "completed", attendant: "Maria Santos" },
+      { id: 2, protocol: "WEB-2024-000987", date: "15/11/2024", status: "completed", attendant: "João Atendente" },
+      { id: 3, protocol: "WEB-2024-000756", date: "10/11/2024", status: "closed", attendant: "Carlos Lima" }
+    ]
+  },
+  2: {
+    protocol: "WEB-2024-001235",
+    date: "22/11/2024 14:20",
+    client: {
+      name: "Carlos Oliveira",
+      avatar: "https://i.pravatar.cc/150?u=2",
+      ip: "200.150.100.50",
+      location: "Rio de Janeiro, RJ"
+    },
+    attendant: {
+      name: "Maria Santos",
+      avatar: "https://i.pravatar.cc/150?u=11"
+    },
+    previousConversations: [
+      { id: 1, protocol: "WEB-2024-001050", date: "18/11/2024", status: "completed", attendant: "Ana Costa" }
+    ]
+  }
+};
+
 export default function Conversations() {
   const [location, setLocation] = useLocation();
   const [match, params] = useRoute("/conversations/webchat/:id");
   const isChatOpen = !!match;
   const conversationId = Number(params?.id);
   const currentContact = contacts.find(c => c.id === conversationId) || contacts[0];
+  const currentDetails = conversationDetails[conversationId] || conversationDetails[1];
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [detailsSidebarOpen, setDetailsSidebarOpen] = useState(true);
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [hoveredMessage, setHoveredMessage] = useState<number | null>(null);
   
@@ -489,8 +712,8 @@ export default function Conversations() {
         {/* Contacts List */}
         <Card className={cn(
           "flex flex-col h-full border-border/50 bg-card/50 backdrop-blur shrink-0 transition-all duration-300 relative",
-          isChatOpen ? "hidden md:flex" : "flex w-full",
-          sidebarCollapsed ? "md:w-20" : "md:w-80 lg:w-96"
+          isChatOpen ? "hidden lg:flex" : "flex w-full",
+          sidebarCollapsed ? "lg:w-20" : "lg:w-80"
         )}>
           <div className="p-4 space-y-4">
             <div className="flex items-center gap-2">
@@ -596,6 +819,15 @@ export default function Conversations() {
                   <Button variant="ghost" size="icon" data-testid="button-call"><Phone className="h-5 w-5" /></Button>
                   <Button variant="ghost" size="icon" data-testid="button-video"><Video className="h-5 w-5" /></Button>
                   <Separator orientation="vertical" className="h-6 mx-1" />
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => setDetailsSidebarOpen(!detailsSidebarOpen)}
+                    data-testid="button-toggle-details"
+                    title={detailsSidebarOpen ? "Ocultar detalhes" : "Mostrar detalhes"}
+                  >
+                    {detailsSidebarOpen ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+                  </Button>
                   <Button variant="ghost" size="icon" data-testid="button-more"><MoreVertical className="h-5 w-5" /></Button>
                 </div>
               </div>
@@ -608,10 +840,24 @@ export default function Conversations() {
                     
                     if (msg.deleted) {
                       return (
-                        <div key={msg.id} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground italic border border-dashed border-border px-3 py-2 rounded-lg select-none">
-                            <Trash2 className="h-3 w-3" />
-                            Mensagem apagada
+                        <div key={msg.id} id={`message-${msg.id}`} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}>
+                          <div className={cn(
+                            "flex items-start gap-2 p-3 rounded-lg border max-w-[85%] md:max-w-[70%]",
+                            msg.sender === "me"
+                              ? "bg-slate-800/50 border-slate-700/50"
+                              : "bg-slate-700/50 border-slate-600/50"
+                          )}>
+                            <Quote className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold mb-1">
+                                {msg.sender === "me" ? "Você" : currentContact.name}
+                              </p>
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground italic">
+                                <Trash2 className="h-3 w-3 shrink-0" />
+                                <span>Mensagem apagada</span>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground mt-1">{msg.time}</p>
+                            </div>
                           </div>
                         </div>
                       );
@@ -834,26 +1080,10 @@ export default function Conversations() {
                                 <Forward className="h-4 w-4 mr-2" />
                                 Encaminhar
                               </DropdownMenuItem>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <div className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50">
-                                    <Smile className="h-4 w-4 mr-2" />
-                                    Reagir
-                                  </div>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent side="right">
-                                  {['❤️', '👍', '😂', '😮', '😢', '🙏'].map(emoji => (
-                                    <DropdownMenuItem
-                                      key={emoji}
-                                      onClick={() => handleReactToMessage(msg.id, emoji)}
-                                      className="text-xl cursor-pointer justify-center"
-                                      data-testid={`emoji-${emoji}-${msg.id}`}
-                                    >
-                                      {emoji}
-                                    </DropdownMenuItem>
-                                  ))}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <EmojiPicker 
+                                messageId={msg.id} 
+                                onSelect={(emoji) => handleReactToMessage(msg.id, emoji)} 
+                              />
                               <DropdownMenuItem onClick={() => handleDeleteMessage(msg.id)} className="text-destructive" data-testid={`menu-delete-${msg.id}`}>
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 Apagar
@@ -906,6 +1136,49 @@ export default function Conversations() {
             </div>
           )}
         </Card>
+
+        {/* Details Sidebar - Sheet for mobile, Card for desktop */}
+        {isChatOpen && (
+          <>
+            {/* Mobile Sheet */}
+            <Sheet open={detailsSidebarOpen} onOpenChange={setDetailsSidebarOpen}>
+              <SheetContent side="right" className="w-80 p-0 lg:hidden">
+                <SheetHeader className="p-4 border-b border-border">
+                  <SheetTitle>Detalhes da Conversa</SheetTitle>
+                </SheetHeader>
+                <ScrollArea className="h-[calc(100vh-5rem)]">
+                  <ConversationDetailsContent currentDetails={currentDetails} />
+                </ScrollArea>
+              </SheetContent>
+            </Sheet>
+
+            {/* Desktop Card */}
+            <Card className={cn(
+              "hidden lg:flex flex-col h-full border-border/50 bg-card/50 backdrop-blur shrink-0 transition-all duration-300 overflow-hidden",
+              detailsSidebarOpen ? "w-80" : "w-0 border-0"
+            )}>
+              {detailsSidebarOpen && (
+                <>
+                  <div className="p-4 border-b border-border bg-card/30 shrink-0 flex items-center justify-between">
+                    <h3 className="font-semibold">Detalhes da Conversa</h3>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={() => setDetailsSidebarOpen(false)}
+                      className="h-8 w-8"
+                      data-testid="button-close-details"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <ScrollArea className="flex-1">
+                    <ConversationDetailsContent currentDetails={currentDetails} />
+                  </ScrollArea>
+                </>
+              )}
+            </Card>
+          </>
+        )}
       </div>
     </MainLayout>
   );
