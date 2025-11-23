@@ -26,8 +26,8 @@ export function AppSidebar() {
   return (
     <aside 
       className={cn(
-        "relative h-[calc(100vh-4rem)] bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out",
-        collapsed ? "w-16" : "w-64"
+        "relative h-[calc(100vh-4rem)] bg-card/50 backdrop-blur border-r border-white/10 transition-all duration-300 ease-in-out",
+        collapsed ? "w-16" : "w-50"
       )}
     >
       {/* Toggle Button */}

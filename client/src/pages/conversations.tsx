@@ -16,20 +16,20 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
-// Assets
-import mp3File from "@assets/13. Behind Enemy Lines_1763919687567.mp3";
-import videoFile from "@assets/9312ac4fd6cf30b9cabb0eb07b5bc517_1763919709453.mp4";
-import mp3File1 from "@assets/01. Here We Go Again_1763921733934.mp3";
-import mp3File2 from "@assets/05. Demi Lovato & Joe Jonas - Wouldn't Change A Thing_1763921733934.mp3";
-import mp3File3 from "@assets/10. Give Your Heart A Break_1763921733934.mp3";
-import mp3File4 from "@assets/12. Back Around_1763921733934.mp3";
+// Assets - usando /storage para servir arquivos de forma segura
+const mp3File = "/storage/13. Behind Enemy Lines_1763919687567.mp3";
+const videoFile = "/storage/9312ac4fd6cf30b9cabb0eb07b5bc517_1763919709453.mp4";
+const mp3File1 = "/storage/01. Here We Go Again_1763921733934.mp3";
+const mp3File2 = "/storage/05. Demi Lovato & Joe Jonas - Wouldn't Change A Thing_1763921733934.mp3";
+const mp3File3 = "/storage/10. Give Your Heart A Break_1763921733934.mp3";
+const mp3File4 = "/storage/12. Back Around_1763921733934.mp3";
 
-// Album Covers
-import cover14 from "@assets/covers/cover-14.jpg";
-import cover16 from "@assets/covers/cover-16.jpg";
-import cover17 from "@assets/covers/cover-17.jpg";
-import cover18 from "@assets/covers/cover-18.jpg";
-import cover19 from "@assets/covers/cover-19.jpg";
+// Album Covers - usando /storage para servir arquivos de forma segura
+const cover14 = "/storage/covers/cover-14.jpg";
+const cover16 = "/storage/covers/cover-16.jpg";
+const cover17 = "/storage/covers/cover-17.jpg";
+const cover18 = "/storage/covers/cover-18.jpg";
+const cover19 = "/storage/covers/cover-19.jpg";
 
 interface Message {
   id: number;
@@ -37,7 +37,10 @@ interface Message {
   sender: string;
   content: string;
   time: string;
+  date: string;
   type: 'text' | 'image' | 'video' | 'audio';
+  channel: string;
+  remoteJid: string | null;
   mediaUrl?: string;
   duration?: string;
   caption?: string;
@@ -50,7 +53,14 @@ interface Message {
     audio_tags?: {
       title: string;
       artist: string;
+      album?: string;
+      year?: string;
       cover: string | null;
+    },
+    file?: {
+      name: string;
+      size: string;
+      type: string;
     }
   } | null;
 }
@@ -65,28 +75,28 @@ const contacts = [
 ];
 
 const initialMessages: Message[] = [
-  { id: 1, conversationId: 1, sender: "me", content: "Oi Ana, tudo bem?", time: "10:30", type: "text", reactions: [{ emoji: "👋", count: 1 }] },
-  { id: 2, conversationId: 1, sender: "other", content: "Oii! Tudo ótimo por aqui e com você?", time: "10:32", type: "text" },
-  { id: 3, conversationId: 1, sender: "me", content: "Tudo certo. Viu o projeto novo?", time: "10:33", type: "text" },
-  { id: 4, conversationId: 1, sender: "other", content: "Sim! Ficou incrível o design.", time: "10:35", type: "text", reactions: [{ emoji: "❤️", count: 2 }, { emoji: "👍", count: 1 }] },
-  { id: 5, conversationId: 1, sender: "other", content: "Acho que só precisamos ajustar aquele detalhe no header.", time: "10:35", replyTo: 3, type: "text" },
-  { id: 6, conversationId: 1, sender: "me", content: "Verdade. Vou mexer nisso agora.", time: "10:40", replyTo: 5, type: "text" },
-  { id: 7, conversationId: 1, sender: "other", content: "Combinado! Até logo.", time: "10:42", type: "text" },
-  { id: 8, conversationId: 1, sender: "other", content: "Encaminhando o orçamento que você pediu.", time: "10:45", forwarded: true, type: "text" },
-  { id: 9, conversationId: 1, sender: "me", content: "Mensagem apagada", time: "10:46", deleted: true, type: "text" },
-  { id: 20, conversationId: 1, sender: "other", content: "Desculpa, não vi essa mensagem!", time: "10:47", replyTo: 9, type: "text" },
+  { id: 1, conversationId: 1, sender: "me", content: "Oi Ana, tudo bem?", time: "10:30", date: "2025-11-10", type: "text", channel: "webchat", remoteJid: null, reactions: [{ emoji: "👋", count: 1 }] },
+  { id: 2, conversationId: 1, sender: "other", content: "Oii! Tudo ótimo por aqui e com você?", time: "10:32", date: "2025-11-10", type: "text", channel: "webchat", remoteJid: null },
+  { id: 3, conversationId: 1, sender: "me", content: "Tudo certo. Viu o projeto novo?", time: "10:33", date: "2025-11-10", type: "text", channel: "webchat", remoteJid: null },
+  { id: 4, conversationId: 1, sender: "other", content: "Sim! Ficou incrível o design.", time: "10:35", date: "2025-11-10", type: "text", channel: "webchat", remoteJid: null, reactions: [{ emoji: "❤️", count: 2 }, { emoji: "👍", count: 1 }] },
+  { id: 5, conversationId: 1, sender: "other", content: "Acho que só precisamos ajustar aquele detalhe no header.", time: "10:35", date: "2025-11-10", replyTo: 3, type: "text", channel: "webchat", remoteJid: null },
+  { id: 6, conversationId: 1, sender: "me", content: "Verdade. Vou mexer nisso agora.", time: "10:40", date: "2025-11-10", replyTo: 5, type: "text", channel: "webchat", remoteJid: null },
+  { id: 7, conversationId: 1, sender: "other", content: "Combinado! Até logo.", time: "10:42", date: "2025-11-10", type: "text", channel: "webchat", remoteJid: null },
+  { id: 8, conversationId: 1, sender: "other", content: "Encaminhando o orçamento que você pediu.", time: "10:45", date: "2025-11-10", forwarded: true, type: "text", channel: "webchat", remoteJid: null },
+  { id: 9, conversationId: 1, sender: "me", content: "Mensagem apagada", time: "10:46", date: "2025-11-10", deleted: true, type: "text", channel: "webchat", remoteJid: null },
+  { id: 20, conversationId: 1, sender: "other", content: "Desculpa, não vi essa mensagem!", time: "10:47", date: "2025-11-10", replyTo: 9, type: "text", channel: "webchat", remoteJid: null },
   
   // Image Message
-  { id: 10, conversationId: 1, sender: "other", content: "", time: "10:48", type: "image", mediaUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8d29ya3xlbnwwfHwwfHx8MA%3D%3D", caption: "Olha essa referência" },
+  { id: 10, conversationId: 1, sender: "other", content: "", time: "10:48", date: "2025-11-10", type: "image", channel: "webchat", remoteJid: null, mediaUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8d29ya3xlbnwwfHwwfHx8MA%3D%3D", caption: "Olha essa referência" },
   
   // Recorded Audio
-  { id: 11, conversationId: 1, sender: "me", content: "", time: "10:50", type: "audio", duration: "0:15", recorded: true },
+  { id: 11, conversationId: 1, sender: "me", content: "", time: "10:50", date: "2025-11-10", type: "audio", channel: "webchat", remoteJid: null, duration: "0:15", recorded: true },
   
   // Recorded Video
-  { id: 12, conversationId: 1, sender: "other", content: "", time: "10:52", type: "video", mediaUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", duration: "0:30", recorded: true },
+  { id: 12, conversationId: 1, sender: "other", content: "", time: "10:52", date: "2025-11-10", type: "video", channel: "webchat", remoteJid: null, mediaUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", duration: "0:30", recorded: true },
   
   // Uploaded Video (The one provided)
-  { id: 13, conversationId: 1, sender: "me", content: "", time: "10:55", type: "video", mediaUrl: videoFile, duration: "0:12", caption: "Vídeo do projeto finalizado" },
+  { id: 13, conversationId: 1, sender: "me", content: "", time: "10:55", date: "2025-11-10", type: "video", channel: "webchat", remoteJid: null, mediaUrl: videoFile, duration: "0:12", caption: "Vídeo do projeto finalizado" },
   
   // Uploaded MP3 with ID3 (The one provided)
   { 
@@ -95,20 +105,25 @@ const initialMessages: Message[] = [
     sender: "other", 
     content: "", 
     time: "10:58", 
-    type: "audio", 
+    date: "2025-11-10",
+    type: "audio",
+    channel: "webchat",
+    remoteJid: null,
     mediaUrl: mp3File, 
     duration: "3:42",
     metadata: {
       audio_tags: {
         title: "Behind Enemy Lines",
         artist: "Demi Lovato",
+        album: "Here We Go Again",
+        year: "2009",
         cover: cover14
       }
     }
   },
   
   // Uploaded MP3 without ID3
-  { id: 15, conversationId: 1, sender: "me", content: "", time: "11:00", type: "audio", mediaUrl: "#", duration: "2:15", caption: "Audio_sem_tags.mp3" },
+  { id: 15, conversationId: 1, sender: "me", content: "", time: "11:00", date: "2025-11-10", type: "audio", channel: "webchat", remoteJid: null, mediaUrl: "#", duration: "2:15", caption: "Audio_sem_tags.mp3" },
 
   // New uploaded audio files
   { 
@@ -117,13 +132,18 @@ const initialMessages: Message[] = [
     sender: "other", 
     content: "", 
     time: "11:02", 
-    type: "audio", 
+    date: "2025-11-10",
+    type: "audio",
+    channel: "webchat",
+    remoteJid: null,
     mediaUrl: mp3File1, 
     duration: "3:48",
     metadata: {
       audio_tags: {
         title: "Here We Go Again",
         artist: "Demi Lovato",
+        album: "Here We Go Again",
+        year: "2009",
         cover: cover16
       }
     }
@@ -134,13 +154,18 @@ const initialMessages: Message[] = [
     sender: "me", 
     content: "", 
     time: "11:05", 
-    type: "audio", 
+    date: "2025-11-10",
+    type: "audio",
+    channel: "webchat",
+    remoteJid: null,
     mediaUrl: mp3File2, 
     duration: "3:28",
     metadata: {
       audio_tags: {
         title: "Wouldn't Change A Thing",
         artist: "Demi Lovato & Joe Jonas",
+        album: "Camp Rock 2: The Final Jam",
+        year: "2010",
         cover: cover17
       }
     }
@@ -151,13 +176,18 @@ const initialMessages: Message[] = [
     sender: "other", 
     content: "", 
     time: "11:08", 
-    type: "audio", 
+    date: "2025-11-10",
+    type: "audio",
+    channel: "webchat",
+    remoteJid: null,
     mediaUrl: mp3File3, 
     duration: "3:27",
     metadata: {
       audio_tags: {
         title: "Give Your Heart A Break",
         artist: "Demi Lovato",
+        album: "Unbroken",
+        year: "2011",
         cover: cover18
       }
     }
@@ -168,20 +198,25 @@ const initialMessages: Message[] = [
     sender: "me", 
     content: "", 
     time: "11:10", 
-    type: "audio", 
+    date: "2025-11-10",
+    type: "audio",
+    channel: "webchat",
+    remoteJid: null,
     mediaUrl: mp3File4, 
     duration: "3:12",
     metadata: {
       audio_tags: {
         title: "Back Around",
         artist: "Demi Lovato",
+        album: "Here We Go Again",
+        year: "2009",
         cover: cover19
       }
     }
   },
 
-  { id: 101, conversationId: 2, sender: "other", content: "Você viu o novo layout?", time: "Ontem", type: "text" },
-  { id: 102, conversationId: 2, sender: "me", content: "Ainda não, vou olhar agora!", time: "Ontem", type: "text" },
+  { id: 101, conversationId: 2, sender: "other", content: "Você viu o novo layout?", time: "Ontem", date: "2025-11-09", type: "text", channel: "webchat", remoteJid: null },
+  { id: 102, conversationId: 2, sender: "me", content: "Ainda não, vou olhar agora!", time: "Ontem", date: "2025-11-09", type: "text", channel: "webchat", remoteJid: null },
 ];
 
 // Custom Video Player Component
@@ -671,6 +706,285 @@ export default function Conversations() {
     }
   };
 
+  const exportConversationFull = async () => {
+    // Informações da conversa (baseadas em estrutura SQL típica)
+    // Coletar todos os atendentes únicos que participaram da conversa
+    const uniqueAttendants = [{
+      id: 10, // Mock ID - seria obtido do backend
+      name: currentDetails.attendant.name,
+      avatar: currentDetails.attendant.avatar,
+    }];
+
+    const conversationInfo = {
+      id: conversationId,
+      protocol: currentDetails.protocol,
+      channel: "webchat",
+      client: {
+        id: currentContact.id,
+        name: currentContact.name,
+        avatar: currentContact.avatar,
+        ip: currentDetails.client.ip,
+        location: currentDetails.client.location,
+      },
+      attendants: uniqueAttendants,
+      participants: [
+        {
+          id: currentContact.id,
+          name: currentContact.name,
+          avatar: currentContact.avatar,
+          role: "client",
+        },
+        ...uniqueAttendants.map(att => ({
+          id: att.id,
+          name: att.name,
+          avatar: att.avatar,
+          role: "attendant" as const,
+        }))
+      ],
+      status: "active",
+      createdAt: currentDetails.date,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Função auxiliar para converter arquivo para base64
+    const fileToBase64 = async (url: string): Promise<{ mime: string; data: string } | null> => {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64data = reader.result as string;
+            const base64 = base64data.split(',')[1]; // Remove o prefixo "data:mime;base64,"
+            resolve({
+              mime: blob.type,
+              data: base64
+            });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch (error) {
+        console.error('Error converting file to base64:', error);
+        return null;
+      }
+    };
+
+    // Processar mensagens para converter arquivos para base64
+    const processedMessages = await Promise.all(
+      filteredMessages.map(async (msg) => {
+        // Determinar remetente com base no sender
+        const senderInfo = msg.sender === "me" 
+          ? {
+              id: uniqueAttendants[0].id,
+              name: uniqueAttendants[0].name,
+              role: "attendant" as const
+            }
+          : {
+              id: conversationInfo.client.id,
+              name: conversationInfo.client.name,
+              role: "client" as const
+            };
+
+        const processedMsg: any = {
+          id: msg.id,
+          conversationId: msg.conversationId,
+          sender: senderInfo,
+          attendantId: msg.sender === "me" ? uniqueAttendants[0].id : null,
+          content: msg.content,
+          time: msg.time,
+          date: msg.date,
+          type: msg.type,
+          channel: msg.channel,
+          deleted: msg.deleted || false,
+        };
+
+        // Adicionar campos opcionais apenas se existirem
+        if (msg.duration) processedMsg.duration = msg.duration;
+        if (msg.caption) processedMsg.caption = msg.caption;
+        if (msg.recorded !== undefined) processedMsg.recorded = msg.recorded;
+        if (msg.forwarded !== undefined) processedMsg.forwarded = msg.forwarded;
+        if (msg.replyTo !== undefined) processedMsg.replyTo = msg.replyTo;
+        if (msg.reactions) processedMsg.reactions = msg.reactions;
+
+        // Converter mediaUrl para base64 se existir
+        if (msg.mediaUrl && msg.mediaUrl !== '#') {
+          const fileData = await fileToBase64(msg.mediaUrl);
+          if (fileData) {
+            processedMsg.mediaUrl = fileData;
+          }
+        }
+
+        // Processar metadata (converter cover para base64 se existir)
+        if (msg.metadata?.audio_tags) {
+          const coverData = msg.metadata.audio_tags.cover 
+            ? await fileToBase64(msg.metadata.audio_tags.cover)
+            : null;
+
+          processedMsg.metadata = {
+            audio_tags: {
+              title: msg.metadata.audio_tags.title,
+              artist: msg.metadata.audio_tags.artist,
+              album: msg.metadata.audio_tags.album,
+              year: msg.metadata.audio_tags.year,
+              cover: coverData
+            }
+          };
+        }
+
+        return processedMsg;
+      })
+    );
+
+    const conversationData = {
+      id: conversationInfo.id,
+      protocol: conversationInfo.protocol,
+      channel: conversationInfo.channel,
+      client: conversationInfo.client,
+      attendants: conversationInfo.attendants,
+      participants: conversationInfo.participants,
+      status: conversationInfo.status,
+      createdAt: conversationInfo.createdAt,
+      updatedAt: conversationInfo.updatedAt,
+      messages: processedMessages,
+      exportedAt: new Date().toISOString(),
+    };
+    
+    const jsonStr = JSON.stringify(conversationData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `conversation-${currentContact.name}-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportConversation = async () => {
+    // Informações da conversa (baseadas em estrutura SQL típica)
+    // Coletar todos os atendentes únicos que participaram da conversa
+    const uniqueAttendants = [{
+      id: 10, // Mock ID - seria obtido do backend
+      name: currentDetails.attendant.name,
+      avatar: currentDetails.attendant.avatar,
+    }];
+
+    const conversationInfo = {
+      id: conversationId,
+      protocol: currentDetails.protocol,
+      channel: "webchat",
+      client: {
+        id: currentContact.id,
+        name: currentContact.name,
+        avatar: currentContact.avatar,
+        ip: currentDetails.client.ip,
+        location: currentDetails.client.location,
+      },
+      attendants: uniqueAttendants,
+      participants: [
+        {
+          id: currentContact.id,
+          name: currentContact.name,
+          avatar: currentContact.avatar,
+          role: "client",
+        },
+        ...uniqueAttendants.map(att => ({
+          id: att.id,
+          name: att.name,
+          avatar: att.avatar,
+          role: "attendant" as const,
+        }))
+      ],
+      status: "active",
+      createdAt: currentDetails.date,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Processar mensagens mantendo URLs públicas
+    const processedMessages = filteredMessages.map((msg) => {
+      // Determinar remetente com base no sender
+      const senderInfo = msg.sender === "me" 
+        ? {
+            id: uniqueAttendants[0].id,
+            name: uniqueAttendants[0].name,
+            role: "attendant" as const
+          }
+        : {
+            id: conversationInfo.client.id,
+            name: conversationInfo.client.name,
+            role: "client" as const
+          };
+
+      const processedMsg: any = {
+        id: msg.id,
+        conversationId: msg.conversationId,
+        sender: senderInfo,
+        attendantId: msg.sender === "me" ? uniqueAttendants[0].id : null,
+        content: msg.content,
+        time: msg.time,
+        date: msg.date,
+        type: msg.type,
+        channel: msg.channel,
+        deleted: msg.deleted || false,
+      };
+
+      // Adicionar campos opcionais apenas se existirem
+      if (msg.duration) processedMsg.duration = msg.duration;
+      if (msg.caption) processedMsg.caption = msg.caption;
+      if (msg.recorded !== undefined) processedMsg.recorded = msg.recorded;
+      if (msg.forwarded !== undefined) processedMsg.forwarded = msg.forwarded;
+      if (msg.replyTo !== undefined) processedMsg.replyTo = msg.replyTo;
+      if (msg.reactions) processedMsg.reactions = msg.reactions;
+
+      // Manter URL pública do mediaUrl
+      if (msg.mediaUrl && msg.mediaUrl !== '#') {
+        processedMsg.mediaUrl = msg.mediaUrl;
+      }
+
+      // Processar metadata mantendo URL pública do cover
+      if (msg.metadata?.audio_tags) {
+        processedMsg.metadata = {
+          audio_tags: {
+            title: msg.metadata.audio_tags.title,
+            artist: msg.metadata.audio_tags.artist,
+            album: msg.metadata.audio_tags.album,
+            year: msg.metadata.audio_tags.year,
+            cover: msg.metadata.audio_tags.cover
+          }
+        };
+      }
+
+      return processedMsg;
+    });
+
+    const conversationData = {
+      id: conversationInfo.id,
+      protocol: conversationInfo.protocol,
+      channel: conversationInfo.channel,
+      client: conversationInfo.client,
+      attendants: conversationInfo.attendants,
+      participants: conversationInfo.participants,
+      status: conversationInfo.status,
+      createdAt: conversationInfo.createdAt,
+      updatedAt: conversationInfo.updatedAt,
+      messages: processedMessages,
+      exportedAt: new Date().toISOString(),
+    };
+    
+    const jsonStr = JSON.stringify(conversationData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `conversation-${currentContact.name}-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const scrollToMessage = (messageId: number) => {
     const element = document.getElementById(`message-${messageId}`);
     if (element) {
@@ -732,15 +1046,15 @@ export default function Conversations() {
 
   return (
     <MainLayout>
-      <div className="flex h-[calc(100vh-8rem)] gap-6 overflow-hidden">
+      <div className="flex h-[calc(100vh-5.50rem)] overflow-hidden">
         {/* Contacts List */}
         <Card className={cn(
-          "flex flex-col h-full border-border/50 bg-card/50 backdrop-blur shrink-0 transition-all duration-300 relative",
+          "flex flex-col h-full border-0 bg-card/50 backdrop-blur shrink-0 transition-all duration-300 relative rounded-none",
           isChatOpen ? "hidden lg:flex" : "flex w-full",
           sidebarCollapsed ? "lg:w-20" : "lg:w-80"
         )}>
-          <div className="p-4 space-y-4">
-            <div className="flex items-center gap-2">
+          <div className="h-16 px-4 flex items-center shrink-0">
+            <div className="flex items-center gap-2 w-full">
               {!sidebarCollapsed && (
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -811,13 +1125,13 @@ export default function Conversations() {
 
         {/* Chat Area */}
         <Card className={cn(
-          "flex-1 flex-col h-full border-border/50 bg-background overflow-hidden",
+          "flex-1 flex-col h-full border-0 bg-card/50 backdrop-blur overflow-hidden rounded-none",
           !isChatOpen ? "hidden md:flex" : "flex"
         )}>
           {isChatOpen ? (
             <>
               {/* Chat Header */}
-              <div className="p-4 border-b border-border flex items-center justify-between bg-card/30 shrink-0">
+              <div className="h-16 px-4 flex items-center justify-between bg-card/30 shrink-0">
                 <div className="flex items-center gap-3">
                   <Link href="/conversations">
                     <Button variant="ghost" size="icon" className="md:hidden" data-testid="button-back">
@@ -843,6 +1157,27 @@ export default function Conversations() {
                   <Button variant="ghost" size="icon" data-testid="button-call"><Phone className="h-5 w-5" /></Button>
                   <Button variant="ghost" size="icon" data-testid="button-video"><Video className="h-5 w-5" /></Button>
                   <Separator orientation="vertical" className="h-6 mx-1" />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" data-testid="button-more">
+                        <MoreVertical className="h-5 w-5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {import.meta.env.DEV && (
+                        <>
+                          <DropdownMenuItem onClick={exportConversationFull}>
+                            <File className="mr-2 h-4 w-4" />
+                            Exportar Dados
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={exportConversation}>
+                            <File className="mr-2 h-4 w-4" />
+                            Exportar Conversa
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button 
                     variant="ghost" 
                     size="icon" 
@@ -852,12 +1187,11 @@ export default function Conversations() {
                   >
                     {detailsSidebarOpen ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
                   </Button>
-                  <Button variant="ghost" size="icon" data-testid="button-more"><MoreVertical className="h-5 w-5" /></Button>
                 </div>
               </div>
 
               {/* Messages */}
-              <ScrollArea className="flex-1 p-4 bg-background/20">
+              <ScrollArea className="flex-1 p-4 bg-card/50 backdrop-blur">
                 <div className="space-y-6">
                   {filteredMessages.map((msg, index) => {
                     const replyMsg = msg.replyTo ? getReplyMessage(msg.replyTo) : null;
@@ -866,21 +1200,48 @@ export default function Conversations() {
                       return (
                         <div key={msg.id} id={`message-${msg.id}`} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}>
                           <div className={cn(
-                            "flex items-start gap-2 p-3 rounded-lg border max-w-[85%] md:max-w-[70%] backdrop-blur-md shadow-lg",
-                            msg.sender === "me"
-                              ? "bg-black/30 border-white/10"
-                              : "bg-black/20 border-white/10"
+                            "flex flex-col gap-2 max-w-[85%] md:max-w-[70%]"
                           )}>
-                            <Quote className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold mb-1">
-                                {msg.sender === "me" ? "Você" : currentContact.name}
-                              </p>
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground italic">
-                                <Trash2 className="h-3 w-3 shrink-0" />
-                                <span>Mensagem apagada</span>
+                            {/* Preview da mensagem original com efeito de citação */}
+                            {replyMsg && (
+                              <div 
+                                className={cn(
+                                  "p-2.5 rounded-lg text-xs cursor-pointer border-l-4 backdrop-blur-md hover:bg-black/20 transition-colors",
+                                  msg.sender === "me" 
+                                    ? "bg-black/15 border-white/30" 
+                                    : "bg-black/10 border-white/30"
+                                )}
+                                onClick={() => scrollToMessage(replyMsg.id)}
+                              >
+                                <div className="flex items-center gap-1.5 mb-1 opacity-80">
+                                  <Quote className="h-3 w-3 shrink-0" />
+                                  <span className="font-semibold truncate">
+                                    {replyMsg.sender === "me" ? "Você" : currentContact.name}
+                                  </span>
+                                </div>
+                                <p className="truncate opacity-70 text-[11px]">
+                                  {replyMsg.content || (replyMsg.type === 'image' ? '📷 Imagem' : replyMsg.type === 'audio' ? '🎵 Áudio' : replyMsg.type === 'video' ? '🎬 Vídeo' : '📎 Arquivo')}
+                                </p>
                               </div>
-                              <p className="text-[10px] text-muted-foreground mt-1">{msg.time}</p>
+                            )}
+                            
+                            {/* Mensagem apagada com efeito muted */}
+                            <div className={cn(
+                              "flex items-start gap-2 p-3 rounded-lg border backdrop-blur-md shadow-lg opacity-60",
+                              msg.sender === "me"
+                                ? "bg-black/20 border-white/5"
+                                : "bg-black/15 border-white/5"
+                            )}>
+                              <Trash2 className="h-4 w-4 text-muted-foreground/70 shrink-0 mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold mb-1 text-muted-foreground/80">
+                                  {msg.sender === "me" ? "Você" : currentContact.name}
+                                </p>
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70 italic">
+                                  <span>Mensagem apagada</span>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground/60 mt-1">{msg.time}</p>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -903,8 +1264,8 @@ export default function Conversations() {
                               className={cn(
                                 "relative rounded-2xl px-4 py-2.5 shadow-lg overflow-hidden backdrop-blur-md",
                                 msg.sender === "me"
-                                  ? "bg-black/40 border border-white/10 text-white rounded-br-none"
-                                  : "bg-black/30 border border-white/10 text-white rounded-bl-none"
+                                  ? "bg-black/40 border border-white/10 text-white rounded-br-none after:content-[''] after:absolute after:bottom-0 after:right-[-8px] after:w-0 after:h-0 after:border-l-[8px] after:border-l-black/40 after:border-b-[8px] after:border-b-transparent after:border-t-[8px] after:border-t-transparent"
+                                  : "bg-black/30 border border-white/10 text-white rounded-bl-none before:content-[''] before:absolute before:bottom-0 before:left-[-8px] before:w-0 before:h-0 before:border-r-[8px] before:border-r-black/30 before:border-b-[8px] before:border-b-transparent before:border-t-[8px] before:border-t-transparent"
                               )}
                             >
                             {/* Reply Preview with optional forwarded indicator */}
@@ -987,22 +1348,25 @@ export default function Conversations() {
                             )}
 
                             {msg.type === 'audio' && (
-                              <div className="min-w-[240px]">
+                              <div className="min-w-[280px]">
                                 {msg.metadata?.audio_tags ? (
-                                  <div className="flex gap-3 items-center bg-black/20 p-2 rounded-lg mb-2">
-                                    <div className="h-12 w-12 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0 relative">
+                                  <div className="flex gap-3 items-start bg-black/20 p-3 rounded-lg mb-2">
+                                    <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 shadow-lg">
                                       {msg.metadata.audio_tags.cover ? (
                                         <img src={msg.metadata.audio_tags.cover} alt="Cover" className="h-full w-full object-cover" />
                                       ) : (
-                                        <Music className="h-6 w-6 opacity-50" />
+                                        <Music className="h-8 w-8 opacity-50" />
                                       )}
-                                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity cursor-pointer" onClick={() => togglePlay(msg)}>
-                                         {playingId === msg.id ? <Pause className="h-6 w-6 fill-white text-white" /> : <Play className="h-6 w-6 fill-white text-white" />}
-                                      </div>
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <p className="font-semibold text-sm truncate">{msg.metadata.audio_tags.title}</p>
                                       <p className="text-xs opacity-70 truncate">{msg.metadata.audio_tags.artist}</p>
+                                      {msg.metadata.audio_tags.album && (
+                                        <p className="text-xs opacity-60 truncate mt-0.5 italic">
+                                          {msg.metadata.audio_tags.album}
+                                          {msg.metadata.audio_tags.year && ` (${msg.metadata.audio_tags.year})`}
+                                        </p>
+                                      )}
                                     </div>
                                   </div>
                                 ) : msg.recorded ? (
@@ -1025,26 +1389,28 @@ export default function Conversations() {
                                 <div className="flex items-center gap-3 mt-1">
                                   <Button 
                                     size="icon" 
-                                    variant="ghost" 
-                                    className="h-8 w-8 rounded-full shrink-0 hover:bg-white/10"
+                                    className="h-10 w-10 rounded-full shrink-0 bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/50 text-white"
                                     onClick={() => togglePlay(msg)}
                                     data-testid={`button-play-audio-${msg.id}`}
                                   >
-                                    {playingId === msg.id ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
+                                    {playingId === msg.id ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
                                   </Button>
                                   <div className="flex-1 space-y-1">
-                                    <Slider 
-                                      value={[playingId === msg.id ? audioProgress : 0]} 
-                                      max={100} 
-                                      step={1}
-                                      className="cursor-pointer"
-                                      onValueChange={(val) => {
+                                    <div className="relative h-1 bg-white/20 rounded-full overflow-hidden cursor-pointer"
+                                      onClick={(e) => {
                                         if (playingId === msg.id && audioRef.current && audioRef.current.duration) {
-                                          audioRef.current.currentTime = (val[0] / 100) * audioRef.current.duration;
-                                          setAudioProgress(val[0]);
+                                          const rect = e.currentTarget.getBoundingClientRect();
+                                          const percent = ((e.clientX - rect.left) / rect.width) * 100;
+                                          audioRef.current.currentTime = (percent / 100) * audioRef.current.duration;
+                                          setAudioProgress(percent);
                                         }
                                       }}
-                                    />
+                                    >
+                                      <div 
+                                        className="absolute inset-y-0 left-0 bg-blue-500 rounded-full transition-all"
+                                        style={{ width: `${playingId === msg.id ? audioProgress : 0}%` }}
+                                      />
+                                    </div>
                                     <div className="flex justify-between text-[10px] opacity-70 font-mono">
                                       <span>{playingId === msg.id && audioRef.current ? formatTime(audioRef.current.currentTime) : "0:00"}</span>
                                       <span>{msg.duration}</span>
@@ -1054,12 +1420,78 @@ export default function Conversations() {
                               </div>
                             )}
 
-                            {/* Footer */}
-                            <div className="flex items-center justify-end gap-1 mt-1 opacity-70 text-[10px]">
-                              <span>{msg.time}</span>
-                              {msg.sender === "me" && (
-                                <span className="text-blue-300">✓✓</span>
-                              )}
+                            {/* Footer with actions on left and time on right */}
+                            <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-white/5">
+                              {/* Action Buttons on Left */}
+                              <div className="flex items-center gap-1 opacity-0 group-hover/message:opacity-100 transition-opacity">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 hover:bg-white/10"
+                                  onClick={() => setReplyingTo(msg.id)}
+                                  data-testid={`button-reply-${msg.id}`}
+                                  title="Responder"
+                                >
+                                  <Reply className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 hover:bg-white/10"
+                                  onClick={() => handleForwardMessage(msg.id)}
+                                  data-testid={`button-forward-${msg.id}`}
+                                  title="Encaminhar"
+                                >
+                                  <Forward className="h-3.5 w-3.5" />
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 hover:bg-white/10"
+                                      data-testid={`button-emoji-${msg.id}`}
+                                      title="Reagir"
+                                    >
+                                      <Smile className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start" className="w-auto p-2">
+                                    <div className="grid grid-cols-5 gap-1">
+                                      {EMOJI_LIST.slice(0, 10).map((emoji) => (
+                                        <Button
+                                          key={emoji}
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8 text-lg hover:bg-accent"
+                                          onClick={() => handleReactToMessage(msg.id, emoji)}
+                                          data-testid={`emoji-${emoji}-${msg.id}`}
+                                        >
+                                          {emoji}
+                                        </Button>
+                                      ))}
+                                    </div>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 hover:bg-white/10 text-red-400 hover:text-red-500"
+                                  onClick={() => handleDeleteMessage(msg.id)}
+                                  data-testid={`button-delete-${msg.id}`}
+                                  title="Apagar"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+
+                              {/* Time on Right */}
+                              <div className="flex items-center gap-1 opacity-70 text-[10px] ml-auto">
+                                <span>{msg.time}</span>
+                                {msg.sender === "me" && (
+                                  <span className="text-blue-300">✓✓</span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -1081,39 +1513,6 @@ export default function Conversations() {
                             </div>
                           )}
                           </div>
-
-                          {/* Persistent Action Menu (accessible via keyboard and touch) */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 shrink-0"
-                                data-testid={`button-message-menu-${msg.id}`}
-                                aria-label="Ações da mensagem"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align={msg.sender === "me" ? "end" : "start"}>
-                              <DropdownMenuItem onClick={() => setReplyingTo(msg.id)} data-testid={`menu-reply-${msg.id}`}>
-                                <Reply className="h-4 w-4 mr-2" />
-                                Responder
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleForwardMessage(msg.id)} data-testid={`menu-forward-${msg.id}`}>
-                                <Forward className="h-4 w-4 mr-2" />
-                                Encaminhar
-                              </DropdownMenuItem>
-                              <EmojiPicker 
-                                messageId={msg.id} 
-                                onSelect={(emoji) => handleReactToMessage(msg.id, emoji)} 
-                              />
-                              <DropdownMenuItem onClick={() => handleDeleteMessage(msg.id)} className="text-destructive" data-testid={`menu-delete-${msg.id}`}>
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Apagar
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
                         </div>
                       </div>
                     );
@@ -1181,12 +1580,12 @@ export default function Conversations() {
             {/* Desktop Card - Only render on large screens */}
             {isLargeScreen && (
               <Card className={cn(
-                "flex flex-col h-full border-border/50 bg-card/50 backdrop-blur shrink-0 transition-all duration-300 overflow-hidden",
-                detailsSidebarOpen ? "w-80" : "w-0 border-0"
+                "flex flex-col h-full border-0 bg-card/50 backdrop-blur shrink-0 transition-all duration-300 overflow-hidden rounded-none",
+                detailsSidebarOpen ? "w-80" : "w-0"
               )}>
                 {detailsSidebarOpen && (
                   <>
-                    <div className="p-4 border-b border-border bg-card/30 shrink-0 flex items-center justify-between">
+                    <div className="h-16 px-4 bg-card/30 shrink-0 flex items-center justify-between">
                       <h3 className="font-semibold">Detalhes da Conversa</h3>
                       <Button 
                         variant="ghost" 

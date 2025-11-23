@@ -104,6 +104,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
+  // Serve attached assets securely through /storage route
+  app.use("/storage", (req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    next();
+  });
+  app.use("/storage", express.static(path.join(process.cwd(), "attached_assets")));
+
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     try {
