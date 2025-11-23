@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sidebar, Menu, Home, MessageSquare, Settings, ChevronLeft, ChevronRight, Users, Bell } from "lucide-react";
+import { Sidebar, Menu, Home, MessageSquare, Settings, ChevronLeft, ChevronRight, Users, Bell, Headset } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "wouter";
@@ -10,11 +10,18 @@ export function AppSidebar() {
 
   const navItems = [
     { icon: Home, label: "Início", href: "/" },
-    { icon: MessageSquare, label: "Conversas", href: "/chats" },
+    { icon: MessageSquare, label: "Conversas", href: "/conversations" },
     { icon: Users, label: "Contatos", href: "/contacts" },
+    { icon: Headset, label: "Atendentes", href: "/attendants" },
     { icon: Bell, label: "Notificações", href: "/notifications" },
     { icon: Settings, label: "Configurações", href: "/settings" },
   ];
+
+  // Check if current path starts with item.href (for highlighting /conversations when in /conversations/webchat/1)
+  const isActive = (href: string) => {
+    if (href === "/") return location === "/";
+    return location.startsWith(href);
+  };
 
   return (
     <aside 
@@ -37,9 +44,9 @@ export function AppSidebar() {
         <nav className="space-y-2 px-2">
           {navItems.map((item) => (
             <Link key={item.href} href={item.href}>
-              <div className={cn(
+              <a className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors group cursor-pointer",
-                location === item.href && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                isActive(item.href) && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
               )}>
                 <item.icon className={cn("h-5 w-5 shrink-0", collapsed ? "mx-auto" : "")} />
                 {!collapsed && (
@@ -47,7 +54,7 @@ export function AppSidebar() {
                     {item.label}
                   </span>
                 )}
-              </div>
+              </a>
             </Link>
           ))}
         </nav>

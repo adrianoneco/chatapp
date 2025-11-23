@@ -5,15 +5,27 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
-import Home from "@/pages/home";
+import Dashboard from "@/pages/dashboard";
+import Conversations from "@/pages/conversations";
+import Contacts from "@/pages/contacts";
+import Attendants from "@/pages/attendants";
+import Settings from "@/pages/settings";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/" component={Dashboard} />
       <Route path="/login" component={AuthPage} />
       <Route path="/register" component={AuthPage} />
       <Route path="/recover" component={AuthPage} />
+      
+      <Route path="/conversations" component={Conversations} />
+      <Route path="/conversations/webchat/:id" component={Conversations} />
+      
+      <Route path="/contacts" component={Contacts} />
+      <Route path="/attendants" component={Attendants} />
+      <Route path="/settings" component={Settings} />
+      
       <Route component={NotFound} />
     </Switch>
   );
