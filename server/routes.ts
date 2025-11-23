@@ -128,6 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
       }
+      console.error("[ERROR] Failed to create user:", error);
       res.status(500).json({ message: "Erro ao criar usuário" });
     }
   });

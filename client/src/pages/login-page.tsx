@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
-import logo from "@assets/generated_images/abstract_chat_bubble_icon_with_gradient.png";
+import logo from "/chatapp-logo-white.svg";
 import { useLogin } from "@/lib/api";
 
 const loginSchema = z.object({
@@ -47,17 +47,15 @@ export default function LoginPage() {
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[100px]" />
       
       <div className="w-full max-w-md z-10">
-        <div className="text-center mb-8 space-y-2">
-          <div className="mx-auto w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-xl border border-white/20 shadow-2xl mb-6">
-            <img src={logo} alt="Logo" className="w-10 h-10 object-contain" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white font-[Outfit]">Bem-vindo de volta</h1>
-          <p className="text-slate-400">Faça login para continuar no ChatApp</p>
-        </div>
-
         <Card className="border-white/10 bg-black/40 backdrop-blur-md shadow-2xl">
-          <CardHeader>
-            <CardTitle className="text-xl text-white">Login</CardTitle>
+          <CardHeader className="space-y-4">
+            <div className="flex justify-center">
+              <img src={logo} alt="ChatApp Logo" className="h-12 object-contain" />
+            </div>
+            <div className="text-center space-y-2">
+              <CardTitle className="text-2xl font-bold text-white font-[Outfit]">Bem-vindo de volta</CardTitle>
+              <p className="text-slate-400 text-sm">Faça login para continuar</p>
+            </div>
           </CardHeader>
           <CardContent>
             {error && (

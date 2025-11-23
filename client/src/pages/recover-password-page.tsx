@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, Loader2, CheckCircle2 } from "lucide-react";
-import logo from "@assets/generated_images/abstract_chat_bubble_icon_with_gradient.png";
+import logo from "/chatapp-logo-white.svg";
 import { useRecoverPassword } from "@/lib/api";
 
 const recoverSchema = z.object({
@@ -47,19 +47,14 @@ export default function RecoverPasswordPage() {
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[100px]" />
       
       <div className="w-full max-w-md z-10">
-        <div className="text-center mb-8 space-y-2">
-          <div className="mx-auto w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-xl border border-white/20 shadow-2xl mb-6">
-            <img src={logo} alt="Logo" className="w-10 h-10 object-contain" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white font-[Outfit]">Recuperar Senha</h1>
-          <p className="text-slate-400">Digite seu email para receber instruções</p>
-        </div>
-
         <Card className="border-white/10 bg-black/40 backdrop-blur-md shadow-2xl">
           {success ? (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-300" data-testid="recover-success-message">
-              <CardHeader>
-                <div className="mx-auto w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mb-4">
+              <CardHeader className="space-y-4">
+                <div className="flex justify-center">
+                  <img src={logo} alt="ChatApp Logo" className="h-12 object-contain" />
+                </div>
+                <div className="mx-auto w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
                   <CheckCircle2 className="h-6 w-6 text-green-400" />
                 </div>
                 <CardTitle className="text-xl text-white text-center">Email Enviado!</CardTitle>
@@ -77,11 +72,14 @@ export default function RecoverPasswordPage() {
             </div>
           ) : (
             <>
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Recuperar Senha</CardTitle>
-                <CardDescription>
-                  Digite seu email para receber um link de redefinição.
-                </CardDescription>
+              <CardHeader className="space-y-4">
+                <div className="flex justify-center">
+                  <img src={logo} alt="ChatApp Logo" className="h-12 object-contain" />
+                </div>
+                <div className="text-center space-y-2">
+                  <CardTitle className="text-2xl font-bold text-white font-[Outfit]">Recuperar Senha</CardTitle>
+                  <p className="text-slate-400 text-sm">Digite seu email para receber instruções</p>
+                </div>
               </CardHeader>
               <CardContent>
                 {error && (
