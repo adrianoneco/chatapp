@@ -556,6 +556,7 @@ export default function Conversations() {
   const [detailsSidebarOpen, setDetailsSidebarOpen] = useState(false);
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [hoveredMessage, setHoveredMessage] = useState<number | null>(null);
+  const [isLargeScreen, setIsLargeScreen] = useState(false);
   
   // Audio Player State
   const [playingId, setPlayingId] = useState<number | null>(null);
@@ -567,10 +568,11 @@ export default function Conversations() {
   // Expandir sidebar direita automaticamente em telas grandes
   useEffect(() => {
     const handleResize = () => {
-      const isLargeScreen = window.matchMedia('(min-width: 1024px)').matches;
-      if (isLargeScreen && isChatOpen) {
+      const largeScreen = window.matchMedia('(min-width: 1024px)').matches;
+      setIsLargeScreen(largeScreen);
+      if (largeScreen && isChatOpen) {
         setDetailsSidebarOpen(true);
-      } else if (!isLargeScreen) {
+      } else if (!largeScreen) {
         setDetailsSidebarOpen(false);
       }
     };
@@ -1159,43 +1161,47 @@ export default function Conversations() {
         {/* Details Sidebar - Sheet for mobile, Card for desktop */}
         {isChatOpen && (
           <>
-            {/* Mobile Sheet */}
-            <Sheet open={detailsSidebarOpen} onOpenChange={setDetailsSidebarOpen}>
-              <SheetContent side="right" className="w-80 p-0 lg:hidden">
-                <SheetHeader className="p-4 border-b border-border">
-                  <SheetTitle>Detalhes da Conversa</SheetTitle>
-                </SheetHeader>
-                <ScrollArea className="h-[calc(100vh-5rem)]">
-                  <ConversationDetailsContent currentDetails={currentDetails} />
-                </ScrollArea>
-              </SheetContent>
-            </Sheet>
-
-            {/* Desktop Card */}
-            <Card className={cn(
-              "hidden lg:flex flex-col h-full border-border/50 bg-card/50 backdrop-blur shrink-0 transition-all duration-300 overflow-hidden",
-              detailsSidebarOpen ? "w-80" : "w-0 border-0"
-            )}>
-              {detailsSidebarOpen && (
-                <>
-                  <div className="p-4 border-b border-border bg-card/30 shrink-0 flex items-center justify-between">
-                    <h3 className="font-semibold">Detalhes da Conversa</h3>
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={() => setDetailsSidebarOpen(false)}
-                      className="h-8 w-8"
-                      data-testid="button-close-details"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <ScrollArea className="flex-1">
+            {/* Mobile Sheet - Only render on small/medium screens */}
+            {!isLargeScreen && (
+              <Sheet open={detailsSidebarOpen} onOpenChange={setDetailsSidebarOpen}>
+                <SheetContent side="right" className="w-80 p-0">
+                  <SheetHeader className="p-4 border-b border-border">
+                    <SheetTitle>Detalhes da Conversa</SheetTitle>
+                  </SheetHeader>
+                  <ScrollArea className="h-[calc(100vh-5rem)]">
                     <ConversationDetailsContent currentDetails={currentDetails} />
                   </ScrollArea>
-                </>
-              )}
-            </Card>
+                </SheetContent>
+              </Sheet>
+            )}
+
+            {/* Desktop Card - Only render on large screens */}
+            {isLargeScreen && (
+              <Card className={cn(
+                "flex flex-col h-full border-border/50 bg-card/50 backdrop-blur shrink-0 transition-all duration-300 overflow-hidden",
+                detailsSidebarOpen ? "w-80" : "w-0 border-0"
+              )}>
+                {detailsSidebarOpen && (
+                  <>
+                    <div className="p-4 border-b border-border bg-card/30 shrink-0 flex items-center justify-between">
+                      <h3 className="font-semibold">Detalhes da Conversa</h3>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => setDetailsSidebarOpen(false)}
+                        className="h-8 w-8"
+                        data-testid="button-close-details"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <ScrollArea className="flex-1">
+                      <ConversationDetailsContent currentDetails={currentDetails} />
+                    </ScrollArea>
+                  </>
+                )}
+              </Card>
+            )}
           </>
         )}
       </div>
