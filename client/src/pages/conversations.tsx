@@ -268,10 +268,20 @@ export default function Conversations() {
   const filteredMessages = messages.filter(m => m.conversationId === (conversationId || 1));
 
   useEffect(() => {
+    // Scroll to bottom when entering a conversation or when messages update
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+    }, 100);
+  }, [conversationId]);
+
+  useEffect(() => {
+    // Smooth scroll when messages update
     if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: "smooth" });
+      scrollRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [filteredMessages, conversationId]);
+  }, [filteredMessages.length]);
 
   // Fetch ID3 Tags for audio files
   useEffect(() => {
@@ -630,20 +640,20 @@ export default function Conversations() {
               {/* Input Area */}
               <div className="p-4 bg-card/30 border-t border-border shrink-0">
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="button-emoji">
-                    <Smile className="h-6 w-6" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="button-attach">
-                    <Paperclip className="h-6 w-6" />
-                  </Button>
-                  <div className="flex-1 relative">
+                  <div className="flex-1 relative bg-background/50 rounded-lg flex items-center px-3 py-2">
+                    <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0" data-testid="button-emoji">
+                      <Smile className="h-5 w-5" />
+                    </Button>
                     <Input 
                       placeholder="Digite uma mensagem..." 
-                      className="bg-background/50 pr-10 py-6"
+                      className="flex-1 bg-transparent border-0 focus-visible:ring-0 px-2"
                       data-testid="input-message"
                     />
+                    <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0" data-testid="button-attach">
+                      <Paperclip className="h-5 w-5" />
+                    </Button>
                   </div>
-                  <Button size="icon" className="h-12 w-12 rounded-full shadow-lg hover-elevate active-elevate-2" data-testid="button-send">
+                  <Button size="icon" className="h-12 w-12 rounded-full shadow-lg hover-elevate active-elevate-2 shrink-0" data-testid="button-send">
                     <Mic className="h-6 w-6" />
                   </Button>
                 </div>
@@ -735,32 +745,54 @@ async function readID3Tags(blob: Blob): Promise<{ title: string; artist: string;
       
       offset += 10; // Skip frame header
       
+      const frameDataStart = offset;
+      
       if (frameId === 'TIT2' || frameId === 'TT2') {
         // Title
         const encoding = view.getUint8(offset);
         offset++;
         title = readString(view, offset, frameSize - 1, encoding);
+        offset = frameDataStart + frameSize;
       } else if (frameId === 'TPE1' || frameId === 'TP1') {
         // Artist
         const encoding = view.getUint8(offset);
         offset++;
         artist = readString(view, offset, frameSize - 1, encoding);
+        offset = frameDataStart + frameSize;
       } else if (frameId === 'APIC' || frameId === 'PIC') {
         // Album art
+        const encoding = view.getUint8(offset);
         offset++; // Skip encoding
-        const mimeEnd = findNullTerminator(view, offset, offset + frameSize);
+        
+        // Read MIME type
+        const mimeEnd = findNullTerminator(view, offset, frameDataStart + frameSize);
         const mime = readString(view, offset, mimeEnd - offset, 0);
         offset = mimeEnd + 1;
+        
         offset++; // Skip picture type
-        const descEnd = findNullTerminator(view, offset, offset + frameSize);
+        
+        // Read description
+        const descEnd = findNullTerminator(view, offset, frameDataStart + frameSize);
         offset = descEnd + 1;
         
-        const imageData = new Uint8Array(arrayBuffer.slice(offset, offset + frameSize - (offset - (offset - frameSize))));
-        const base64 = btoa(String.fromCharCode(...Array.from(imageData)));
+        // Read image data
+        const imageStart = offset;
+        const imageEnd = frameDataStart + frameSize;
+        const imageData = new Uint8Array(arrayBuffer.slice(imageStart, imageEnd));
+        
+        // Convert to base64
+        let binary = '';
+        const len = imageData.byteLength;
+        for (let i = 0; i < len; i++) {
+          binary += String.fromCharCode(imageData[i]);
+        }
+        const base64 = btoa(binary);
         cover = `data:${mime};base64,${base64}`;
+        
+        offset = frameDataStart + frameSize;
+      } else {
+        offset = frameDataStart + frameSize;
       }
-      
-      offset += frameSize - (frameId === 'APIC' || frameId === 'PIC' ? 0 : 1);
     }
     
     return { title, artist, cover };
