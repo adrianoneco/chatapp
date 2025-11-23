@@ -2,6 +2,9 @@ import { type Server } from "node:http";
 
 import express, { type Express, type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import ConnectPgSimple from "connect-pg-simple";
+import pkg from "pg";
+const { Pool } = pkg;
 import { registerRoutes } from "./routes";
 
 export function log(message: string, source = "express") {
@@ -23,7 +26,16 @@ declare module 'http' {
   }
 }
 
+const PgSession = ConnectPgSimple(session);
+const pgPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
 app.use(session({
+  store: new PgSession({
+    pool: pgPool,
+    createTableIfMissing: true,
+  }),
   secret: process.env.SESSION_SECRET || "dev-secret-change-in-production",
   resave: false,
   saveUninitialized: false,
