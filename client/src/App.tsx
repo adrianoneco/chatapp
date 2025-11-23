@@ -33,43 +33,49 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   return <Component />;
 }
 
+function WebSocketManager() {
+  useWebSocket();
+  return null;
+}
+
 function Router() {
   return (
-    <Switch>
-      <Route path="/login" component={AuthPage} />
-      <Route path="/register" component={AuthPage} />
-      <Route path="/recover" component={AuthPage} />
-      
-      <Route path="/">
-        {() => <ProtectedRoute component={Dashboard} />}
-      </Route>
-      <Route path="/conversations">
-        {() => <ProtectedRoute component={Conversations} />}
-      </Route>
-      <Route path="/conversations/webchat/:id">
-        {() => <ProtectedRoute component={Conversations} />}
-      </Route>
-      <Route path="/contacts">
-        {() => <ProtectedRoute component={Contacts} />}
-      </Route>
-      <Route path="/attendants">
-        {() => <ProtectedRoute component={Attendants} />}
-      </Route>
-      <Route path="/settings">
-        {() => <ProtectedRoute component={Settings} />}
-      </Route>
-      <Route path="/notifications">
-        {() => <ProtectedRoute component={Notifications} />}
-      </Route>
-      
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      <WebSocketManager />
+      <Switch>
+        <Route path="/login" component={AuthPage} />
+        <Route path="/register" component={AuthPage} />
+        <Route path="/recover" component={AuthPage} />
+        
+        <Route path="/">
+          {() => <ProtectedRoute component={Dashboard} />}
+        </Route>
+        <Route path="/conversations">
+          {() => <ProtectedRoute component={Conversations} />}
+        </Route>
+        <Route path="/conversations/webchat/:id">
+          {() => <ProtectedRoute component={Conversations} />}
+        </Route>
+        <Route path="/contacts">
+          {() => <ProtectedRoute component={Contacts} />}
+        </Route>
+        <Route path="/attendants">
+          {() => <ProtectedRoute component={Attendants} />}
+        </Route>
+        <Route path="/settings">
+          {() => <ProtectedRoute component={Settings} />}
+        </Route>
+        <Route path="/notifications">
+          {() => <ProtectedRoute component={Notifications} />}
+        </Route>
+        
+        <Route component={NotFound} />
+      </Switch>
+    </>
   );
 }
 
 function App() {
-  useWebSocket();
-  
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
