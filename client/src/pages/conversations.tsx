@@ -4,11 +4,12 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Reply } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { useRef, useEffect } from "react";
 
 const contacts = [
   { id: 1, name: "Ana Silva", status: "Online", lastMessage: "Combinado! Até logo.", time: "10:42", unread: 2, avatar: "https://i.pravatar.cc/150?u=1" },
@@ -19,21 +20,51 @@ const contacts = [
   { id: 6, name: "Julia Pereira", status: "Online", lastMessage: "Vamos almoçar?", time: "09:15", unread: 1, avatar: "https://i.pravatar.cc/150?u=6" },
 ];
 
-const messages = [
-  { id: 1, sender: "me", content: "Oi Ana, tudo bem?", time: "10:30" },
-  { id: 2, sender: "other", content: "Oii! Tudo ótimo por aqui e com você?", time: "10:32" },
-  { id: 3, sender: "me", content: "Tudo certo. Viu o projeto novo?", time: "10:33" },
-  { id: 4, sender: "other", content: "Sim! Ficou incrível o design.", time: "10:35" },
-  { id: 5, sender: "other", content: "Acho que só precisamos ajustar aquele detalhe no header.", time: "10:35" },
-  { id: 6, sender: "me", content: "Verdade. Vou mexer nisso agora.", time: "10:40" },
-  { id: 7, sender: "other", content: "Combinado! Até logo.", time: "10:42" },
+const allMessages = [
+  { id: 1, conversationId: 1, sender: "me", content: "Oi Ana, tudo bem?", time: "10:30" },
+  { id: 2, conversationId: 1, sender: "other", content: "Oii! Tudo ótimo por aqui e com você?", time: "10:32" },
+  { id: 3, conversationId: 1, sender: "me", content: "Tudo certo. Viu o projeto novo?", time: "10:33" },
+  { id: 4, conversationId: 1, sender: "other", content: "Sim! Ficou incrível o design.", time: "10:35" },
+  { id: 5, conversationId: 1, sender: "other", content: "Acho que só precisamos ajustar aquele detalhe no header.", time: "10:35", replyTo: 3 },
+  { id: 6, conversationId: 1, sender: "me", content: "Verdade. Vou mexer nisso agora.", time: "10:40", replyTo: 5 },
+  { id: 7, conversationId: 1, sender: "other", content: "Combinado! Até logo.", time: "10:42" },
+  { id: 8, conversationId: 1, sender: "other", content: "Encaminhando o orçamento que você pediu.", time: "10:45", forwarded: true },
+  
+  { id: 101, conversationId: 2, sender: "other", content: "Você viu o novo layout?", time: "Ontem" },
+  { id: 102, conversationId: 2, sender: "me", content: "Ainda não, vou olhar agora!", time: "Ontem" },
 ];
 
 export default function Conversations() {
   const [location, setLocation] = useLocation();
   const [match, params] = useRoute("/conversations/webchat/:id");
   const isChatOpen = !!match;
-  const currentContact = contacts.find(c => c.id === Number(params?.id)) || contacts[0];
+  const conversationId = Number(params?.id);
+  const currentContact = contacts.find(c => c.id === conversationId) || contacts[0];
+  
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Filter messages for current conversation
+  // In a real app this would be fetched from an API
+  const messages = allMessages.filter(m => m.conversationId === (conversationId || 1));
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, conversationId]);
+
+  const scrollToMessage = (messageId: number) => {
+    const element = document.getElementById(`message-${messageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      element.classList.add("bg-accent/50");
+      setTimeout(() => element.classList.remove("bg-accent/50"), 1000);
+    }
+  };
+
+  const getReplyMessage = (replyId: number) => {
+    return allMessages.find(m => m.id === replyId);
+  };
 
   return (
     <MainLayout>
@@ -55,7 +86,7 @@ export default function Conversations() {
                 <Link key={contact.id} href={`/conversations/webchat/${contact.id}`}>
                   <a className={cn(
                     "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
-                    Number(params?.id) === contact.id ? "bg-accent/60" : ""
+                    conversationId === contact.id ? "bg-accent/60" : ""
                   )}>
                     <div className="relative">
                       <Avatar>
@@ -129,26 +160,66 @@ export default function Conversations() {
 
               {/* Messages */}
               <ScrollArea className="flex-1 p-4 bg-background/20">
-                <div className="space-y-4">
-                  {messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"}`}
-                    >
+                <div className="space-y-6">
+                  {messages.map((msg, index) => {
+                    const replyMsg = msg.replyTo ? getReplyMessage(msg.replyTo) : null;
+                    const isLast = index === messages.length - 1;
+                    
+                    return (
                       <div
-                        className={`max-w-[70%] rounded-2xl px-4 py-2.5 shadow-sm ${
-                          msg.sender === "me"
-                            ? "bg-primary text-primary-foreground rounded-br-none"
-                            : "bg-secondary text-secondary-foreground rounded-bl-none"
-                        }`}
+                        key={msg.id}
+                        id={`message-${msg.id}`}
+                        className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}
                       >
-                        <p className="text-sm leading-relaxed">{msg.content}</p>
-                        <p className={`text-[10px] mt-1 text-right ${msg.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                          {msg.time}
-                        </p>
+                        <div className="flex flex-col max-w-[70%]">
+                          {/* Forwarded Label */}
+                          {msg.forwarded && (
+                            <div className="flex items-center text-xs text-muted-foreground mb-1 italic">
+                              <CornerDownRight className="h-3 w-3 mr-1" />
+                              Encaminhada
+                            </div>
+                          )}
+
+                          <div
+                            className={cn(
+                              "relative rounded-2xl px-4 py-2.5 shadow-sm",
+                              msg.sender === "me"
+                                ? "bg-primary text-primary-foreground rounded-br-none"
+                                : "bg-secondary text-secondary-foreground rounded-bl-none"
+                            )}
+                          >
+                            {/* Reply Preview */}
+                            {replyMsg && (
+                              <div 
+                                className={cn(
+                                  "mb-2 p-2 rounded text-xs cursor-pointer border-l-4 relative overflow-hidden group",
+                                  msg.sender === "me" 
+                                    ? "bg-primary-foreground/10 border-primary-foreground/50 hover:bg-primary-foreground/20" 
+                                    : "bg-background/10 border-foreground/20 hover:bg-background/20"
+                                )}
+                                onClick={() => scrollToMessage(replyMsg.id)}
+                              >
+                                <div className="font-semibold mb-0.5 flex items-center gap-1">
+                                  <Quote className="h-3 w-3" />
+                                  {replyMsg.sender === "me" ? "Você" : currentContact.name}
+                                </div>
+                                <p className="truncate opacity-90">{replyMsg.content}</p>
+                              </div>
+                            )}
+
+                            {/* Message Content */}
+                            <p className="text-sm leading-relaxed">{msg.content}</p>
+                            
+                            {/* Timestamp */}
+                            <p className={`text-[10px] mt-1 text-right ${msg.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                              {msg.time}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
+                  <div ref={scrollRef} />
                 </div>
               </ScrollArea>
 
