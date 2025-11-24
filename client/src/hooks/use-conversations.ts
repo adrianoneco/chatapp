@@ -143,6 +143,69 @@ export function useAssignConversation() {
   });
 }
 
+export function useStartConversation() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      return apiRequest(`/conversations/${conversationId}/start`, {
+        method: "PATCH",
+      });
+    },
+    onSuccess: (_, conversationId) => {
+      queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+      queryClient.invalidateQueries({ queryKey: [`/conversations/${conversationId}`] });
+    },
+  });
+}
+
+export function useCloseConversation() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      return apiRequest(`/conversations/${conversationId}/close`, {
+        method: "PATCH",
+      });
+    },
+    onSuccess: (_, conversationId) => {
+      queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+      queryClient.invalidateQueries({ queryKey: [`/conversations/${conversationId}`] });
+    },
+  });
+}
+
+export function useReopenConversation() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      return apiRequest(`/conversations/${conversationId}/reopen`, {
+        method: "PATCH",
+      });
+    },
+    onSuccess: (_, conversationId) => {
+      queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+      queryClient.invalidateQueries({ queryKey: [`/conversations/${conversationId}`] });
+    },
+  });
+}
+
+export function useDeleteConversation() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      return apiRequest(`/conversations/${conversationId}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+    },
+  });
+}
+
 // Messages hooks
 export function useMessages(conversationId: string | undefined) {
   return useQuery<MessageWithDetails[]>({
