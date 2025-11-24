@@ -92,6 +92,21 @@ const uploadAudio = multer({
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB for audio
 });
 
+const uploadDocument = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(process.cwd(), "data", "documents");
+      fs.mkdirSync(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
+    },
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB for documents
+});
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -717,6 +732,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error uploading audio:", error);
       res.status(500).json({ message: "Erro ao fazer upload do áudio" });
+    }
+  });
+
+  app.post("/api/upload/document", requireAuth, uploadDocument.single("document"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "Nenhum documento fornecido" });
+      }
+      const url = `/data/documents/${req.file.filename}`;
+      res.json({ url });
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      res.status(500).json({ message: "Erro ao fazer upload do documento" });
     }
   });
 

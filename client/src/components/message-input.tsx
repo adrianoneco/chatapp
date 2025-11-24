@@ -11,6 +11,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { apiRequest } from "@/lib/api";
+import { detectFileType, FileInfo } from "@/lib/file-utils";
+import { FilePreview } from "@/components/file-preview";
 
 interface QuickMessage {
   id: string;
@@ -22,7 +24,7 @@ interface MessageInputProps {
   conversationId: string;
   onSendMessage: (data: {
     content: string;
-    type: "text" | "image" | "video" | "audio";
+    type: "text" | "image" | "video" | "audio" | "document";
     mediaUrl?: string;
     duration?: string;
     caption?: string;
@@ -57,8 +59,10 @@ export function MessageInput({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<"image" | "video" | "audio" | null>(null);
+  const [mediaType, setMediaType] = useState<"image" | "video" | "audio" | "document" | null>(null);
   const [mediaCaption, setMediaCaption] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
   
   // Recording states
   const [isRecording, setIsRecording] = useState(false);
@@ -252,19 +256,43 @@ export function MessageInput({
     setRecordedChunks([]);
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "video" | "file") => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, sourceType?: "image" | "video") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const info = detectFileType(file);
     const url = URL.createObjectURL(file);
+    
+    // If sourceType is provided (from camera/video button), use it
+    // Otherwise use the detected type
+    const finalType = sourceType || info.type;
+    
+    // Convert detected file type to media type
+    let mediaTypeValue: "image" | "video" | "audio" | "document" = "image";
+    if (finalType === "video") mediaTypeValue = "video";
+    else if (finalType === "audio") mediaTypeValue = "audio";
+    else if (finalType === "document") mediaTypeValue = "document";
+    else if (finalType === "image") mediaTypeValue = "image";
+    
+    setSelectedFile(file);
+    setFileInfo(info);
     setMediaPreview(url);
-    setMediaType(type === "file" ? "image" : type);
+    setMediaType(mediaTypeValue);
     setRecordedChunks([file]);
   };
 
-  const uploadMedia = async (file: Blob, type: "image" | "video" | "audio"): Promise<string> => {
+  const uploadMedia = async (file: Blob, type: "image" | "video" | "audio" | "document"): Promise<string> => {
     const formData = new FormData();
-    const extension = type === "audio" ? "webm" : type === "video" ? "webm" : "jpg";
+    
+    // Determine file extension based on type and file
+    let extension = "bin";
+    if (file instanceof File) {
+      const parts = file.name.split(".");
+      extension = parts.length > 1 ? parts[parts.length - 1] : extension;
+    } else {
+      extension = type === "audio" ? "webm" : type === "video" ? "webm" : "jpg";
+    }
+    
     formData.append(type, file, `${type}-${Date.now()}.${extension}`);
 
     return new Promise((resolve, reject) => {
@@ -309,8 +337,14 @@ export function MessageInput({
         ? `${Math.floor(recordingTime / 60)}:${(recordingTime % 60).toString().padStart(2, "0")}`
         : undefined;
 
+      const defaultContent = 
+        mediaType === "audio" ? "Áudio" :
+        mediaType === "video" ? "Vídeo" :
+        mediaType === "document" ? (fileInfo?.name || "Documento") :
+        "Imagem";
+
       onSendMessage({
-        content: mediaCaption || (mediaType === "audio" ? "Áudio" : mediaType === "video" ? "Vídeo" : "Imagem"),
+        content: mediaCaption || defaultContent,
         type: mediaType,
         mediaUrl,
         duration,
@@ -325,6 +359,8 @@ export function MessageInput({
       setRecordedChunks([]);
       setRecordingTime(0);
       setRecordingType(null);
+      setSelectedFile(null);
+      setFileInfo(null);
       toast.success("Mídia enviada com sucesso!");
     } catch (error) {
       toast.error("Erro ao enviar mídia");
@@ -480,7 +516,8 @@ export function MessageInput({
         type="file"
         accept="*/*"
         className="hidden"
-        onChange={(e) => handleFileSelect(e, "file")}
+        onChange={(e) => handleFileSelect(e)}
+        data-testid="input-file"
       />
       <input
         ref={imageInputRef}
@@ -489,6 +526,7 @@ export function MessageInput({
         capture="environment"
         className="hidden"
         onChange={(e) => handleFileSelect(e, "image")}
+        data-testid="input-image"
       />
       <input
         ref={videoInputRef}
@@ -497,6 +535,7 @@ export function MessageInput({
         capture="environment"
         className="hidden"
         onChange={(e) => handleFileSelect(e, "video")}
+        data-testid="input-video"
       />
 
       {/* Quick Messages Dialog */}
@@ -567,30 +606,49 @@ export function MessageInput({
           setMediaType(null);
           setMediaCaption("");
           setRecordedChunks([]);
+          setSelectedFile(null);
+          setFileInfo(null);
         }
       }}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {isUploading ? "Enviando..." : "Enviar Mídia"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {mediaType === "image" && mediaPreview && (
-              <img src={mediaPreview} alt="Preview" className="w-full rounded-lg" />
+            {/* File Preview */}
+            {mediaPreview && selectedFile && fileInfo && (
+              <FilePreview 
+                file={selectedFile} 
+                fileInfo={fileInfo} 
+                previewUrl={mediaPreview}
+              />
             )}
-            {mediaType === "video" && mediaPreview && (
-              <video src={mediaPreview} controls className="w-full rounded-lg" />
+            
+            {/* Fallback for recorded media without file info */}
+            {mediaPreview && !selectedFile && (
+              <>
+                {mediaType === "image" && (
+                  <img src={mediaPreview} alt="Preview" className="w-full rounded-lg" />
+                )}
+                {mediaType === "video" && (
+                  <video src={mediaPreview} controls className="w-full rounded-lg" />
+                )}
+                {mediaType === "audio" && (
+                  <div className="p-8 bg-card rounded-lg flex flex-col items-center gap-4">
+                    <Mic className="h-12 w-12 opacity-30" />
+                    <audio src={mediaPreview} controls className="w-full" />
+                    {recordingTime > 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        Duração: {formatTime(recordingTime)}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
             )}
-            {mediaType === "audio" && mediaPreview && (
-              <div className="p-8 bg-card rounded-lg flex flex-col items-center gap-4">
-                <Mic className="h-12 w-12 opacity-50" />
-                <audio src={mediaPreview} controls className="w-full" />
-                <p className="text-sm text-muted-foreground">
-                  Duração: {formatTime(recordingTime)}
-                </p>
-              </div>
-            )}
+            
             {!isUploading && (
               <Textarea
                 placeholder="Adicionar legenda (opcional)"
@@ -617,6 +675,8 @@ export function MessageInput({
                 setMediaType(null);
                 setMediaCaption("");
                 setRecordedChunks([]);
+                setSelectedFile(null);
+                setFileInfo(null);
               }}
               disabled={isUploading}
             >
