@@ -1,6 +1,26 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/api";
 
+const API_URL = "/api";
+
+async function fetchAPI(path: string, options?: RequestInit) {
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Erro na requisição" }));
+    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export interface ConversationWithDetails {
   id: string;
   protocol: string;
@@ -78,6 +98,7 @@ export interface MessageWithDetails {
 export function useConversations() {
   return useQuery<ConversationWithDetails[]>({
     queryKey: ["/conversations"],
+    queryFn: () => fetchAPI("/conversations"),
     refetchInterval: 5000, // Refetch every 5 seconds
   });
 }
@@ -85,6 +106,7 @@ export function useConversations() {
 export function useConversation(id: string | undefined) {
   return useQuery<ConversationWithDetails>({
     queryKey: [`/conversations/${id}`],
+    queryFn: () => fetchAPI(`/conversations/${id}`),
     enabled: !!id,
   });
 }
@@ -125,6 +147,7 @@ export function useAssignConversation() {
 export function useMessages(conversationId: string | undefined) {
   return useQuery<MessageWithDetails[]>({
     queryKey: [`/conversations/${conversationId}/messages`],
+    queryFn: () => fetchAPI(`/conversations/${conversationId}/messages`),
     enabled: !!conversationId,
     refetchInterval: 3000, // Refetch every 3 seconds
   });
