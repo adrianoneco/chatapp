@@ -77,14 +77,14 @@ export interface MessageWithDetails {
 // Conversations hooks
 export function useConversations() {
   return useQuery<ConversationWithDetails[]>({
-    queryKey: ["/api/conversations"],
+    queryKey: ["/conversations"],
     refetchInterval: 5000, // Refetch every 5 seconds
   });
 }
 
 export function useConversation(id: string | undefined) {
   return useQuery<ConversationWithDetails>({
-    queryKey: [`/api/conversations/${id}`],
+    queryKey: [`/conversations/${id}`],
     enabled: !!id,
   });
 }
@@ -94,13 +94,13 @@ export function useCreateConversation() {
   
   return useMutation({
     mutationFn: async (data: { clientId?: string; channel?: string; clientLocation?: string }) => {
-      return apiRequest(`/api/conversations`, {
+      return apiRequest(`/conversations`, {
         method: "POST",
         body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["/conversations"] });
     },
   });
 }
@@ -110,13 +110,13 @@ export function useAssignConversation() {
   
   return useMutation({
     mutationFn: async (conversationId: string) => {
-      return apiRequest(`/api/conversations/${conversationId}/assign`, {
+      return apiRequest(`/conversations/${conversationId}/assign`, {
         method: "PATCH",
       });
     },
     onSuccess: (_, conversationId) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/conversations/${conversationId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+      queryClient.invalidateQueries({ queryKey: [`/conversations/${conversationId}`] });
     },
   });
 }
@@ -124,7 +124,7 @@ export function useAssignConversation() {
 // Messages hooks
 export function useMessages(conversationId: string | undefined) {
   return useQuery<MessageWithDetails[]>({
-    queryKey: [`/api/conversations/${conversationId}/messages`],
+    queryKey: [`/conversations/${conversationId}/messages`],
     enabled: !!conversationId,
     refetchInterval: 3000, // Refetch every 3 seconds
   });
@@ -151,16 +151,16 @@ export function useSendMessage() {
         metadata?: any;
       };
     }) => {
-      return apiRequest(`/api/conversations/${conversationId}/messages`, {
+      return apiRequest(`/conversations/${conversationId}/messages`, {
         method: "POST",
         body: JSON.stringify(data),
       });
     },
     onSuccess: (_, { conversationId }) => {
       queryClient.invalidateQueries({ 
-        queryKey: [`/api/conversations/${conversationId}/messages`] 
+        queryKey: [`/conversations/${conversationId}/messages`] 
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["/conversations"] });
     },
   });
 }
@@ -170,14 +170,14 @@ export function useDeleteMessage() {
   
   return useMutation({
     mutationFn: async ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
-      return apiRequest(`/api/messages/${messageId}`, {
+      return apiRequest(`/messages/${messageId}`, {
         method: "PATCH",
         body: JSON.stringify({ deleted: true }),
       });
     },
     onSuccess: (_, { conversationId }) => {
       queryClient.invalidateQueries({ 
-        queryKey: [`/api/conversations/${conversationId}/messages`] 
+        queryKey: [`/conversations/${conversationId}/messages`] 
       });
     },
   });
@@ -196,14 +196,14 @@ export function useAddReaction() {
       conversationId: string;
       emoji: string;
     }) => {
-      return apiRequest(`/api/messages/${messageId}/reactions`, {
+      return apiRequest(`/messages/${messageId}/reactions`, {
         method: "POST",
         body: JSON.stringify({ emoji }),
       });
     },
     onSuccess: (_, { conversationId }) => {
       queryClient.invalidateQueries({ 
-        queryKey: [`/api/conversations/${conversationId}/messages`] 
+        queryKey: [`/conversations/${conversationId}/messages`] 
       });
     },
   });

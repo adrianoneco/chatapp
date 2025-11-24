@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { z } from "zod";
 import { eq, or, like, desc, and, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
 import { users, conversations, messages, messageReactions } from "@shared/schema";
 import {
@@ -365,16 +366,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any).id;
       const userRole = (req.user as any).role;
 
+      // Create aliases for multiple joins on users table
+      const clientUser = alias(users, "clientUser");
+      const attendantUser = alias(users, "attendantUser");
+
       // Get conversations where user is either client or attendant
       const userConversations = await db
         .select({
           conversation: conversations,
-          client: users,
-          attendant: users,
+          client: clientUser,
+          attendant: attendantUser,
         })
         .from(conversations)
-        .leftJoin(users, eq(conversations.clientId, users.id))
-        .leftJoin(users, eq(conversations.attendantId, users.id))
+        .leftJoin(clientUser, eq(conversations.clientId, clientUser.id))
+        .leftJoin(attendantUser, eq(conversations.attendantId, attendantUser.id))
         .where(
           userRole === "client"
             ? eq(conversations.clientId, userId)
@@ -414,15 +419,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/conversations/:id", requireAuth, async (req, res) => {
     try {
+      // Create aliases for multiple joins on users table
+      const clientUser = alias(users, "clientUser");
+      const attendantUser = alias(users, "attendantUser");
+
       const [conversation] = await db
         .select({
           conversation: conversations,
-          client: users,
-          attendant: users,
+          client: clientUser,
+          attendant: attendantUser,
         })
         .from(conversations)
-        .leftJoin(users, eq(conversations.clientId, users.id))
-        .leftJoin(users, eq(conversations.attendantId, users.id))
+        .leftJoin(clientUser, eq(conversations.clientId, clientUser.id))
+        .leftJoin(attendantUser, eq(conversations.attendantId, attendantUser.id))
         .where(eq(conversations.id, req.params.id));
 
       if (!conversation) {
