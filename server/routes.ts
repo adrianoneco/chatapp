@@ -527,6 +527,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user as any;
       
+      // Get the conversation to check permissions
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, req.params.id));
+
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      // Permission check: only admin or assigned attendant can send messages
+      const isAssignedAttendant = conversation.attendantId === user.id;
+      const isAdmin = user.role === "admin";
+      const canSend = isAdmin || isAssignedAttendant;
+
+      if (!canSend) {
+        return res.status(403).json({ message: "Apenas o atendente vinculado pode enviar mensagens nesta conversa" });
+      }
+      
       const [message] = await db
         .insert(messages)
         .values({
@@ -627,10 +646,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AI text correction route
+  // AI text correction route (using Groq)
   app.post("/api/messages/correct-text", requireAuth, async (req, res) => {
     try {
-      const { correctText } = await import("./openai");
+      const { correctText } = await import("./groq");
       const correctedText = await correctText(req.body.text);
       res.json({ correctedText });
     } catch (error: any) {

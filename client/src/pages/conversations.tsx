@@ -413,11 +413,10 @@ export default function Conversations() {
   const currentContact = conversation?.client || conversation?.attendant;
   const currentConversation = conversations?.find(c => c.id === conversationId);
 
-  // Check if user can send messages
+  // Check if user can send messages - only assigned attendant or admin
+  // If conversation is waiting, show assign button for attendants/admins
   const canSendMessage = conversation 
-    ? (user?.role === "admin" || 
-       conversation.status === "waiting" ||
-       conversation.attendantId === user?.id)
+    ? (user?.role === "admin" || conversation.attendantId === user?.id)
     : false;
 
   // Check if user can assign conversation
