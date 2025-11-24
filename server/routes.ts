@@ -486,6 +486,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Apenas atendentes podem assumir conversas" });
       }
 
+      // Check conversation exists and is not deleted
+      const [current] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, req.params.id),
+            eq(conversations.deleted, false)
+          )
+        );
+
+      if (!current) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      if (current.status !== "waiting") {
+        return res.status(400).json({ message: "Apenas conversas aguardando podem ser assumidas" });
+      }
+
       const [updated] = await db
         .update(conversations)
         .set({ 
@@ -493,11 +512,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: "active",
           updatedAt: new Date(),
         })
-        .where(eq(conversations.id, req.params.id))
+        .where(
+          and(
+            eq(conversations.id, req.params.id),
+            eq(conversations.deleted, false),
+            eq(conversations.status, "waiting")
+          )
+        )
         .returning();
 
       if (!updated) {
-        return res.status(404).json({ message: "Conversa não encontrada" });
+        return res.status(409).json({ message: "Conversa foi alterada por outro usuário" });
       }
 
       broadcastToAll({ type: "conversation:assigned", conversation: updated });
@@ -657,17 +682,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Apenas atendentes podem deletar conversas" });
       }
 
+      // Check conversation exists and is not already deleted
+      const [current] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, req.params.id),
+            eq(conversations.deleted, false)
+          )
+        );
+
+      if (!current) {
+        return res.status(404).json({ message: "Conversa não encontrada ou já foi deletada" });
+      }
+
       const [updated] = await db
         .update(conversations)
         .set({ 
           deleted: true,
           updatedAt: new Date(),
         })
-        .where(eq(conversations.id, req.params.id))
+        .where(
+          and(
+            eq(conversations.id, req.params.id),
+            eq(conversations.deleted, false)
+          )
+        )
         .returning();
 
       if (!updated) {
-        return res.status(404).json({ message: "Conversa não encontrada" });
+        return res.status(409).json({ message: "Conversa foi alterada por outro usuário" });
       }
 
       broadcastToAll({ type: "conversation:updated", conversation: updated });
