@@ -2,7 +2,7 @@ import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
 import { broadcastToAll, initWebSocketServer } from "./websocket";
-import { eq, or, like, desc, and, sql } from "drizzle-orm";
+import { eq, or, like, desc, and, sql, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
 import { users, conversations, messages, messageReactions } from "@shared/schema";
@@ -504,7 +504,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               count: sql<number>`count(*)::int`,
             })
             .from(messageReactions)
-            .where(sql`${messageReactions.messageId} = ANY(${messageIds})`)
+            .where(inArray(messageReactions.messageId, messageIds))
             .groupBy(messageReactions.messageId, messageReactions.emoji)
         : [];
 

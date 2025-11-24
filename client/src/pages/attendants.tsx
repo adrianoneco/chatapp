@@ -352,9 +352,9 @@ export default function Attendants() {
                   )}
                 />
               )}
-              <div>
-                <FormLabel>Avatar (opcional)</FormLabel>
-                <div className="mt-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Avatar (opcional)</label>
+                <div>
                   <Input
                     type="file"
                     accept="image/*"
