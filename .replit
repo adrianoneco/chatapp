@@ -44,6 +44,10 @@ localPort = 36639
 externalPort = 4200
 
 [[ports]]
+localPort = 39389
+externalPort = 8080
+
+[[ports]]
 localPort = 41191
 externalPort = 5173
 
@@ -90,3 +94,4 @@ waitForPort = 5000
 [agent]
 mockupState = "FULLSTACK"
 integrations = ["javascript_openai:1.0.0"]
+expertMode = true
