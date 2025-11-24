@@ -63,16 +63,24 @@ export function AudioPreview({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
 
   useEffect(() => {
     let objectUrl: string | null = null;
 
     const loadMetadata = async () => {
       setLoading(true);
+      setAudioError(null);
       try {
         console.log("[AudioPreview] Loading metadata for file:", file.name);
         const meta = await readAudioMetadata(file);
-        console.log("[AudioPreview] Metadata loaded:", meta);
+        console.log("[AudioPreview] Metadata loaded:", {
+          title: meta.title,
+          artist: meta.artist,
+          album: meta.album,
+          duration: meta.duration,
+          hasPicture: !!meta.picture
+        });
         setMetadata(meta);
 
         // Convert album art to data URL if available
@@ -82,10 +90,17 @@ export function AudioPreview({
           objectUrl = url;
           setCoverUrl(url);
           console.log("[AudioPreview] Cover URL created");
+        } else {
+          console.log("[AudioPreview] No album art found");
         }
       } catch (error) {
         console.error("[AudioPreview] Error loading audio metadata:", error);
+        // Set minimal metadata on error
+        setMetadata({
+          title: file.name.replace(/\.[^/.]+$/, "")
+        });
       } finally {
+        console.log("[AudioPreview] Metadata loading complete");
         setLoading(false);
       }
     };
@@ -100,32 +115,25 @@ export function AudioPreview({
     };
   }, [file]);
 
-  const togglePlay = () => {
-    if (!audioRef) return;
+  const togglePlay = async () => {
+    if (!audioRef) {
+      console.log("[AudioPreview] No audio ref available");
+      return;
+    }
     
-    if (isPlaying) {
-      audioRef.pause();
-    } else {
-      audioRef.play();
+    try {
+      if (isPlaying) {
+        audioRef.pause();
+        setIsPlaying(false);
+      } else {
+        await audioRef.play();
+        setIsPlaying(true);
+      }
+    } catch (error) {
+      console.error("[AudioPreview] Error playing audio:", error);
+      setAudioError("Erro ao reproduzir o áudio");
+      setIsPlaying(false);
     }
-    setIsPlaying(!isPlaying);
-  };
-
-  const handleTimeUpdate = () => {
-    if (audioRef) {
-      setCurrentTime(audioRef.currentTime);
-    }
-  };
-
-  const handleLoadedMetadata = () => {
-    if (audioRef) {
-      setDuration(audioRef.duration);
-    }
-  };
-
-  const handleEnded = () => {
-    setIsPlaying(false);
-    setCurrentTime(0);
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -146,9 +154,117 @@ export function AudioPreview({
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  // Log previewUrl for debugging
+  useEffect(() => {
+    console.log("[AudioPreview] Preview URL:", previewUrl);
+    console.log("[AudioPreview] File type:", file.type);
+    console.log("[AudioPreview] File size:", file.size);
+    console.log("[AudioPreview] File name:", file.name);
+    
+    // Test if URL is valid
+    if (previewUrl.startsWith('blob:')) {
+      console.log("[AudioPreview] Preview URL is a blob URL");
+    } else {
+      console.log("[AudioPreview] Preview URL is NOT a blob URL - this might cause issues");
+    }
+  }, [previewUrl, file]);
+
+  // Setup and cleanup audio element event listeners
+  useEffect(() => {
+    if (!audioRef) return;
+
+    console.log("[AudioPreview] Setting up audio event listeners");
+
+    const handleTimeUpdate = () => {
+      const currentTime = audioRef.currentTime;
+      console.log("[AudioPreview] Time update:", currentTime);
+      setCurrentTime(currentTime);
+    };
+
+    const handleLoadedMetadata = () => {
+      const audioDuration = audioRef.duration;
+      console.log("[AudioPreview] Loaded metadata - Duration:", audioDuration);
+      if (!isNaN(audioDuration) && audioDuration > 0) {
+        setDuration(audioDuration);
+      }
+    };
+
+    const handleDurationChange = () => {
+      console.log("[AudioPreview] Duration changed:", audioRef.duration);
+      if (audioRef.duration && !isNaN(audioRef.duration) && audioRef.duration > 0) {
+        setDuration(audioRef.duration);
+      }
+    };
+
+    const handleEnded = () => {
+      console.log("[AudioPreview] Audio ended");
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    const handleError = (e: Event) => {
+      console.error("[AudioPreview] Error loading audio:", e);
+      setAudioError("Erro ao carregar o arquivo de áudio");
+      setIsPlaying(false);
+    };
+
+    const handleCanPlay = () => {
+      console.log("[AudioPreview] Audio can play");
+      setAudioError(null);
+    };
+
+    const handlePlay = () => {
+      console.log("[AudioPreview] Audio started playing");
+      setIsPlaying(true);
+    };
+
+    const handlePause = () => {
+      console.log("[AudioPreview] Audio paused");
+      setIsPlaying(false);
+    };
+
+    const handleCanPlayThrough = () => {
+      console.log("[AudioPreview] Audio can play through");
+      if (audioRef.duration && !isNaN(audioRef.duration) && audioRef.duration > 0) {
+        console.log("[AudioPreview] Setting duration from canplaythrough:", audioRef.duration);
+        setDuration(audioRef.duration);
+      }
+    };
+
+    audioRef.addEventListener('timeupdate', handleTimeUpdate);
+    audioRef.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audioRef.addEventListener('durationchange', handleDurationChange);
+    audioRef.addEventListener('ended', handleEnded);
+    audioRef.addEventListener('error', handleError);
+    audioRef.addEventListener('canplay', handleCanPlay);
+    audioRef.addEventListener('play', handlePlay);
+    audioRef.addEventListener('pause', handlePause);
+    audioRef.addEventListener('canplaythrough', handleCanPlayThrough);
+
+    return () => {
+      console.log("[AudioPreview] Cleaning up audio element");
+      audioRef.removeEventListener('timeupdate', handleTimeUpdate);
+      audioRef.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audioRef.removeEventListener('durationchange', handleDurationChange);
+      audioRef.removeEventListener('ended', handleEnded);
+      audioRef.removeEventListener('error', handleError);
+      audioRef.removeEventListener('canplay', handleCanPlay);
+      audioRef.removeEventListener('play', handlePlay);
+      audioRef.removeEventListener('pause', handlePause);
+      audioRef.removeEventListener('canplaythrough', handleCanPlayThrough);
+      audioRef.pause();
+      audioRef.src = '';
+    };
+  }, [audioRef]);
+
   return (
     <div className={`${className}`} data-testid="preview-audio">
       <div className="flex flex-col gap-6 p-6 bg-gradient-to-br from-card via-card to-muted/50 rounded-xl border border-border/50">
+        {audioError && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 text-sm text-destructive">
+            {audioError}
+          </div>
+        )}
         {/* Album art and metadata */}
         <div className="flex gap-6 items-start">
           <div className="w-32 h-32 bg-muted rounded-xl flex items-center justify-center overflow-hidden shrink-0 shadow-xl">
@@ -174,13 +290,11 @@ export function AudioPreview({
             ) : (
               <>
                 <h3 className="font-bold text-xl truncate" data-testid="audio-title">
-                  {metadata?.title || file.name}
+                  {metadata?.title || file.name.replace(/\.[^/.]+$/, "")}
                 </h3>
-                {metadata?.artist && (
-                  <p className="text-base text-muted-foreground truncate" data-testid="audio-artist">
-                    {metadata.artist}
-                  </p>
-                )}
+                <p className="text-base text-muted-foreground truncate" data-testid="audio-artist">
+                  {metadata?.artist || "Artista desconhecido"}
+                </p>
                 {metadata?.album && (
                   <p className="text-sm text-muted-foreground truncate" data-testid="audio-album">
                     {metadata.album}
@@ -189,14 +303,10 @@ export function AudioPreview({
                 )}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span>{formatFileSize(file.size)}</span>
-                  {metadata?.duration && (
-                    <>
-                      <span>•</span>
-                      <span data-testid="audio-duration">
-                        {Math.floor(metadata.duration / 60)}:{Math.floor(metadata.duration % 60).toString().padStart(2, '0')}
-                      </span>
-                    </>
-                  )}
+                  <span>•</span>
+                  <span data-testid="audio-duration">
+                    {duration > 0 ? formatTime(duration) : (metadata?.duration ? formatTime(metadata.duration) : "--:--")}
+                  </span>
                 </div>
               </>
             )}
@@ -225,7 +335,8 @@ export function AudioPreview({
             <div className="flex items-center gap-4">
               <button
                 onClick={togglePlay}
-                className="h-14 w-14 rounded-full bg-primary hover:bg-primary/90 flex items-center justify-center shadow-lg transition-all hover:scale-105"
+                disabled={!!audioError || !audioRef}
+                className="h-14 w-14 rounded-full bg-primary hover:bg-primary/90 flex items-center justify-center shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 data-testid="audio-play-button"
               >
                 {isPlaying ? (
@@ -246,17 +357,11 @@ export function AudioPreview({
 
         {/* Hidden audio element */}
         <audio 
-          ref={(el) => {
-            if (el && el !== audioRef) {
-              setAudioRef(el);
-              el.addEventListener('timeupdate', handleTimeUpdate);
-              el.addEventListener('loadedmetadata', handleLoadedMetadata);
-              el.addEventListener('ended', handleEnded);
-            }
-          }}
+          ref={setAudioRef}
           src={previewUrl}
           data-testid="audio-player"
           className="hidden"
+          preload="metadata"
         />
       </div>
     </div>

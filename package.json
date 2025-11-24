@@ -5,11 +5,12 @@
   "license": "MIT",
   "scripts": {
     "dev:client": "vite dev --port 5000",
-    "dev": "NODE_ENV=development dotenv -e .env -- tsx server/index-dev.ts",
+    "dev": "dotenv -e .env -- tsx server/index-dev.ts",
     "build": "vite build && esbuild server/index-prod.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.js",
     "start": "NODE_ENV=production dotenv -e .env -- node dist/index.js",
+    "dev:test": "bun run build && dotenv -e .env -- tsx server/index-dev.ts",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "dotenv -e .env -- drizzle-kit push"
   },
   "notes": "removed framer motion dependency",
   "dependencies": {
@@ -62,8 +63,8 @@
     "input-otp": "^1.4.2",
     "lucide-react": "^0.545.0",
     "memorystore": "^1.6.7",
+    "mp3tag.js": "^3.14.1",
     "multer": "^2.0.2",
-    "music-metadata-browser": "^2.5.11",
     "next-themes": "^0.4.6",
     "openai": "^6.9.1",
     "passport": "^0.7.0",

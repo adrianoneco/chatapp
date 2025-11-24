@@ -5,7 +5,7 @@ import { broadcastToAll, initWebSocketServer } from "./websocket";
 import { eq, or, like, desc, and, sql, inArray, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
-import { users, conversations, messages, messageReactions } from "@shared/schema";
+import { users, conversations, messages, messageReactions, channels } from "@shared/schema";
 import {
   createUser,
   getUserByEmail,
@@ -15,7 +15,7 @@ import {
   updatePasswordResetToken,
   resetPassword,
 } from "./auth";
-import { requireAuth } from "./middleware";
+import { requireAuth, requireRole } from "./middleware";
 import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
@@ -353,6 +353,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ user: sanitized, avatarUrl });
     } catch (error) {
       res.status(500).json({ message: "Erro ao fazer upload do avatar" });
+    }
+  });
+
+  // Channels routes
+  app.get("/api/channels", requireAuth, async (req, res) => {
+    try {
+      const allChannels = await db.select().from(channels).orderBy(channels.name);
+      res.json(allChannels);
+    } catch (error) {
+      console.error("Error fetching channels:", error);
+      res.status(500).json({ message: "Erro ao buscar canais" });
+    }
+  });
+
+  app.post("/api/channels", requireAuth, requireRole(["admin"]), async (req, res) => {
+    try {
+      const { name, slug, icon, color, enabled } = req.body;
+
+      if (!name || !slug) {
+        return res.status(400).json({ message: "Nome e slug são obrigatórios" });
+      }
+
+      const [channel] = await db.insert(channels).values({
+        name,
+        slug,
+        icon,
+        color,
+        enabled: enabled ?? true,
+        isDefault: false,
+      }).returning();
+
+      res.json(channel);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(409).json({ message: "Já existe um canal com este slug" });
+      }
+      console.error("Error creating channel:", error);
+      res.status(500).json({ message: "Erro ao criar canal" });
+    }
+  });
+
+  app.patch("/api/channels/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, slug, icon, color, enabled } = req.body;
+
+      // Check if channel is default
+      const [channel] = await db.select().from(channels).where(eq(channels.id, id));
+      if (!channel) {
+        return res.status(404).json({ message: "Canal não encontrado" });
+      }
+
+      if (channel.isDefault) {
+        return res.status(403).json({ message: "Não é possível editar o canal padrão" });
+      }
+
+      const [updated] = await db.update(channels)
+        .set({ name, slug, icon, color, enabled, updatedAt: new Date() })
+        .where(eq(channels.id, id))
+        .returning();
+
+      res.json(updated);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(409).json({ message: "Já existe um canal com este slug" });
+      }
+      console.error("Error updating channel:", error);
+      res.status(500).json({ message: "Erro ao atualizar canal" });
+    }
+  });
+
+  app.delete("/api/channels/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Check if channel is default
+      const [channel] = await db.select().from(channels).where(eq(channels.id, id));
+      if (!channel) {
+        return res.status(404).json({ message: "Canal não encontrado" });
+      }
+
+      if (channel.isDefault) {
+        return res.status(403).json({ message: "Não é possível deletar o canal padrão" });
+      }
+
+      await db.delete(channels).where(eq(channels.id, id));
+      res.json({ message: "Canal deletado com sucesso" });
+    } catch (error) {
+      console.error("Error deleting channel:", error);
+      res.status(500).json({ message: "Erro ao deletar canal" });
     }
   });
 

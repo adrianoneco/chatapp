@@ -113,34 +113,54 @@ export function formatFileSize(bytes: number): string {
 
 export async function readAudioMetadata(file: File): Promise<AudioMetadata> {
   try {
-    // Use music-metadata-browser to read audio tags
-    const { parseBlob } = await import('music-metadata-browser');
-    const metadata = await parseBlob(file);
+    const MP3Tag = (await import('mp3tag.js')).default;
+    
+    // Convert File to ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    console.log("[readAudioMetadata] File converted to ArrayBuffer, size:", arrayBuffer.byteLength);
+    
+    const mp3tag = new MP3Tag(arrayBuffer);
+    const tags = mp3tag.read();
+    
+    console.log("[readAudioMetadata] Raw tags from mp3tag.js:", tags);
     
     const result: AudioMetadata = {
-      title: metadata.common.title || file.name.replace(/\.[^/.]+$/, ""),
-      artist: metadata.common.artist,
-      album: metadata.common.album,
-      year: metadata.common.year?.toString(),
-      genre: metadata.common.genre?.[0],
-      duration: metadata.format.duration,
+      title: tags?.title || file.name.replace(/\.[^/.]+$/, ""),
+      artist: tags?.artist,
+      album: tags?.album,
+      year: tags?.year,
+      genre: tags?.genre,
+      duration: undefined,
     };
 
     // Extract album art if available
-    if (metadata.common.picture && metadata.common.picture.length > 0) {
-      const picture = metadata.common.picture[0];
+    if (tags?.v2?.APIC && tags.v2.APIC.length > 0) {
+      const picture = tags.v2.APIC[0];
+      console.log("[readAudioMetadata] Image found:", {
+        format: picture.format,
+        dataSize: picture.data?.length
+      });
       result.picture = {
         data: new Uint8Array(picture.data),
         format: picture.format,
       };
     }
 
+    console.log("[readAudioMetadata] Final result:", {
+      title: result.title,
+      artist: result.artist,
+      album: result.album,
+      year: result.year,
+      genre: result.genre,
+      hasPicture: !!result.picture
+    });
+
     return result;
   } catch (error) {
-    console.log("Could not read audio metadata, using filename:", error);
-    // Fallback to filename
+    console.error("[readAudioMetadata] Error reading tags:", error);
+    // Fallback to filename - always return valid object
     return {
-      title: file.name.replace(/\.[^/.]+$/, ""),
+      title: file.name.replace(/\.[^/.]+$/, "") || "Audio File",
     };
   }
 }

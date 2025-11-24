@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   Send, Loader2, Sparkles, MessageSquare, Camera, Video, 
-  Mic, Paperclip, X, Image as ImageIcon, Play, Pause, Square, StopCircle 
+  Mic, Paperclip, X, Image as ImageIcon, Play, Pause, Square, StopCircle, Reply 
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -42,6 +42,13 @@ interface MessageInputProps {
   }) => void;
   replyingTo: string | null;
   onCancelReply: () => void;
+  replyMessage?: {
+    content: string;
+    sender?: {
+      displayName: string;
+    };
+    type: string;
+  } | null;
   disabled?: boolean;
   isPending?: boolean;
   canSend?: boolean;
@@ -53,6 +60,7 @@ export function MessageInput({
   onSendMessage, 
   replyingTo, 
   onCancelReply,
+  replyMessage,
   disabled = false,
   isPending = false,
   canSend = true,
@@ -494,24 +502,58 @@ export function MessageInput({
 
   return (
     <>
-      <div className="p-4 bg-card/30 border-t border-border shrink-0">
-        <div className="flex items-end gap-2">
-          <div className="flex-1 relative bg-background/50 rounded-lg flex items-end">
-            <Textarea
-              placeholder="Digite uma mensagem..."
-              className="flex-1 bg-transparent border-0 focus-visible:ring-0 resize-none min-h-[44px] max-h-32 py-3 pl-3 pr-2"
-              data-testid="input-message"
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendText();
-                }
-              }}
-              rows={1}
-              disabled={disabled}
-            />
+      <div className="bg-card/30 border-t border-border shrink-0">
+        {/* Reply Preview */}
+        {replyingTo && replyMessage && (
+          <div className="px-4 pt-3 pb-2 border-b border-border/50">
+            <div className="flex items-start gap-2 bg-accent/50 rounded-lg p-3 border-l-4 border-primary">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Reply className="h-3.5 w-3.5 opacity-70" />
+                  <span className="text-xs font-semibold opacity-90">
+                    Respondendo a {replyMessage.sender?.displayName || "Mensagem"}
+                  </span>
+                </div>
+                <p className="text-sm opacity-80 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+                  {replyMessage.content || (
+                    replyMessage.type === 'image' ? '📷 Imagem' : 
+                    replyMessage.type === 'audio' ? '🎵 Áudio' : 
+                    replyMessage.type === 'video' ? '🎬 Vídeo' : 
+                    '📎 Arquivo'
+                  )}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={onCancelReply}
+                data-testid="button-cancel-reply"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="p-4">
+          <div className="flex items-end gap-2">
+            <div className="flex-1 relative bg-background/50 rounded-lg flex items-end">
+              <Textarea
+                placeholder="Digite uma mensagem..."
+                className="flex-1 bg-transparent border-0 focus-visible:ring-0 resize-none min-h-[44px] max-h-32 py-3 pl-3 pr-2"
+                data-testid="input-message"
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendText();
+                  }
+                }}
+                rows={1}
+                disabled={disabled}
+              />
             <div className="flex items-center gap-1 pb-2 pr-2">
               <Button
                 variant="ghost"
@@ -594,6 +636,7 @@ export function MessageInput({
               <Send className="h-6 w-6" />
             )}
           </Button>
+        </div>
         </div>
       </div>
 

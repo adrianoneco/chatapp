@@ -459,6 +459,65 @@ export default function Conversations() {
   // This will automatically update audio messages without ID3 tags
   useAudioMetadataUpdater(messages, conversationId);
   
+  // Process audio messages without duration when entering conversation
+  useEffect(() => {
+    if (!messages || messages.length === 0) return;
+
+    const processAudioDurations = async () => {
+      const audioMessagesWithoutDuration = messages.filter(
+        msg => msg.type === 'audio' && msg.mediaUrl && msg.mediaUrl !== '#' && !msg.duration
+      );
+
+      if (audioMessagesWithoutDuration.length === 0) return;
+
+      console.log(`[processAudioDurations] Found ${audioMessagesWithoutDuration.length} audio messages without duration`);
+
+      // Process up to 3 messages at a time to avoid overwhelming the browser
+      for (const msg of audioMessagesWithoutDuration.slice(0, 3)) {
+        try {
+          const audio = new Audio(msg.mediaUrl!);
+          
+          await new Promise<void>((resolve) => {
+            audio.addEventListener('loadedmetadata', async () => {
+              if (audio.duration && !isNaN(audio.duration)) {
+                const durationMinutes = Math.floor(audio.duration / 60);
+                const durationSeconds = Math.floor(audio.duration % 60);
+                const durationStr = `${durationMinutes}:${durationSeconds.toString().padStart(2, '0')}`;
+                
+                console.log(`[processAudioDurations] Captured duration for message ${msg.id}: ${durationStr}`);
+                
+                try {
+                  await apiRequest(`/messages/${msg.id}/metadata`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ duration: durationStr }),
+                  });
+                } catch (error) {
+                  console.error('[processAudioDurations] Error updating duration:', error);
+                }
+              }
+              resolve();
+            });
+
+            audio.addEventListener('error', () => {
+              console.error('[processAudioDurations] Error loading audio:', msg.id);
+              resolve();
+            });
+          });
+
+          // Small delay between processing
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } catch (error) {
+          console.error('[processAudioDurations] Error processing message:', msg.id, error);
+        }
+      }
+    };
+
+    // Start processing after a small delay
+    const timeout = setTimeout(processAudioDurations, 1000);
+
+    return () => clearTimeout(timeout);
+  }, [messages, conversationId]);
+  
   // Debounce contact search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -470,6 +529,22 @@ export default function Conversations() {
 
   const currentContact = conversation?.client || conversation?.attendant;
   const currentConversation = conversations?.find(c => c.id === conversationId);
+
+  // Automatically switch to the tab where the current conversation is
+  useEffect(() => {
+    if (!conversation) return;
+
+    const conversationStatus = conversation.status;
+    
+    // Only switch if we're not already on the correct tab
+    if (conversationStatus === "waiting" && activeTab !== "waiting") {
+      setActiveTab("waiting");
+    } else if (conversationStatus === "active" && activeTab !== "active") {
+      setActiveTab("active");
+    } else if (conversationStatus === "closed" && activeTab !== "closed") {
+      setActiveTab("closed");
+    }
+  }, [conversation?.id, conversation?.status]);
 
   // Check if user can send messages - only assigned attendant or admin
   // If conversation is waiting, show assign button for attendants/admins
@@ -602,7 +677,7 @@ export default function Conversations() {
     }
   }, [messages.length]);
 
-  const togglePlay = (msg: MessageWithDetails) => {
+  const togglePlay = async (msg: MessageWithDetails) => {
     if (!msg.mediaUrl) return;
 
     if (playingId === msg.id) {
@@ -627,6 +702,27 @@ export default function Conversations() {
       audio.addEventListener('ended', () => {
         setPlayingId(null);
         setAudioProgress(0);
+      });
+
+      // Capturar duração quando metadata for carregada
+      audio.addEventListener('loadedmetadata', async () => {
+        if (audio.duration && !msg.duration && !isNaN(audio.duration)) {
+          const durationMinutes = Math.floor(audio.duration / 60);
+          const durationSeconds = Math.floor(audio.duration % 60);
+          const durationStr = `${durationMinutes}:${durationSeconds.toString().padStart(2, '0')}`;
+          
+          console.log(`[togglePlay] Captured duration for message ${msg.id}: ${durationStr}`);
+          
+          // Atualizar duração no servidor
+          try {
+            await apiRequest(`/messages/${msg.id}/metadata`, {
+              method: 'PATCH',
+              body: JSON.stringify({ duration: durationStr }),
+            });
+          } catch (error) {
+            console.error('[togglePlay] Error updating duration:', error);
+          }
+        }
       });
       
       audio.play().catch(e => console.log("Playback error", e));
@@ -1470,9 +1566,16 @@ export default function Conversations() {
                             
                             {/* Forwarded indicator in message header (only when no reply) */}
                             {msg.forwarded && !msg.replyToId && (
-                              <div className="mb-2 flex items-center justify-end gap-1 text-[10px] opacity-70">
-                                <CornerDownRight className="h-2.5 w-2.5" />
-                                <span>Encaminhada</span>
+                              <div className={cn(
+                                "mb-2 p-2 rounded text-xs border-l-4 relative overflow-hidden",
+                                isMyMessage 
+                                  ? "bg-black/20 border-blue-400/50" 
+                                  : "bg-black/20 border-white/50"
+                              )}>
+                                <div className="flex items-center gap-1.5 opacity-80">
+                                  <CornerDownRight className="h-3 w-3 shrink-0" />
+                                  <span className="font-semibold">Mensagem Encaminhada</span>
+                                </div>
                               </div>
                             )}
 
@@ -1598,10 +1701,8 @@ export default function Conversations() {
                                     </div>
                                     <div className="flex justify-between text-[10px] opacity-70 font-mono">
                                       <span>{playingId === msg.id && audioRef.current ? formatTime(audioRef.current.currentTime) : "0:00"}</span>
+                                      <span>{msg.duration || "--:--"}</span>
                                     </div>
-                                  </div>
-                                  <div className="text-[10px] opacity-70 font-mono shrink-0">
-                                    {msg.duration}
                                   </div>
                                 </div>
                               </div>
@@ -1725,6 +1826,7 @@ export default function Conversations() {
                 }}
                 replyingTo={replyingTo}
                 onCancelReply={() => setReplyingTo(null)}
+                replyMessage={replyingTo ? getReplyMessage(replyingTo) : null}
                 isPending={sendMessageMutation.isPending}
                 canSend={canSendMessage}
                 onAssignConversation={canAssignConversation ? handleAssignConversation : undefined}

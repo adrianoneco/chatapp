@@ -13,6 +13,7 @@ import Contacts from "@/pages/contacts";
 import Attendants from "@/pages/attendants";
 import Settings from "@/pages/settings";
 import Notifications from "@/pages/notifications";
+import Channels from "@/pages/channels";
 import { useCurrentUser } from "@/lib/api";
 import { useWebSocket } from "@/lib/websocket";
 import { ReactNode } from "react";
@@ -66,6 +67,9 @@ function Router() {
         </Route>
         <Route path="/settings">
           {() => <ProtectedRoute component={Settings} />}
+        </Route>
+        <Route path="/channels">
+          {() => <ProtectedRoute component={Channels} />}
         </Route>
         <Route path="/notifications">
           {() => <ProtectedRoute component={Notifications} />}

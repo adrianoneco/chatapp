@@ -48,11 +48,12 @@ app.use(session({
 }));
 
 app.use(express.json({
+  limit: process.env.BODY_PARSER_LIMIT || '50mb',
   verify: (req, _res, buf) => {
     req.rawBody = buf;
   }
 }));
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ limit: '50mb', extended: false }));
 
 // Serve static files BEFORE other middleware to avoid conflicts
 app.use("/uploads", (req, res, next) => {

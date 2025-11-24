@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sidebar, Menu, Home, MessageSquare, Settings, ChevronLeft, ChevronRight, Users, Bell, Headset } from "lucide-react";
+import { Sidebar, Menu, Home, MessageSquare, Settings, ChevronLeft, ChevronRight, Users, Bell, Headset, Hash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "wouter";
@@ -13,6 +13,7 @@ export function AppSidebar() {
     { icon: MessageSquare, label: "Conversas", href: "/conversations" },
     { icon: Users, label: "Contatos", href: "/contacts" },
     { icon: Headset, label: "Atendentes", href: "/attendants" },
+    { icon: Hash, label: "Canais", href: "/channels" },
     { icon: Bell, label: "Notificações", href: "/notifications" },
     { icon: Settings, label: "Configurações", href: "/settings" },
   ];
