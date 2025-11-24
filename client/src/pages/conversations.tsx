@@ -4,13 +4,13 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize, PanelLeftClose, PanelLeft, Reply, Forward, Laugh, X, MapPin, Clock, Hash, User, CheckCircle2, XCircle, Loader2, Plus } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize, PanelLeftClose, PanelLeft, Reply, Forward, Laugh, X, MapPin, Clock, Hash, User, CheckCircle2, XCircle, Loader2, Plus, PlayCircle, StopCircle, RotateCcw } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { useRef, useEffect, useState } from "react";
-import { useConversations, useConversation, useMessages, useSendMessage, useDeleteMessage, useAddReaction, ConversationWithDetails, MessageWithDetails, useCreateConversation } from "@/hooks/use-conversations";
+import { useConversations, useConversation, useMessages, useSendMessage, useDeleteMessage, useAddReaction, ConversationWithDetails, MessageWithDetails, useCreateConversation, useStartConversation, useCloseConversation, useReopenConversation, useDeleteConversation } from "@/hooks/use-conversations";
 import { useUser } from "@/hooks/use-user";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -399,6 +399,10 @@ export default function Conversations() {
   const [debouncedContactSearch, setDebouncedContactSearch] = useState("");
   const [selectedChannel, setSelectedChannel] = useState<string>("all");
   const createConversationMutation = useCreateConversation();
+  const startConversationMutation = useStartConversation();
+  const closeConversationMutation = useCloseConversation();
+  const reopenConversationMutation = useReopenConversation();
+  const deleteConversationMutation = useDeleteConversation();
   const { data: contactsData, isLoading: loadingContacts } = useUsers("client", debouncedContactSearch);
   
   // Debounce contact search
@@ -436,6 +440,56 @@ export default function Conversations() {
       toast.success("Conversa assumida com sucesso!");
     } catch (error: any) {
       toast.error(error.message || "Erro ao assumir conversa");
+    }
+  };
+
+  // Handle conversation actions
+  const handleStartConversation = async () => {
+    if (!conversationId) return;
+    
+    try {
+      await startConversationMutation.mutateAsync(conversationId);
+      toast.success("Conversa iniciada com sucesso!");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao iniciar conversa");
+    }
+  };
+
+  const handleCloseConversation = async () => {
+    if (!conversationId) return;
+    
+    if (!confirm("Tem certeza que deseja encerrar esta conversa?")) return;
+    
+    try {
+      await closeConversationMutation.mutateAsync(conversationId);
+      toast.success("Conversa encerrada com sucesso!");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao encerrar conversa");
+    }
+  };
+
+  const handleReopenConversation = async () => {
+    if (!conversationId) return;
+    
+    try {
+      await reopenConversationMutation.mutateAsync(conversationId);
+      toast.success("Conversa reaberta com sucesso!");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao reabrir conversa");
+    }
+  };
+
+  const handleDeleteConversation = async () => {
+    if (!conversationId) return;
+    
+    if (!confirm("Tem certeza que deseja deletar esta conversa? Esta ação não pode ser desfeita.")) return;
+    
+    try {
+      await deleteConversationMutation.mutateAsync(conversationId);
+      toast.success("Conversa deletada com sucesso!");
+      setLocation("/conversations");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao deletar conversa");
     }
   };
 
@@ -1018,6 +1072,33 @@ export default function Conversations() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {(user?.role === "attendant" || user?.role === "admin") && (
+                        <>
+                          {conversation?.status === "waiting" && (
+                            <DropdownMenuItem onClick={handleStartConversation}>
+                              <PlayCircle className="mr-2 h-4 w-4" />
+                              Iniciar
+                            </DropdownMenuItem>
+                          )}
+                          {conversation?.status === "active" && (
+                            <DropdownMenuItem onClick={handleCloseConversation}>
+                              <StopCircle className="mr-2 h-4 w-4" />
+                              Encerrar
+                            </DropdownMenuItem>
+                          )}
+                          {conversation?.status === "closed" && (
+                            <DropdownMenuItem onClick={handleReopenConversation}>
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Reabrir
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onClick={handleDeleteConversation} className="text-destructive">
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Deletar
+                          </DropdownMenuItem>
+                          <Separator className="my-1" />
+                        </>
+                      )}
                       {import.meta.env.DEV && (
                         <>
                           <DropdownMenuItem onClick={exportConversationFull}>
