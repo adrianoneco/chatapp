@@ -506,6 +506,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get or check for existing conversation with a contact
+  app.get("/api/conversations/with/:contactId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const contactId = req.params.contactId;
+
+      // Create aliases for multiple joins on users table
+      const clientUser = alias(users, "clientUser");
+      const attendantUser = alias(users, "attendantUser");
+
+      // Find existing conversation between these users
+      const [existingConversation] = await db
+        .select({
+          conversation: conversations,
+          client: clientUser,
+          attendant: attendantUser,
+        })
+        .from(conversations)
+        .leftJoin(clientUser, eq(conversations.clientId, clientUser.id))
+        .leftJoin(attendantUser, eq(conversations.attendantId, attendantUser.id))
+        .where(
+          and(
+            eq(conversations.deleted, false),
+            or(
+              and(
+                eq(conversations.clientId, userId),
+                eq(conversations.attendantId, contactId)
+              ),
+              and(
+                eq(conversations.clientId, contactId),
+                eq(conversations.attendantId, userId)
+              )
+            )
+          )
+        )
+        .limit(1);
+
+      if (existingConversation) {
+        return res.json({
+          conversation: {
+            ...existingConversation.conversation,
+            client: existingConversation.client ? sanitizeUser(existingConversation.client) : null,
+            attendant: existingConversation.attendant ? sanitizeUser(existingConversation.attendant) : null,
+          }
+        });
+      }
+
+      res.json({ conversation: null });
+    } catch (error) {
+      console.error("Error finding conversation:", error);
+      res.status(500).json({ message: "Erro ao buscar conversa" });
+    }
+  });
+
   app.get("/api/conversations/:id", requireAuth, async (req, res) => {
     try {
       // Create aliases for multiple joins on users table

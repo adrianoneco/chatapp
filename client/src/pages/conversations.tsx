@@ -446,6 +446,12 @@ export default function Conversations() {
   const [selectedChannel, setSelectedChannel] = useState<string>("all");
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [selectedAttendant, setSelectedAttendant] = useState<string>("");
+  const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
+  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [messageToForward, setMessageToForward] = useState<MessageWithDetails | null>(null);
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false);
+  const [selectedReplyContacts, setSelectedReplyContacts] = useState<string[]>([]);
+  const [messageToReply, setMessageToReply] = useState<MessageWithDetails | null>(null);
   const createConversationMutation = useCreateConversation();
   const startConversationMutation = useStartConversation();
   const closeConversationMutation = useCloseConversation();
@@ -991,16 +997,123 @@ export default function Conversations() {
 
   const handleForwardMessage = (messageId: string) => {
     const msg = messages.find(m => m.id === messageId);
-    if (msg && conversationId) {
-      sendMessageMutation.mutate({
-        conversationId,
-        data: {
-          content: msg.content,
-          type: msg.type,
-          mediaUrl: msg.mediaUrl || undefined,
-          forwarded: true,
-        },
-      });
+    if (msg) {
+      setMessageToForward(msg);
+      setForwardDialogOpen(true);
+      setSelectedContacts([]);
+    }
+  };
+
+  const handleForwardToContacts = async () => {
+    if (!messageToForward || selectedContacts.length === 0) return;
+
+    try {
+      for (const contactId of selectedContacts) {
+        // Buscar ou criar conversa com o contato
+        const response = await apiRequest(`/conversations/with/${contactId}`, {
+          method: 'GET'
+        });
+
+        let targetConversationId: string;
+        if (response.conversation) {
+          targetConversationId = response.conversation.id;
+        } else {
+          // Criar nova conversa se não existir
+          const createResponse = await apiRequest('/conversations', {
+            method: 'POST',
+            body: JSON.stringify({ contactId })
+          });
+          targetConversationId = createResponse.id;
+        }
+
+        // Enviar mensagem encaminhada
+        await apiRequest(`/conversations/${targetConversationId}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({
+            content: messageToForward.content,
+            type: messageToForward.type,
+            mediaUrl: messageToForward.mediaUrl || undefined,
+            forwarded: true,
+          })
+        });
+      }
+
+      toast.success(`Mensagem encaminhada para ${selectedContacts.length} contato(s)`);
+      setForwardDialogOpen(false);
+      setSelectedContacts([]);
+      setMessageToForward(null);
+    } catch (error) {
+      console.error('Error forwarding message:', error);
+      toast.error('Erro ao encaminhar mensagem');
+    }
+  };
+
+  const toggleContactSelection = (contactId: string) => {
+    setSelectedContacts(prev => 
+      prev.includes(contactId) 
+        ? prev.filter(id => id !== contactId)
+        : [...prev, contactId]
+    );
+  };
+
+  const toggleReplyContactSelection = (contactId: string) => {
+    setSelectedReplyContacts(prev => 
+      prev.includes(contactId) 
+        ? prev.filter(id => id !== contactId)
+        : [...prev, contactId]
+    );
+  };
+
+  const handleReplyMessage = (messageId: string) => {
+    const msg = messages.find(m => m.id === messageId);
+    if (msg) {
+      setMessageToReply(msg);
+      setReplyDialogOpen(true);
+      setSelectedReplyContacts([]);
+    }
+  };
+
+  const handleReplyToContacts = async () => {
+    if (!messageToReply || selectedReplyContacts.length === 0) return;
+
+    try {
+      for (const contactId of selectedReplyContacts) {
+        // Buscar ou criar conversa com o contato
+        const response = await apiRequest(`/conversations/with/${contactId}`, {
+          method: 'GET'
+        });
+
+        let targetConversationId: string;
+        if (response.conversation) {
+          targetConversationId = response.conversation.id;
+        } else {
+          // Criar nova conversa se não existir
+          const createResponse = await apiRequest('/conversations', {
+            method: 'POST',
+            body: JSON.stringify({ contactId })
+          });
+          targetConversationId = createResponse.id;
+        }
+
+        // Enviar mensagem com resposta
+        await apiRequest(`/conversations/${targetConversationId}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({
+            content: messageToReply.content,
+            type: messageToReply.type,
+            mediaUrl: messageToReply.mediaUrl || undefined,
+            replyToId: messageToReply.id,
+          })
+        });
+      }
+
+      toast.success(`Resposta enviada para ${selectedReplyContacts.length} contato(s)`);
+      setReplyDialogOpen(false);
+      setSelectedReplyContacts([]);
+      setMessageToReply(null);
+    } catch (error) {
+      console.error('Error replying to message:', error);
+      toast.error('Erro ao enviar resposta');
     }
   };
 
@@ -1716,7 +1829,7 @@ export default function Conversations() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-6 w-6 hover:bg-white/10"
-                                  onClick={() => setReplyingTo(msg.id)}
+                                  onClick={() => handleReplyMessage(msg.id)}
                                   data-testid={`button-reply-${msg.id}`}
                                   title="Responder"
                                 >
@@ -2046,6 +2159,200 @@ export default function Conversations() {
                 </div>
               )}
             </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reply Message Dialog */}
+      <Dialog open={replyDialogOpen} onOpenChange={setReplyDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Responder Mensagem</DialogTitle>
+            <DialogDescription>
+              Selecione um ou mais contatos para responder esta mensagem
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar contatos..."
+                value={contactSearch}
+                onChange={(e) => setContactSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            
+            <ScrollArea className="h-[300px] pr-4">
+              {loadingContacts ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : contactsData?.users && contactsData.users.length > 0 ? (
+                <div className="space-y-1">
+                  {contactsData.users.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors",
+                        selectedReplyContacts.includes(contact.id)
+                          ? "bg-primary/10 hover:bg-primary/20"
+                          : "hover:bg-accent/50"
+                      )}
+                      onClick={() => toggleReplyContactSelection(contact.id)}
+                    >
+                      <div className={cn(
+                        "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                        selectedReplyContacts.includes(contact.id)
+                          ? "bg-primary border-primary"
+                          : "border-muted-foreground/50"
+                      )}>
+                        {selectedReplyContacts.includes(contact.id) && (
+                          <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
+                        )}
+                      </div>
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={contact.avatarUrl || undefined} />
+                        <AvatarFallback>{contact.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{contact.displayName}</p>
+                        <p className="text-sm text-muted-foreground truncate">{contact.email}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                  <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-sm text-muted-foreground">
+                    {contactSearch ? "Nenhum contato encontrado" : "Nenhum contato disponível"}
+                  </p>
+                </div>
+              )}
+            </ScrollArea>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <p className="text-sm text-muted-foreground">
+                {selectedReplyContacts.length} {selectedReplyContacts.length === 1 ? 'contato selecionado' : 'contatos selecionados'}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setReplyDialogOpen(false);
+                    setSelectedReplyContacts([]);
+                    setMessageToReply(null);
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleReplyToContacts}
+                  disabled={selectedReplyContacts.length === 0}
+                >
+                  <Reply className="h-4 w-4 mr-2" />
+                  Responder
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Forward Message Dialog */}
+      <Dialog open={forwardDialogOpen} onOpenChange={setForwardDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Encaminhar Mensagem</DialogTitle>
+            <DialogDescription>
+              Selecione um ou mais contatos para encaminhar esta mensagem
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar contatos..."
+                value={contactSearch}
+                onChange={(e) => setContactSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            
+            <ScrollArea className="h-[300px] pr-4">
+              {loadingContacts ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : contactsData?.users && contactsData.users.length > 0 ? (
+                <div className="space-y-1">
+                  {contactsData.users.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors",
+                        selectedContacts.includes(contact.id)
+                          ? "bg-primary/10 hover:bg-primary/20"
+                          : "hover:bg-accent/50"
+                      )}
+                      onClick={() => toggleContactSelection(contact.id)}
+                    >
+                      <div className={cn(
+                        "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                        selectedContacts.includes(contact.id)
+                          ? "bg-primary border-primary"
+                          : "border-muted-foreground/50"
+                      )}>
+                        {selectedContacts.includes(contact.id) && (
+                          <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
+                        )}
+                      </div>
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={contact.avatarUrl || undefined} />
+                        <AvatarFallback>{contact.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{contact.displayName}</p>
+                        <p className="text-sm text-muted-foreground truncate">{contact.email}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                  <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-sm text-muted-foreground">
+                    {contactSearch ? "Nenhum contato encontrado" : "Nenhum contato disponível"}
+                  </p>
+                </div>
+              )}
+            </ScrollArea>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <p className="text-sm text-muted-foreground">
+                {selectedContacts.length} {selectedContacts.length === 1 ? 'contato selecionado' : 'contatos selecionados'}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setForwardDialogOpen(false);
+                    setSelectedContacts([]);
+                    setMessageToForward(null);
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleForwardToContacts}
+                  disabled={selectedContacts.length === 0}
+                >
+                  <Forward className="h-4 w-4 mr-2" />
+                  Encaminhar
+                </Button>
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
