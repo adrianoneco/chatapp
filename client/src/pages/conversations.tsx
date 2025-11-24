@@ -948,13 +948,13 @@ export default function Conversations() {
                   if (user?.role === "client" && !contact) {
                     // Client view with no attendant assigned
                     displayName = "Aguardando atendente";
-                    avatarUrl = "https://i.pravatar.cc/150?u=waiting";
+                    avatarUrl = "/user-profile.png";
                   } else if (contact) {
                     displayName = contact.displayName;
-                    avatarUrl = contact.avatarUrl || `https://i.pravatar.cc/150?u=${contact.id}`;
+                    avatarUrl = contact.avatarUrl || `/user-profile.png`;
                   } else {
                     displayName = "Sem nome";
-                    avatarUrl = "https://i.pravatar.cc/150?u=unknown";
+                    avatarUrl = "/user-profile.png";
                   }
                   
                   return (

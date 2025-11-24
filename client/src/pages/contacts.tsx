@@ -21,8 +21,8 @@ import { useLocation } from "wouter";
 const userSchema = z.object({
   displayName: z.string().min(2, "Nome muito curto"),
   email: z.string().email("Email inválido"),
-  phone: z.string().optional(),
-  password: z.string().min(6, "Mínimo 6 caracteres").optional(),
+  phone: z.string().optional().or(z.literal("")),
+  password: z.string().min(6, "Mínimo 6 caracteres").optional().or(z.literal("")),
 });
 
 export default function Contacts() {
@@ -83,8 +83,10 @@ export default function Contacts() {
   };
 
   const handleSubmit = async (values: z.infer<typeof userSchema>) => {
+    console.log("Submitting form with values:", values);
     try {
       if (editingUser) {
+        console.log("Updating user:", editingUser.id);
         await updateMutation.mutateAsync({
           id: editingUser.id,
           data: {
@@ -95,6 +97,7 @@ export default function Contacts() {
         });
 
         if (avatarFile) {
+          console.log("Uploading avatar for user:", editingUser.id);
           await uploadAvatarMutation.mutateAsync({
             id: editingUser.id,
             file: avatarFile,
@@ -104,10 +107,12 @@ export default function Contacts() {
         toast.success("Contato atualizado com sucesso!");
       } else {
         if (!values.password) {
+          console.error("Password is required for new users");
           toast.error("Senha é obrigatória para novos usuários");
           return;
         }
 
+        console.log("Creating new user with role: client");
         const result = await registerMutation.mutateAsync({
           email: values.email,
           password: values.password,
@@ -116,6 +121,7 @@ export default function Contacts() {
         });
 
         if (avatarFile && result.user) {
+          console.log("Uploading avatar for new user:", result.user.id);
           await uploadAvatarMutation.mutateAsync({
             id: result.user.id,
             file: avatarFile,
@@ -128,7 +134,9 @@ export default function Contacts() {
       setIsDialogOpen(false);
       setAvatarFile(null);
       form.reset();
+      console.log("Form submitted successfully");
     } catch (error: any) {
+      console.error("Error submitting form:", error);
       toast.error(error.message || "Erro ao salvar contato");
     }
   };
@@ -420,11 +428,11 @@ export default function Contacts() {
                 />
               )}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={form.formState.isSubmitting}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Salvando..." : editingUser ? "Atualizar" : "Criar"}
+                <Button type="submit" disabled={form.formState.isSubmitting || registerMutation.isPending || updateMutation.isPending}>
+                  {(form.formState.isSubmitting || registerMutation.isPending || updateMutation.isPending) ? "Salvando..." : editingUser ? "Atualizar" : "Criar"}
                 </Button>
               </DialogFooter>
             </form>
