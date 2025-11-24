@@ -58,13 +58,24 @@ export function AudioPreview({
 }) {
   const [metadata, setMetadata] = useState<AudioMetadata | null>(null);
   const [loading, setLoading] = useState(true);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    let objectUrl: string | null = null;
+
     const loadMetadata = async () => {
       setLoading(true);
       try {
         const meta = await readAudioMetadata(file);
         setMetadata(meta);
+
+        // Convert album art to data URL if available
+        if (meta.picture) {
+          const blob = new Blob([meta.picture.data], { type: meta.picture.format });
+          const url = URL.createObjectURL(blob);
+          objectUrl = url;
+          setCoverUrl(url);
+        }
       } catch (error) {
         console.error("Error loading audio metadata:", error);
       } finally {
@@ -73,14 +84,30 @@ export function AudioPreview({
     };
 
     loadMetadata();
+
+    return () => {
+      // Revoke the object URL created in this effect
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
   }, [file]);
 
   return (
     <Card className={`p-6 ${className}`} data-testid="preview-audio">
       <div className="flex flex-col gap-4">
-        {/* Album art placeholder */}
+        {/* Album art */}
         <div className="w-full aspect-square bg-muted rounded-lg flex items-center justify-center overflow-hidden">
-          <Music className="h-24 w-24 opacity-30" />
+          {coverUrl ? (
+            <img 
+              src={coverUrl} 
+              alt="Album art" 
+              className="w-full h-full object-cover"
+              data-testid="audio-cover"
+            />
+          ) : (
+            <Music className="h-24 w-24 opacity-30" />
+          )}
         </div>
 
         {/* Metadata */}
@@ -89,12 +116,24 @@ export function AudioPreview({
             <>
               <Skeleton className="h-6 w-3/4" />
               <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-4 w-2/3" />
             </>
           ) : (
             <>
               <h3 className="font-semibold text-lg" data-testid="audio-title">
                 {metadata?.title || file.name}
               </h3>
+              {metadata?.artist && (
+                <p className="text-sm text-muted-foreground" data-testid="audio-artist">
+                  {metadata.artist}
+                </p>
+              )}
+              {metadata?.album && (
+                <p className="text-sm text-muted-foreground" data-testid="audio-album">
+                  {metadata.album}
+                  {metadata.year && ` (${metadata.year})`}
+                </p>
+              )}
               <p className="text-sm text-muted-foreground">
                 {formatFileSize(file.size)}
               </p>

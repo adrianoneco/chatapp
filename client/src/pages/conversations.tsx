@@ -883,9 +883,25 @@ export default function Conversations() {
             ) : conversations && conversations.length > 0 ? (
               <div className="space-y-1 p-2">
                 {conversations.map((conv) => {
+                  // Determine who to show: if user is client, show attendant; if user is attendant/admin, show client
                   const contact = user?.id === conv.clientId ? conv.attendant : conv.client;
-                  const displayName = contact?.displayName || "Sem nome";
-                  const avatarUrl = contact?.avatarUrl || `https://i.pravatar.cc/150?u=${contact?.id}`;
+                  
+                  // For clients: if no attendant yet (waiting status), show "Aguardando atendente"
+                  // For attendants: always show the client
+                  let displayName: string;
+                  let avatarUrl: string;
+                  
+                  if (user?.role === "client" && !contact) {
+                    // Client view with no attendant assigned
+                    displayName = "Aguardando atendente";
+                    avatarUrl = "https://i.pravatar.cc/150?u=waiting";
+                  } else if (contact) {
+                    displayName = contact.displayName;
+                    avatarUrl = contact.avatarUrl || `https://i.pravatar.cc/150?u=${contact.id}`;
+                  } else {
+                    displayName = "Sem nome";
+                    avatarUrl = "https://i.pravatar.cc/150?u=unknown";
+                  }
                   
                   return (
                     <Link key={conv.id} href={`/conversations/webchat/${conv.id}`}>

@@ -57,7 +57,7 @@ export interface MessageWithDetails {
   conversationId: string;
   senderId: string;
   content: string;
-  type: "text" | "image" | "video" | "audio";
+  type: "text" | "image" | "video" | "audio" | "document";
   mediaUrl: string | null;
   duration: string | null;
   caption: string | null;
@@ -164,7 +164,7 @@ export function useSendMessage() {
       conversationId: string;
       data: {
         content: string;
-        type?: "text" | "image" | "video" | "audio";
+        type?: "text" | "image" | "video" | "audio" | "document";
         mediaUrl?: string;
         duration?: string;
         caption?: string;

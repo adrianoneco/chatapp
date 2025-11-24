@@ -112,10 +112,35 @@ export function formatFileSize(bytes: number): string {
 }
 
 export async function readAudioMetadata(file: File): Promise<AudioMetadata> {
-  // Basic metadata from filename
-  const metadata: AudioMetadata = {
-    title: file.name.replace(/\.[^/.]+$/, ""), // Remove extension
-  };
-  
-  return Promise.resolve(metadata);
+  try {
+    // Use music-metadata-browser to read audio tags
+    const { parseBlob } = await import('music-metadata-browser');
+    const metadata = await parseBlob(file);
+    
+    const result: AudioMetadata = {
+      title: metadata.common.title || file.name.replace(/\.[^/.]+$/, ""),
+      artist: metadata.common.artist,
+      album: metadata.common.album,
+      year: metadata.common.year?.toString(),
+      genre: metadata.common.genre?.[0],
+      duration: metadata.format.duration,
+    };
+
+    // Extract album art if available
+    if (metadata.common.picture && metadata.common.picture.length > 0) {
+      const picture = metadata.common.picture[0];
+      result.picture = {
+        data: new Uint8Array(picture.data),
+        format: picture.format,
+      };
+    }
+
+    return result;
+  } catch (error) {
+    console.log("Could not read audio metadata, using filename:", error);
+    // Fallback to filename
+    return {
+      title: file.name.replace(/\.[^/.]+$/, ""),
+    };
+  }
 }

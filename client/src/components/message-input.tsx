@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { apiRequest } from "@/lib/api";
-import { detectFileType, FileInfo } from "@/lib/file-utils";
+import { detectFileType, FileInfo, readAudioMetadata, AudioMetadata } from "@/lib/file-utils";
 import { FilePreview } from "@/components/file-preview";
 
 interface QuickMessage {
@@ -30,6 +30,15 @@ interface MessageInputProps {
     caption?: string;
     recorded?: boolean;
     replyToId?: string;
+    metadata?: {
+      audio_tags?: {
+        title: string;
+        artist: string;
+        album?: string;
+        year?: string;
+        cover: string | null;
+      };
+    };
   }) => void;
   replyingTo: string | null;
   onCancelReply: () => void;
@@ -63,6 +72,7 @@ export function MessageInput({
   const [mediaCaption, setMediaCaption] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
+  const [audioMetadata, setAudioMetadata] = useState<AudioMetadata | null>(null);
   
   // Recording states
   const [isRecording, setIsRecording] = useState(false);
@@ -256,7 +266,7 @@ export function MessageInput({
     setRecordedChunks([]);
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, sourceType?: "image" | "video") => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, sourceType?: "image" | "video") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -279,6 +289,19 @@ export function MessageInput({
     setMediaPreview(url);
     setMediaType(mediaTypeValue);
     setRecordedChunks([file]);
+
+    // If it's an audio file, read metadata
+    if (mediaTypeValue === "audio" && file instanceof File) {
+      try {
+        const metadata = await readAudioMetadata(file);
+        setAudioMetadata(metadata);
+      } catch (error) {
+        console.error("Error reading audio metadata:", error);
+        setAudioMetadata(null);
+      }
+    } else {
+      setAudioMetadata(null);
+    }
   };
 
   const uploadMedia = async (file: Blob, type: "image" | "video" | "audio" | "document"): Promise<string> => {
@@ -343,6 +366,31 @@ export function MessageInput({
         mediaType === "document" ? (fileInfo?.name || "Documento") :
         "Imagem";
 
+      // Prepare metadata for audio files
+      let metadata = undefined;
+      if (mediaType === "audio" && audioMetadata) {
+        // Convert album art to base64 if available
+        let coverData: string | null = null;
+        if (audioMetadata.picture) {
+          const blob = new Blob([audioMetadata.picture.data], { type: audioMetadata.picture.format });
+          const reader = new FileReader();
+          coverData = await new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        }
+
+        metadata = {
+          audio_tags: {
+            title: audioMetadata.title || "Sem título",
+            artist: audioMetadata.artist || "Artista desconhecido",
+            album: audioMetadata.album,
+            year: audioMetadata.year,
+            cover: coverData,
+          },
+        };
+      }
+
       onSendMessage({
         content: mediaCaption || defaultContent,
         type: mediaType,
@@ -351,6 +399,7 @@ export function MessageInput({
         caption: mediaCaption || undefined,
         recorded: !!recordingType,
         replyToId: replyingTo || undefined,
+        metadata,
       });
 
       setMediaPreview(null);
@@ -361,6 +410,7 @@ export function MessageInput({
       setRecordingType(null);
       setSelectedFile(null);
       setFileInfo(null);
+      setAudioMetadata(null);
       toast.success("Mídia enviada com sucesso!");
     } catch (error) {
       toast.error("Erro ao enviar mídia");
