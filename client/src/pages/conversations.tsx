@@ -853,7 +853,7 @@ export default function Conversations() {
     });
   };
 
-  const handleStartConversation = async (clientId: string, channel: string) => {
+  const handleCreateNewConversation = async (clientId: string, channel: string) => {
     // Guard against invalid channel - default to webchat if "all" is selected
     const validChannel = channel === "all" ? "webchat" : channel;
     
@@ -1605,7 +1605,7 @@ export default function Conversations() {
                     <div
                       key={contact.id}
                       className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
-                      onClick={() => handleStartConversation(contact.id, selectedChannel === "all" ? "webchat" : selectedChannel)}
+                      onClick={() => handleCreateNewConversation(contact.id, selectedChannel === "all" ? "webchat" : selectedChannel)}
                       data-testid={`contact-item-${contact.id}`}
                     >
                       <Avatar className="h-10 w-10">

@@ -366,7 +366,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientUser = alias(users, "clientUser");
       const attendantUser = alias(users, "attendantUser");
 
-      // Get conversations where user is either client or attendant
+      // Get conversations where user is either client or attendant (excluding deleted)
       const userConversations = await db
         .select({
           conversation: conversations,
@@ -377,9 +377,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .leftJoin(clientUser, eq(conversations.clientId, clientUser.id))
         .leftJoin(attendantUser, eq(conversations.attendantId, attendantUser.id))
         .where(
-          userRole === "client"
-            ? eq(conversations.clientId, userId)
-            : or(eq(conversations.attendantId, userId), eq(conversations.status, "waiting"))
+          and(
+            eq(conversations.deleted, false),
+            userRole === "client"
+              ? eq(conversations.clientId, userId)
+              : or(eq(conversations.attendantId, userId), eq(conversations.status, "waiting"))
+          )
         )
         .orderBy(desc(conversations.updatedAt));
 
@@ -428,7 +431,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(conversations)
         .leftJoin(clientUser, eq(conversations.clientId, clientUser.id))
         .leftJoin(attendantUser, eq(conversations.attendantId, attendantUser.id))
-        .where(eq(conversations.id, req.params.id));
+        .where(
+          and(
+            eq(conversations.id, req.params.id),
+            eq(conversations.deleted, false)
+          )
+        );
 
       if (!conversation) {
         return res.status(404).json({ message: "Conversa não encontrada" });
@@ -507,6 +515,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Apenas atendentes podem iniciar conversas" });
       }
 
+      // Check current conversation status
+      const [current] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, req.params.id),
+            eq(conversations.deleted, false)
+          )
+        );
+
+      if (!current) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      if (current.status !== "waiting") {
+        return res.status(400).json({ message: "Apenas conversas aguardando podem ser iniciadas" });
+      }
+
       const [updated] = await db
         .update(conversations)
         .set({ 
@@ -518,7 +545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .returning();
 
       if (!updated) {
-        return res.status(404).json({ message: "Conversa não encontrada" });
+        return res.status(500).json({ message: "Erro ao atualizar conversa" });
       }
 
       broadcastToAll({ type: "conversation:updated", conversation: updated });
@@ -536,6 +563,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Apenas atendentes podem encerrar conversas" });
       }
 
+      // Check current conversation status
+      const [current] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, req.params.id),
+            eq(conversations.deleted, false)
+          )
+        );
+
+      if (!current) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      if (current.status !== "active") {
+        return res.status(400).json({ message: "Apenas conversas ativas podem ser encerradas" });
+      }
+
       const [updated] = await db
         .update(conversations)
         .set({ 
@@ -546,7 +592,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .returning();
 
       if (!updated) {
-        return res.status(404).json({ message: "Conversa não encontrada" });
+        return res.status(500).json({ message: "Erro ao atualizar conversa" });
       }
 
       broadcastToAll({ type: "conversation:updated", conversation: updated });
@@ -564,6 +610,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Apenas atendentes podem reabrir conversas" });
       }
 
+      // Check current conversation status
+      const [current] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, req.params.id),
+            eq(conversations.deleted, false)
+          )
+        );
+
+      if (!current) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      if (current.status !== "closed") {
+        return res.status(400).json({ message: "Apenas conversas encerradas podem ser reabertas" });
+      }
+
       const [updated] = await db
         .update(conversations)
         .set({ 
@@ -574,7 +639,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .returning();
 
       if (!updated) {
-        return res.status(404).json({ message: "Conversa não encontrada" });
+        return res.status(500).json({ message: "Erro ao atualizar conversa" });
       }
 
       broadcastToAll({ type: "conversation:updated", conversation: updated });
