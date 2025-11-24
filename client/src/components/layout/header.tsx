@@ -10,8 +10,26 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import logo from "@assets/generated_images/abstract_chat_bubble_icon_with_gradient.png";
+import { useUser } from "@/hooks/use-user";
+import { useLogout } from "@/lib/api";
+import { useLocation } from "wouter";
+import { toast } from "sonner";
 
 export function Header() {
+  const { data: user } = useUser();
+  const logoutMutation = useLogout();
+  const [, setLocation] = useLocation();
+
+  const handleLogout = async () => {
+    try {
+      await logoutMutation.mutateAsync();
+      toast.success("Logout realizado com sucesso!");
+      setLocation("/login");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao fazer logout");
+    }
+  };
+
   return (
     <header className="h-16 border-b border-white/10 bg-black/40 backdrop-blur-md shadow-2xl px-6 flex items-center justify-between sticky top-0 z-50">
       <div className="flex items-center gap-3">
@@ -33,11 +51,11 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="pl-2 pr-4 gap-3 hover:bg-accent/50 h-10 rounded-full">
               <Avatar className="h-8 w-8 border border-border">
-                <AvatarImage src="https://github.com/shadcn.png" alt="@user" />
-                <AvatarFallback>UR</AvatarFallback>
+                <AvatarImage src={user?.avatarUrl || undefined} alt={user?.displayName} />
+                <AvatarFallback>{user?.displayName?.substring(0, 2).toUpperCase() || "U"}</AvatarFallback>
               </Avatar>
               <div className="flex flex-col items-start text-sm">
-                <span className="font-medium leading-none">Usuario Demo</span>
+                <span className="font-medium leading-none">{user?.displayName || "Carregando..."}</span>
                 <span className="text-xs text-muted-foreground">Online</span>
               </div>
             </Button>
@@ -54,7 +72,7 @@ export function Header() {
               <span>Configurações</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
+            <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               <span>Sair</span>
             </DropdownMenuItem>

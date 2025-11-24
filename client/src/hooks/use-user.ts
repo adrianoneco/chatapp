@@ -14,9 +14,10 @@ export function useUser() {
   return useQuery<User>({
     queryKey: ["user"],
     queryFn: async () => {
-      const result = await apiRequest<{ user: User }>("/api/user");
+      const result = await apiRequest<{ user: User }>("/auth/me");
       return result.user;
     },
     staleTime: Infinity, // User info doesn't change often
+    retry: false,
   });
 }

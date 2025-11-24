@@ -2,7 +2,7 @@ import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
 import { broadcastToAll, initWebSocketServer } from "./websocket";
-import { eq, or, like, desc, and, sql, inArray } from "drizzle-orm";
+import { eq, or, like, desc, and, sql, inArray, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
 import { users, conversations, messages, messageReactions } from "@shared/schema";
@@ -452,6 +452,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/conversations/:id/history", requireAuth, async (req, res) => {
+    try {
+      // Get the current conversation to find the client
+      const [currentConversation] = await db
+        .select({ clientId: conversations.clientId })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, req.params.id),
+            eq(conversations.deleted, false)
+          )
+        );
+
+      if (!currentConversation) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      // Get all conversations for this client, excluding the current one
+      const attendantUser = alias(users, "attendantUser");
+      
+      const history = await db
+        .select({
+          conversation: conversations,
+          attendant: attendantUser,
+        })
+        .from(conversations)
+        .leftJoin(attendantUser, eq(conversations.attendantId, attendantUser.id))
+        .where(
+          and(
+            eq(conversations.clientId, currentConversation.clientId),
+            ne(conversations.id, req.params.id),
+            eq(conversations.deleted, false)
+          )
+        )
+        .orderBy(desc(conversations.createdAt))
+        .limit(10);
+
+      const formattedHistory = history.map(h => ({
+        ...h.conversation,
+        attendant: h.attendant ? sanitizeUser(h.attendant) : null,
+      }));
+
+      res.json(formattedHistory);
+    } catch (error) {
+      console.error("Error fetching conversation history:", error);
+      res.status(500).json({ message: "Erro ao buscar histórico de conversas" });
+    }
+  });
+
   app.post("/api/conversations", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;
@@ -529,6 +578,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Erro ao assumir conversa" });
+    }
+  });
+
+  app.patch("/api/conversations/:id/transfer", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { attendantId } = req.body;
+      
+      if (user.role !== "attendant" && user.role !== "admin") {
+        return res.status(403).json({ message: "Apenas atendentes podem transferir conversas" });
+      }
+
+      if (!attendantId) {
+        return res.status(400).json({ message: "ID do atendente é obrigatório" });
+      }
+
+      // Verify the target attendant exists and has the right role
+      const [targetAttendant] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, attendantId));
+
+      if (!targetAttendant || (targetAttendant.role !== "attendant" && targetAttendant.role !== "admin")) {
+        return res.status(400).json({ message: "Atendente inválido" });
+      }
+
+      // Check current conversation
+      const [current] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, req.params.id),
+            eq(conversations.deleted, false)
+          )
+        );
+
+      if (!current) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      if (current.attendantId === attendantId) {
+        return res.status(400).json({ message: "A conversa já está atribuída a este atendente" });
+      }
+
+      const [updated] = await db
+        .update(conversations)
+        .set({ 
+          attendantId,
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, req.params.id))
+        .returning();
+
+      if (!updated) {
+        return res.status(500).json({ message: "Erro ao transferir conversa" });
+      }
+
+      broadcastToAll({ type: "conversation:updated", conversation: updated });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao transferir conversa" });
     }
   });
 
@@ -784,6 +895,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Apenas o atendente vinculado pode enviar mensagens nesta conversa" });
       }
       
+      console.log("[Server] Creating message with data:", {
+        type: req.body.type,
+        hasMetadata: !!req.body.metadata,
+        metadata: req.body.metadata,
+        duration: req.body.duration
+      });
+
       const [message] = await db
         .insert(messages)
         .values({
@@ -800,6 +918,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           metadata: req.body.metadata || null,
         })
         .returning();
+
+      console.log("[Server] Message created:", {
+        id: message.id,
+        type: message.type,
+        hasMetadata: !!message.metadata,
+        metadata: message.metadata,
+        duration: message.duration
+      });
 
       // Update conversation timestamp
       await db
@@ -847,6 +973,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Erro ao atualizar mensagem" });
+    }
+  });
+
+  app.patch("/api/messages/:id/metadata", requireAuth, async (req, res) => {
+    try {
+      const { metadata, duration } = req.body;
+      
+      const updateData: any = {
+        updatedAt: new Date(),
+      };
+      
+      if (metadata) {
+        updateData.metadata = metadata;
+      }
+      
+      if (duration) {
+        updateData.duration = duration;
+      }
+
+      const [updated] = await db
+        .update(messages)
+        .set(updateData)
+        .where(eq(messages.id, req.params.id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ message: "Mensagem não encontrada" });
+      }
+
+      broadcastToAll({ 
+        type: "message:updated", 
+        message: updated, 
+        conversationId: updated.conversationId 
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating message metadata:", error);
+      res.status(500).json({ message: "Erro ao atualizar metadados da mensagem" });
     }
   });
 

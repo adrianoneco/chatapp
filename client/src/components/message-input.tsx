@@ -293,10 +293,17 @@ export function MessageInput({
     // If it's an audio file, read metadata
     if (mediaTypeValue === "audio" && file instanceof File) {
       try {
+        console.log("[MessageInput] Reading audio metadata for:", file.name);
         const metadata = await readAudioMetadata(file);
+        console.log("[MessageInput] Audio metadata loaded:", metadata);
         setAudioMetadata(metadata);
+        
+        // Also set recording time from duration for display
+        if (metadata.duration) {
+          setRecordingTime(Math.floor(metadata.duration));
+        }
       } catch (error) {
-        console.error("Error reading audio metadata:", error);
+        console.error("[MessageInput] Error reading audio metadata:", error);
         setAudioMetadata(null);
       }
     } else {
@@ -354,11 +361,27 @@ export function MessageInput({
 
     try {
       const file = recordedChunks[0];
+      
+      // Force read audio metadata before sending if it's an audio file and not already loaded
+      let finalAudioMetadata = audioMetadata;
+      if (mediaType === "audio" && file instanceof File && !audioMetadata) {
+        try {
+          finalAudioMetadata = await readAudioMetadata(file);
+        } catch (error) {
+          console.error("Error reading audio metadata before upload:", error);
+        }
+      }
+      
       const mediaUrl = await uploadMedia(file, mediaType);
       
-      const duration = recordingType && recordingTime > 0 
-        ? `${Math.floor(recordingTime / 60)}:${(recordingTime % 60).toString().padStart(2, "0")}`
-        : undefined;
+      // Duration from recording or from audio metadata
+      let duration: string | undefined;
+      if (recordingTime > 0) {
+        duration = `${Math.floor(recordingTime / 60)}:${(recordingTime % 60).toString().padStart(2, "0")}`;
+      } else if (finalAudioMetadata?.duration) {
+        const totalSeconds = Math.floor(finalAudioMetadata.duration);
+        duration = `${Math.floor(totalSeconds / 60)}:${(totalSeconds % 60).toString().padStart(2, "0")}`;
+      }
 
       const defaultContent = 
         mediaType === "audio" ? "Áudio" :
@@ -368,28 +391,42 @@ export function MessageInput({
 
       // Prepare metadata for audio files
       let metadata = undefined;
-      if (mediaType === "audio" && audioMetadata) {
+      if (mediaType === "audio" && finalAudioMetadata) {
+        console.log("[MessageInput] Preparing audio metadata for send:", finalAudioMetadata);
         // Convert album art to base64 if available
         let coverData: string | null = null;
-        if (audioMetadata.picture) {
-          const blob = new Blob([audioMetadata.picture.data], { type: audioMetadata.picture.format });
+        if (finalAudioMetadata.picture) {
+          const blob = new Blob([finalAudioMetadata.picture.data], { type: finalAudioMetadata.picture.format });
           const reader = new FileReader();
           coverData = await new Promise<string>((resolve) => {
             reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(blob);
           });
+          console.log("[MessageInput] Cover art converted to base64, length:", coverData?.length);
         }
 
         metadata = {
           audio_tags: {
-            title: audioMetadata.title || "Sem título",
-            artist: audioMetadata.artist || "Artista desconhecido",
-            album: audioMetadata.album,
-            year: audioMetadata.year,
+            title: finalAudioMetadata.title || "Sem título",
+            artist: finalAudioMetadata.artist || "Artista desconhecido",
+            album: finalAudioMetadata.album,
+            year: finalAudioMetadata.year,
             cover: coverData,
           },
         };
+        console.log("[MessageInput] Final metadata to send:", metadata);
+      } else {
+        console.log("[MessageInput] No audio metadata to send, mediaType:", mediaType, "finalAudioMetadata:", finalAudioMetadata);
       }
+
+      console.log("[MessageInput] Sending message with:", {
+        content: mediaCaption || defaultContent,
+        type: mediaType,
+        mediaUrl,
+        duration,
+        hasMetadata: !!metadata,
+        metadata
+      });
 
       onSendMessage({
         content: mediaCaption || defaultContent,

@@ -10,16 +10,19 @@ import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { useRef, useEffect, useState } from "react";
-import { useConversations, useConversation, useMessages, useSendMessage, useDeleteMessage, useAddReaction, ConversationWithDetails, MessageWithDetails, useCreateConversation, useStartConversation, useCloseConversation, useReopenConversation, useDeleteConversation } from "@/hooks/use-conversations";
+import { useConversations, useConversation, useMessages, useSendMessage, useDeleteMessage, useAddReaction, ConversationWithDetails, MessageWithDetails, useCreateConversation, useStartConversation, useCloseConversation, useReopenConversation, useDeleteConversation, useTransferConversation, useConversationHistory } from "@/hooks/use-conversations";
 import { useUser } from "@/hooks/use-user";
+import { useAudioMetadataUpdater } from "@/hooks/use-audio-metadata-updater";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Slider } from "@/components/ui/slider";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUsers, apiRequest } from "@/lib/api";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -259,29 +262,6 @@ function EmojiPicker({ onSelect, messageId }: { onSelect: (emoji: string) => voi
   );
 }
 
-// Mock conversation details
-interface ConversationDetails {
-  protocol: string;
-  date: string;
-  client: {
-    name: string;
-    avatar: string;
-    ip: string;
-    location: string;
-  };
-  attendant: {
-    name: string;
-    avatar: string;
-  };
-  previousConversations: Array<{
-    id: number;
-    protocol: string;
-    date: string;
-    status: 'completed' | 'pending' | 'closed';
-    attendant: string;
-  }>;
-}
-
 // Conversation Details Content Component
 interface ConversationDetailsProps {
   conversation: ConversationWithDetails;
@@ -290,6 +270,21 @@ interface ConversationDetailsProps {
 function ConversationDetailsContent({ conversation }: ConversationDetailsProps) {
   const client = conversation.client!;
   const attendant = conversation.attendant;
+  const { data: history, isLoading: loadingHistory } = useConversationHistory(conversation.id);
+
+  const getStatusBadge = (status: string) => {
+    const variants: Record<string, { label: string; className: string }> = {
+      active: { label: "Ativa", className: "bg-green-500/10 text-green-500 border-green-500/20" },
+      waiting: { label: "Aguardando", className: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" },
+      closed: { label: "Encerrada", className: "bg-gray-500/10 text-gray-500 border-gray-500/20" },
+    };
+    const variant = variants[status] || variants.waiting;
+    return (
+      <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${variant.className}`}>
+        {variant.label}
+      </span>
+    );
+  };
 
   return (
     <div className="p-4 space-y-6">
@@ -361,6 +356,56 @@ function ConversationDetailsContent({ conversation }: ConversationDetailsProps) 
           <Separator />
         </>
       )}
+
+      {/* Conversation History */}
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          Histórico de Conversas
+        </h4>
+        {loadingHistory ? (
+          <div className="flex items-center justify-center p-4">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : history && history.length > 0 ? (
+          <div className="space-y-2">
+            {history.map((conv: ConversationWithDetails) => (
+              <div 
+                key={conv.id} 
+                className="p-3 bg-background/50 rounded-lg space-y-2 border border-border/50"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-mono text-muted-foreground truncate flex-1">
+                    {conv.protocol}
+                  </p>
+                  {getStatusBadge(conv.status)}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  <span>{format(new Date(conv.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
+                </div>
+                {conv.attendant && (
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={conv.attendant.avatarUrl || undefined} />
+                      <AvatarFallback className="text-[10px]">
+                        {conv.attendant.displayName.substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {conv.attendant.displayName}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground text-center p-4">
+            Nenhuma conversa anterior encontrada
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -383,6 +428,7 @@ export default function Conversations() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [detailsSidebarOpen, setDetailsSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"waiting" | "active" | "closed">("waiting");
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [hoveredMessage, setHoveredMessage] = useState<string | null>(null);
   const [isLargeScreen, setIsLargeScreen] = useState(false);
@@ -398,12 +444,20 @@ export default function Conversations() {
   const [contactSearch, setContactSearch] = useState("");
   const [debouncedContactSearch, setDebouncedContactSearch] = useState("");
   const [selectedChannel, setSelectedChannel] = useState<string>("all");
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [selectedAttendant, setSelectedAttendant] = useState<string>("");
   const createConversationMutation = useCreateConversation();
   const startConversationMutation = useStartConversation();
   const closeConversationMutation = useCloseConversation();
   const reopenConversationMutation = useReopenConversation();
   const deleteConversationMutation = useDeleteConversation();
+  const transferConversationMutation = useTransferConversation();
   const { data: contactsData, isLoading: loadingContacts } = useUsers("client", debouncedContactSearch);
+  const { data: attendantsData, isLoading: loadingAttendants } = useUsers("attendant");
+  
+  // Process audio messages in background to extract metadata
+  // This will automatically update audio messages without ID3 tags
+  useAudioMetadataUpdater(messages, conversationId);
   
   // Debounce contact search
   useEffect(() => {
@@ -490,6 +544,25 @@ export default function Conversations() {
       setLocation("/conversations");
     } catch (error: any) {
       toast.error(error.message || "Erro ao deletar conversa");
+    }
+  };
+
+  const handleTransferConversation = async () => {
+    if (!conversationId || !selectedAttendant) {
+      toast.error("Selecione um atendente para transferir");
+      return;
+    }
+    
+    try {
+      await transferConversationMutation.mutateAsync({
+        conversationId,
+        attendantId: selectedAttendant,
+      });
+      toast.success("Conversa transferida com sucesso!");
+      setTransferDialogOpen(false);
+      setSelectedAttendant("");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao transferir conversa");
     }
   };
 
@@ -929,6 +1002,21 @@ export default function Conversations() {
               </Button>
             </div>
           </div>
+          {!sidebarCollapsed && (
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "waiting" | "active" | "closed")} className="shrink-0">
+              <TabsList className="w-full grid grid-cols-3 h-10 mx-2 mb-2">
+                <TabsTrigger value="waiting" className="text-xs" data-testid="tab-waiting">
+                  Pendente
+                </TabsTrigger>
+                <TabsTrigger value="active" className="text-xs" data-testid="tab-active">
+                  Atendendo
+                </TabsTrigger>
+                <TabsTrigger value="closed" className="text-xs" data-testid="tab-closed">
+                  Fechada
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
           <ScrollArea className="flex-1">
             {loadingConversations ? (
               <div className="flex items-center justify-center p-8">
@@ -936,7 +1024,7 @@ export default function Conversations() {
               </div>
             ) : conversations && conversations.length > 0 ? (
               <div className="space-y-1 p-2">
-                {conversations.map((conv) => {
+                {conversations.filter(conv => conv.status === activeTab).map((conv) => {
                   // Determine who to show: if user is client, show attendant; if user is attendant/admin, show client
                   const contact = user?.id === conv.clientId ? conv.attendant : conv.client;
                   
@@ -958,15 +1046,17 @@ export default function Conversations() {
                   }
                   
                   return (
-                    <Link key={conv.id} href={`/conversations/webchat/${conv.id}`}>
-                      <div 
-                        className={cn(
-                          "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
-                          conversationId === conv.id ? "bg-accent/60" : "",
-                          sidebarCollapsed && "justify-center"
-                        )}
-                        data-testid={`link-contact-${conv.id}`}
-                      >
+                    <ContextMenu key={conv.id}>
+                      <ContextMenuTrigger asChild>
+                        <Link href={`/conversations/webchat/${conv.id}`}>
+                          <div 
+                            className={cn(
+                              "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
+                              conversationId === conv.id ? "bg-accent/60" : "",
+                              sidebarCollapsed && "justify-center"
+                            )}
+                            data-testid={`link-contact-${conv.id}`}
+                          >
                         <div className="relative shrink-0">
                           <Avatar>
                             <AvatarImage src={avatarUrl} />
@@ -1003,8 +1093,120 @@ export default function Conversations() {
                         )}
                       </div>
                     </Link>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    {user && (user.role === "attendant" || user.role === "admin") ? (
+                      <>
+                        {conv.status === "waiting" && (
+                          <ContextMenuItem 
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              try {
+                                await startConversationMutation.mutateAsync(conv.id);
+                                toast.success("Conversa iniciada com sucesso!");
+                                setLocation(`/conversations/webchat/${conv.id}`);
+                              } catch (error: any) {
+                                toast.error(error.message || "Erro ao iniciar conversa");
+                              }
+                            }}
+                            data-testid={`context-start-${conv.id}`}
+                          >
+                            <PlayCircle className="mr-2 h-4 w-4" />
+                            Iniciar Conversa
+                          </ContextMenuItem>
+                        )}
+                        {conv.status === "active" && (
+                          <>
+                            <ContextMenuItem 
+                              onClick={async (e) => {
+                                e.preventDefault();
+                                if (confirm("Tem certeza que deseja encerrar esta conversa?")) {
+                                  try {
+                                    await closeConversationMutation.mutateAsync(conv.id);
+                                    toast.success("Conversa encerrada com sucesso!");
+                                  } catch (error: any) {
+                                    toast.error(error.message || "Erro ao encerrar conversa");
+                                  }
+                                }
+                              }}
+                              data-testid={`context-close-${conv.id}`}
+                            >
+                              <StopCircle className="mr-2 h-4 w-4" />
+                              Encerrar Conversa
+                            </ContextMenuItem>
+                            <ContextMenuItem 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setLocation(`/conversations/webchat/${conv.id}`);
+                                setTimeout(() => setTransferDialogOpen(true), 200);
+                              }}
+                              data-testid={`context-transfer-${conv.id}`}
+                            >
+                              <User className="mr-2 h-4 w-4" />
+                              Transferir
+                            </ContextMenuItem>
+                          </>
+                        )}
+                        {conv.status === "closed" && (
+                          <ContextMenuItem 
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              try {
+                                await reopenConversationMutation.mutateAsync(conv.id);
+                                toast.success("Conversa reaberta com sucesso!");
+                                setLocation(`/conversations/webchat/${conv.id}`);
+                              } catch (error: any) {
+                                toast.error(error.message || "Erro ao reabrir conversa");
+                              }
+                            }}
+                            data-testid={`context-reopen-${conv.id}`}
+                          >
+                            <RotateCcw className="mr-2 h-4 w-4" />
+                            Reabrir Conversa
+                          </ContextMenuItem>
+                        )}
+                        <ContextMenuSeparator />
+                        <ContextMenuItem 
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            if (confirm("Tem certeza que deseja deletar esta conversa? Esta ação não pode ser desfeita.")) {
+                              try {
+                                await deleteConversationMutation.mutateAsync(conv.id);
+                                toast.success("Conversa deletada com sucesso!");
+                                if (conversationId === conv.id) {
+                                  setLocation("/conversations");
+                                }
+                              } catch (error: any) {
+                                toast.error(error.message || "Erro ao deletar conversa");
+                              }
+                            }
+                          }}
+                          className="text-destructive"
+                          data-testid={`context-delete-${conv.id}`}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Deletar Conversa
+                        </ContextMenuItem>
+                      </>
+                    ) : (
+                      <ContextMenuItem disabled>
+                        Sem ações disponíveis
+                      </ContextMenuItem>
+                    )}
+                  </ContextMenuContent>
+                </ContextMenu>
                   );
                 })}
+                {conversations.filter(conv => conv.status === activeTab).length === 0 && (
+                  <div className="flex flex-col items-center justify-center p-8 text-center">
+                    <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <p className="text-sm text-muted-foreground">
+                      {activeTab === "waiting" && "Nenhuma conversa pendente"}
+                      {activeTab === "active" && "Nenhuma conversa em atendimento"}
+                      {activeTab === "closed" && "Nenhuma conversa fechada"}
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center p-8 text-center">
@@ -1033,7 +1235,7 @@ export default function Conversations() {
                   {currentContact ? (
                     <>
                       <Avatar>
-                        <AvatarImage src={currentContact.avatarUrl || `https://i.pravatar.cc/150?u=${currentContact.id}`} />
+                        <AvatarImage src={currentContact.avatarUrl || undefined} />
                         <AvatarFallback>{currentContact.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div>
@@ -1075,28 +1277,35 @@ export default function Conversations() {
                       {(user?.role === "attendant" || user?.role === "admin") && (
                         <>
                           {conversation?.status === "waiting" && (
-                            <DropdownMenuItem onClick={handleStartConversation}>
+                            <DropdownMenuItem onClick={handleStartConversation} data-testid="menu-start-conversation">
                               <PlayCircle className="mr-2 h-4 w-4" />
-                              Iniciar
+                              Iniciar Conversa
                             </DropdownMenuItem>
                           )}
                           {conversation?.status === "active" && (
-                            <DropdownMenuItem onClick={handleCloseConversation}>
-                              <StopCircle className="mr-2 h-4 w-4" />
-                              Encerrar
-                            </DropdownMenuItem>
+                            <>
+                              <DropdownMenuItem onClick={handleCloseConversation} data-testid="menu-close-conversation">
+                                <StopCircle className="mr-2 h-4 w-4" />
+                                Encerrar Conversa
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setTransferDialogOpen(true)} data-testid="menu-transfer-conversation">
+                                <User className="mr-2 h-4 w-4" />
+                                Transferir
+                              </DropdownMenuItem>
+                            </>
                           )}
                           {conversation?.status === "closed" && (
-                            <DropdownMenuItem onClick={handleReopenConversation}>
+                            <DropdownMenuItem onClick={handleReopenConversation} data-testid="menu-reopen-conversation">
                               <RotateCcw className="mr-2 h-4 w-4" />
-                              Reabrir
+                              Reabrir Conversa
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem onClick={handleDeleteConversation} className="text-destructive">
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={handleDeleteConversation} className="text-destructive" data-testid="menu-delete-conversation">
                             <Trash2 className="mr-2 h-4 w-4" />
-                            Deletar
+                            Deletar Conversa
                           </DropdownMenuItem>
-                          <Separator className="my-1" />
+                          {import.meta.env.DEV && <DropdownMenuSeparator />}
                         </>
                       )}
                       {import.meta.env.DEV && (
@@ -1298,6 +1507,15 @@ export default function Conversations() {
 
                             {msg.type === 'audio' && (
                               <div className="min-w-[280px]">
+                                {(() => {
+                                  console.log("[Audio Message Debug]", { 
+                                    messageId: msg.id, 
+                                    hasMetadata: !!msg.metadata, 
+                                    hasAudioTags: !!msg.metadata?.audio_tags,
+                                    metadata: msg.metadata 
+                                  });
+                                  return null;
+                                })()}
                                 {msg.metadata?.audio_tags ? (
                                   <div className="flex gap-3 items-start bg-black/20 p-3 rounded-lg mb-2">
                                     <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 shadow-lg">
@@ -1316,12 +1534,22 @@ export default function Conversations() {
                                           {msg.metadata.audio_tags.year && ` (${msg.metadata.audio_tags.year})`}
                                         </p>
                                       )}
+                                      {msg.duration && (
+                                        <p className="text-xs opacity-70 mt-1">
+                                          Duração: {msg.duration}
+                                        </p>
+                                      )}
                                     </div>
                                   </div>
                                 ) : msg.recorded ? (
                                   <div className="flex items-center gap-2 mb-2 bg-black/20 p-2 rounded-lg">
                                     <Mic className="h-4 w-4 opacity-80" />
-                                    <span className="text-xs font-medium opacity-90">Mensagem de Voz</span>
+                                    <div className="flex-1">
+                                      <span className="text-xs font-medium opacity-90">Mensagem de Voz</span>
+                                      {msg.duration && (
+                                        <span className="text-xs opacity-70 ml-2">{msg.duration}</span>
+                                      )}
+                                    </div>
                                   </div>
                                 ) : (
                                   <div className="flex gap-3 items-center bg-black/20 p-2 rounded-lg mb-2">
@@ -1330,7 +1558,15 @@ export default function Conversations() {
                                      </div>
                                      <div className="flex-1 min-w-0">
                                        <p className="text-sm truncate font-medium">{msg.caption || "Arquivo de Áudio"}</p>
-                                       <p className="text-[10px] opacity-70">MP3</p>
+                                       <div className="flex items-center gap-2 text-[10px] opacity-70">
+                                         <span>MP3</span>
+                                         {msg.duration && (
+                                           <>
+                                             <span>•</span>
+                                             <span>{msg.duration}</span>
+                                           </>
+                                         )}
+                                       </div>
                                      </div>
                                   </div>
                                 )}
@@ -1362,8 +1598,10 @@ export default function Conversations() {
                                     </div>
                                     <div className="flex justify-between text-[10px] opacity-70 font-mono">
                                       <span>{playingId === msg.id && audioRef.current ? formatTime(audioRef.current.currentTime) : "0:00"}</span>
-                                      <span>{msg.duration}</span>
                                     </div>
+                                  </div>
+                                  <div className="text-[10px] opacity-70 font-mono shrink-0">
+                                    {msg.duration}
                                   </div>
                                 </div>
                               </div>
@@ -1556,6 +1794,83 @@ export default function Conversations() {
           </>
         )}
       </div>
+
+      {/* Transfer Conversation Dialog */}
+      <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Transferir Conversa</DialogTitle>
+            <DialogDescription>
+              Selecione o atendente para quem deseja transferir esta conversa
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {loadingAttendants ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : attendantsData?.users && attendantsData.users.length > 0 ? (
+              <>
+                <Select value={selectedAttendant} onValueChange={setSelectedAttendant}>
+                  <SelectTrigger data-testid="select-attendant">
+                    <SelectValue placeholder="Selecione um atendente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {attendantsData.users
+                      .filter(att => att.id !== conversation?.attendantId)
+                      .map((attendant) => (
+                        <SelectItem key={attendant.id} value={attendant.id}>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6">
+                              <AvatarImage src={attendant.avatarUrl || undefined} />
+                              <AvatarFallback>{attendant.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <span>{attendant.displayName}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                
+                <div className="flex justify-end gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setTransferDialogOpen(false);
+                      setSelectedAttendant("");
+                    }}
+                    data-testid="button-cancel-transfer"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={handleTransferConversation}
+                    disabled={!selectedAttendant || transferConversationMutation.isPending}
+                    data-testid="button-confirm-transfer"
+                  >
+                    {transferConversationMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Transferindo...
+                      </>
+                    ) : (
+                      "Transferir"
+                    )}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-8 text-center">
+                <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-sm text-muted-foreground">
+                  Nenhum atendente disponível para transferência
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* New Conversation Dialog */}
       <Dialog open={newConversationDialogOpen} onOpenChange={setNewConversationDialogOpen}>

@@ -19,8 +19,8 @@ import { toast } from "sonner";
 const userSchema = z.object({
   displayName: z.string().min(2, "Nome muito curto"),
   email: z.string().email("Email inválido"),
-  phone: z.string().optional(),
-  password: z.string().min(6, "Mínimo 6 caracteres").optional(),
+  phone: z.string().optional().or(z.literal("")),
+  password: z.string().min(6, "Mínimo 6 caracteres").optional().or(z.literal("")),
 });
 
 export default function Attendants() {
@@ -99,14 +99,14 @@ export default function Attendants() {
 
         toast.success("Atendente atualizado com sucesso!");
       } else {
-        if (!values.password) {
+        if (!values.password || values.password.trim() === "") {
           toast.error("Senha é obrigatória para novos usuários");
           return;
         }
 
         const result = await registerMutation.mutateAsync({
           email: values.email,
-          password: values.password,
+          password: values.password.trim(),
           displayName: values.displayName,
           role: "attendant",
         });

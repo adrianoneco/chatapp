@@ -111,6 +111,14 @@ export function useConversation(id: string | undefined) {
   });
 }
 
+export function useConversationHistory(id: string | undefined) {
+  return useQuery<ConversationWithDetails[]>({
+    queryKey: [`/conversations/${id}/history`],
+    queryFn: () => fetchAPI(`/conversations/${id}/history`),
+    enabled: !!id,
+  });
+}
+
 export function useCreateConversation() {
   const queryClient = useQueryClient();
   
@@ -202,6 +210,23 @@ export function useDeleteConversation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+    },
+  });
+}
+
+export function useTransferConversation() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ conversationId, attendantId }: { conversationId: string; attendantId: string }) => {
+      return apiRequest(`/conversations/${conversationId}/transfer`, {
+        method: "PATCH",
+        body: JSON.stringify({ attendantId }),
+      });
+    },
+    onSuccess: (_, { conversationId }) => {
+      queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+      queryClient.invalidateQueries({ queryKey: [`/conversations/${conversationId}`] });
     },
   });
 }
