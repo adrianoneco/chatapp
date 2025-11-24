@@ -4,13 +4,13 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize, PanelLeftClose, PanelLeft, Reply, Forward, Laugh, X, MapPin, Clock, Hash, User, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize, PanelLeftClose, PanelLeft, Reply, Forward, Laugh, X, MapPin, Clock, Hash, User, CheckCircle2, XCircle, Loader2, Plus } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { useRef, useEffect, useState } from "react";
-import { useConversations, useConversation, useMessages, useSendMessage, useDeleteMessage, useAddReaction, ConversationWithDetails, MessageWithDetails } from "@/hooks/use-conversations";
+import { useConversations, useConversation, useMessages, useSendMessage, useDeleteMessage, useAddReaction, ConversationWithDetails, MessageWithDetails, useCreateConversation } from "@/hooks/use-conversations";
 import { useUser } from "@/hooks/use-user";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -19,6 +19,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useUsers } from "@/lib/api";
+import { toast } from "sonner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Assets - usando /storage para servir arquivos de forma segura
 const mp3File = "/storage/13. Behind Enemy Lines_1763919687567.mp3";
@@ -732,6 +736,23 @@ export default function Conversations() {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // New Conversation Dialog State
+  const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
+  const [debouncedContactSearch, setDebouncedContactSearch] = useState("");
+  const [selectedChannel, setSelectedChannel] = useState<string>("all");
+  const createConversationMutation = useCreateConversation();
+  const { data: contactsData, isLoading: loadingContacts } = useUsers("client", debouncedContactSearch);
+  
+  // Debounce contact search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedContactSearch(contactSearch);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [contactSearch]);
 
   const currentContact = conversation?.client || conversation?.attendant;
   const currentConversation = conversations?.find(c => c.id === conversationId);
@@ -1096,6 +1117,31 @@ export default function Conversations() {
     });
   };
 
+  const handleStartConversation = async (clientId: string, channel: string) => {
+    // Guard against invalid channel - default to webchat if "all" is selected
+    const validChannel = channel === "all" ? "webchat" : channel;
+    
+    try {
+      const result = await createConversationMutation.mutateAsync({
+        clientId,
+        channel: validChannel as "webchat" | "whatsapp" | "telegram",
+      });
+      toast.success("Conversa iniciada com sucesso!");
+      setNewConversationDialogOpen(false);
+      setContactSearch("");
+      setSelectedChannel("all");
+      setLocation(`/conversations/webchat/${result.id}`);
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao iniciar conversa");
+    }
+  };
+
+  const filteredContacts = contactsData?.users?.filter(contact => {
+    if (selectedChannel === "all") return true;
+    // Filter logic can be enhanced based on channel preference
+    return true;
+  }) || [];
+
   const formatMessageTime = (dateString: string) => {
     const date = new Date(dateString);
     if (isToday(date)) {
@@ -1119,10 +1165,22 @@ export default function Conversations() {
           <div className="h-16 px-4 flex items-center shrink-0">
             <div className="flex items-center gap-2 w-full">
               {!sidebarCollapsed && (
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Buscar conversas..." className="pl-9 bg-background/50" data-testid="input-search-conversations" />
-                </div>
+                <>
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Buscar conversas..." className="pl-9 bg-background/50" data-testid="input-search-conversations" />
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => setNewConversationDialogOpen(true)}
+                    className="shrink-0"
+                    data-testid="button-new-conversation"
+                    title="Nova conversa"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </Button>
+                </>
               )}
               <Button 
                 variant="ghost" 
@@ -1702,7 +1760,7 @@ export default function Conversations() {
                     <SheetTitle>Detalhes da Conversa</SheetTitle>
                   </SheetHeader>
                   <ScrollArea className="h-[calc(100vh-5rem)]">
-                    <ConversationDetailsContent conversation={conversation!} />
+                    {conversation && <ConversationDetailsContent conversation={conversation} />}
                   </ScrollArea>
                 </SheetContent>
               </Sheet>
@@ -1729,7 +1787,7 @@ export default function Conversations() {
                       </Button>
                     </div>
                     <ScrollArea className="flex-1">
-                      <ConversationDetailsContent conversation={conversation!} />
+                      {conversation && <ConversationDetailsContent conversation={conversation} />}
                     </ScrollArea>
                   </>
                 )}
@@ -1738,6 +1796,82 @@ export default function Conversations() {
           </>
         )}
       </div>
+
+      {/* New Conversation Dialog */}
+      <Dialog open={newConversationDialogOpen} onOpenChange={setNewConversationDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Nova Conversa</DialogTitle>
+            <DialogDescription>
+              Selecione um contato para iniciar uma nova conversa
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Buscar contato..." 
+                className="pl-9"
+                value={contactSearch}
+                onChange={(e) => setContactSearch(e.target.value)}
+                data-testid="input-search-contacts"
+              />
+            </div>
+
+            {/* Channel Filter */}
+            <Select value={selectedChannel} onValueChange={setSelectedChannel}>
+              <SelectTrigger data-testid="select-channel">
+                <SelectValue placeholder="Filtrar por canal" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os canais</SelectItem>
+                <SelectItem value="webchat">WebChat</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                <SelectItem value="telegram">Telegram</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Contacts List */}
+            <ScrollArea className="h-[300px] border rounded-md">
+              {loadingContacts ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredContacts.length > 0 ? (
+                <div className="p-2 space-y-1">
+                  {filteredContacts.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
+                      onClick={() => handleStartConversation(contact.id, selectedChannel === "all" ? "webchat" : selectedChannel)}
+                      data-testid={`contact-item-${contact.id}`}
+                    >
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={contact.avatarUrl || undefined} />
+                        <AvatarFallback>{contact.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{contact.displayName}</p>
+                        <p className="text-sm text-muted-foreground truncate">{contact.email}</p>
+                      </div>
+                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                  <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-sm text-muted-foreground">
+                    {contactSearch ? "Nenhum contato encontrado" : "Nenhum contato disponível"}
+                  </p>
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }
