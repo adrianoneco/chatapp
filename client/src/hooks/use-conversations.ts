@@ -24,12 +24,16 @@ async function fetchAPI(path: string, options?: RequestInit) {
 export interface ConversationWithDetails {
   id: string;
   protocol: string;
+  sequenceNumber: number;
   channel: "webchat" | "whatsapp" | "telegram";
   clientId: string;
   attendantId: string | null;
   status: "active" | "waiting" | "closed";
   clientIp: string | null;
   clientLocation: string | null;
+  gpsLocation: boolean;
+  latitude: number | null;
+  longitude: number | null;
   createdAt: string;
   updatedAt: string;
   client: {

@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize, PanelLeftClose, PanelLeft, Reply, Forward, Laugh, X, MapPin, Clock, Hash, User, CheckCircle2, XCircle, Loader2, Plus, PlayCircle, StopCircle, RotateCcw } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize, PanelLeftClose, PanelLeft, Reply, Forward, Laugh, X, MapPin, Clock, Hash, User, CheckCircle2, XCircle, Loader2, Plus, PlayCircle, StopCircle, RotateCcw, X as XIcon, Globe, Copy, Download } from "lucide-react";
+import { FaTrash } from "react-icons/fa6";
 import { Separator } from "@/components/ui/separator";
 import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
@@ -20,6 +21,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -286,15 +288,82 @@ function ConversationDetailsContent({ conversation }: ConversationDetailsProps) 
     );
   };
 
+  const copyProtocol = () => {
+    navigator.clipboard.writeText(conversation.protocol);
+    toast.success("Protocolo copiado!");
+  };
+
+  const downloadNotes = () => {
+    const notes = `ANOTAÇÕES DA CONVERSA\n\n` +
+      `Protocolo: ${conversation.protocol}\n` +
+      `Data/Hora: ${format(new Date(conversation.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}\n` +
+      `IP: ${conversation.clientIp || "Não disponível"}\n` +
+      `Localização: ${conversation.clientLocation || "Não disponível"}\n` +
+      `Tipo: ${conversation.gpsLocation ? 'GPS' : 'IP/Browser'}\n\n` +
+      `Cliente: ${client?.displayName || "N/A"}\n` +
+      `Email: ${client?.email || "N/A"}\n\n` +
+      `Atendente: ${attendant?.displayName || "Não atribuído"}\n` +
+      `Email: ${attendant?.email || "N/A"}\n\n` +
+      `Status: ${conversation.status}\n` +
+      `Canal: ${conversation.channel}\n\n` +
+      `---\n` +
+      `Espaço para anotações:\n\n\n\n\n`;
+    
+    const blob = new Blob([notes], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `anotacoes-${conversation.protocol}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success("Arquivo baixado!");
+  };
+
   return (
     <div className="p-4 space-y-6">
-      {/* Protocol and Date */}
+      {/* Protocol, Date and IP */}
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-sm">
           <Hash className="h-4 w-4 text-muted-foreground" />
           <div className="flex-1">
             <p className="text-xs text-muted-foreground">Protocolo</p>
-            <p className="font-mono font-medium">{conversation.protocol}</p>
+            <div className="flex items-center gap-2">
+              <p className="font-mono font-medium flex-1">{conversation.protocol}</p>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      onClick={copyProtocol}
+                      className="h-7 w-7"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Copiar protocolo</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      onClick={downloadNotes}
+                      className="h-7 w-7"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Baixar anotações</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2 text-sm">
@@ -308,27 +377,23 @@ function ConversationDetailsContent({ conversation }: ConversationDetailsProps) 
 
       <Separator />
 
-      {/* Client Info */}
+      {/* Location Info with IP */}
       <div className="space-y-3">
         <h4 className="text-sm font-semibold flex items-center gap-2">
-          <User className="h-4 w-4" />
-          Cliente
+          <MapPin className="h-4 w-4" />
+          IP e Localização
         </h4>
-        <div className="flex items-center gap-3 p-3 bg-background/50 rounded-lg">
-          <Avatar className="h-12 w-12">
-            <AvatarImage src={client.avatarUrl || undefined} />
-            <AvatarFallback>{client.displayName.substring(0, 2)}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium truncate">{client.displayName}</p>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-              <MapPin className="h-3 w-3" />
-              <span className="truncate">{conversation.clientLocation || "Localização desconhecida"}</span>
+        <div className="p-3 bg-background/50 rounded-lg space-y-2">
+          <div className="flex items-start gap-2">
+            <Globe className="h-4 w-4 text-muted-foreground mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-mono">{conversation.clientIp || "IP não disponível"}</p>
+              <p className="text-sm mt-1 truncate">{conversation.clientLocation || "Localização desconhecida"}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {conversation.clientIp ? `Baseado em ${conversation.gpsLocation ? 'GPS' : 'IP/Browser'}` : 'Não disponível'}
+              </p>
             </div>
           </div>
-        </div>
-        <div className="text-xs space-y-1">
-          <p className="text-muted-foreground">IP: <span className="font-mono text-foreground">{conversation.clientIp || "Não disponível"}</span></p>
         </div>
       </div>
 
@@ -343,13 +408,13 @@ function ConversationDetailsContent({ conversation }: ConversationDetailsProps) 
               Atendente
             </h4>
             <div className="flex items-center gap-3 p-3 bg-background/50 rounded-lg">
-              <Avatar className="h-10 w-10">
+              <Avatar className="h-12 w-12 border-2 border-primary/20">
                 <AvatarImage src={attendant.avatarUrl || undefined} />
-                <AvatarFallback>{attendant.displayName.substring(0, 2)}</AvatarFallback>
+                <AvatarFallback>{attendant.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{attendant.displayName}</p>
-                <p className="text-xs text-muted-foreground">Atendente responsável</p>
+                <p className="text-xs text-muted-foreground truncate">{attendant.email || "Atendente responsável"}</p>
               </div>
             </div>
           </div>
@@ -748,6 +813,9 @@ export default function Conversations() {
         avatar: currentContact.avatarUrl,
         ip: conversation.clientIp,
         location: conversation.clientLocation,
+        gpsLocation: conversation.gpsLocation,
+        latitude: conversation.latitude,
+        longitude: conversation.longitude,
       },
       attendant: conversation.attendant ? {
         id: conversation.attendant.id,
@@ -820,19 +888,15 @@ export default function Conversations() {
           }
         }
 
-        // Processar metadata (converter cover para base64 se existir)
+        // Processar metadata (manter cover como URL pública)
         if (msg.metadata?.audio_tags) {
-          const coverData = msg.metadata.audio_tags.cover 
-            ? await fileToBase64(msg.metadata.audio_tags.cover)
-            : null;
-
           processedMsg.metadata = {
             audio_tags: {
               title: msg.metadata.audio_tags.title,
               artist: msg.metadata.audio_tags.artist,
               album: msg.metadata.audio_tags.album,
               year: msg.metadata.audio_tags.year,
-              cover: coverData
+              cover: msg.metadata.audio_tags.cover
             }
           };
         }
@@ -882,6 +946,11 @@ export default function Conversations() {
         id: currentContact.id,
         name: currentContact.displayName,
         avatar: currentContact.avatarUrl,
+        ip: conversation.clientIp,
+        location: conversation.clientLocation,
+        gpsLocation: conversation.gpsLocation,
+        latitude: conversation.latitude,
+        longitude: conversation.longitude,
       },
       attendant: conversation.attendant ? {
         id: conversation.attendant.id,
@@ -1026,13 +1095,17 @@ export default function Conversations() {
           targetConversationId = createResponse.id;
         }
 
-        // Enviar mensagem encaminhada
+        // Enviar mensagem encaminhada (reutilizando o mesmo arquivo)
         await apiRequest(`/conversations/${targetConversationId}/messages`, {
           method: 'POST',
           body: JSON.stringify({
             content: messageToForward.content,
             type: messageToForward.type,
             mediaUrl: messageToForward.mediaUrl || undefined,
+            metadata: messageToForward.metadata || undefined,
+            duration: messageToForward.duration || undefined,
+            fileName: messageToForward.fileName || undefined,
+            fileSize: messageToForward.fileSize || undefined,
             forwarded: true,
           })
         });
@@ -1095,13 +1168,17 @@ export default function Conversations() {
           targetConversationId = createResponse.id;
         }
 
-        // Enviar mensagem com resposta
+        // Enviar mensagem com resposta (reutilizando o mesmo arquivo)
         await apiRequest(`/conversations/${targetConversationId}/messages`, {
           method: 'POST',
           body: JSON.stringify({
             content: messageToReply.content,
             type: messageToReply.type,
             mediaUrl: messageToReply.mediaUrl || undefined,
+            metadata: messageToReply.metadata || undefined,
+            duration: messageToReply.duration || undefined,
+            fileName: messageToReply.fileName || undefined,
+            fileSize: messageToReply.fileSize || undefined,
             replyToId: messageToReply.id,
           })
         });
@@ -1139,10 +1216,69 @@ export default function Conversations() {
     // Guard against invalid channel - default to webchat if "all" is selected
     const validChannel = channel === "all" ? "webchat" : channel;
     
+    // Collect location information
+    let locationData: {
+      clientLocation?: string;
+      clientIp?: string;
+      gpsLocation?: boolean;
+      latitude?: number;
+      longitude?: number;
+    } = {};
+
     try {
+      // Request geolocation permission
+      if (navigator.geolocation) {
+        await new Promise<void>((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              locationData.latitude = position.coords.latitude;
+              locationData.longitude = position.coords.longitude;
+              locationData.gpsLocation = true;
+
+              // Try to get location name from coordinates using reverse geocoding
+              try {
+                const response = await fetch(
+                  `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}&accept-language=pt-BR`
+                );
+                const data = await response.json();
+                if (data.address) {
+                  const city = data.address.city || data.address.town || data.address.village || '';
+                  const state = data.address.state || '';
+                  const country = data.address.country || '';
+                  locationData.clientLocation = [city, state, country].filter(Boolean).join(', ');
+                }
+              } catch (error) {
+                console.error('Error getting location name:', error);
+              }
+              resolve();
+            },
+            (error) => {
+              console.warn('GPS location denied or unavailable:', error);
+              resolve();
+            },
+            { timeout: 10000, enableHighAccuracy: true }
+          );
+        });
+      }
+
+      // Fallback: Get IP-based location if GPS failed
+      if (!locationData.clientLocation) {
+        try {
+          const ipResponse = await fetch('https://ipapi.co/json/');
+          const ipData = await ipResponse.json();
+          locationData.clientLocation = [ipData.city, ipData.region, ipData.country_name].filter(Boolean).join(', ');
+          locationData.clientIp = ipData.ip;
+          locationData.gpsLocation = false;
+        } catch (error) {
+          console.error('Error getting IP location:', error);
+          locationData.clientLocation = 'Localização desconhecida';
+        }
+      }
+
       const result = await createConversationMutation.mutateAsync({
         clientId,
         channel: validChannel as "webchat" | "whatsapp" | "telegram",
+        ...locationData,
       });
       toast.success("Conversa iniciada com sucesso!");
       setNewConversationDialogOpen(false);
@@ -1283,7 +1419,12 @@ export default function Conversations() {
                         {!sidebarCollapsed && (
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="font-medium truncate">{displayName}</span>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs font-mono px-1.5 py-0">
+                                  #{conv.sequenceNumber}
+                                </Badge>
+                                <span className="font-medium truncate">{displayName}</span>
+                              </div>
                               <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
                                 {conv.lastMessage ? formatMessageTime(conv.lastMessage.createdAt) : ""}
                               </span>
@@ -1393,7 +1534,7 @@ export default function Conversations() {
                           className="text-destructive"
                           data-testid={`context-delete-${conv.id}`}
                         >
-                          <Trash2 className="mr-2 h-4 w-4" />
+                          <FaTrash className="mr-2 h-4 w-4" />
                           Deletar Conversa
                         </ContextMenuItem>
                       </>
@@ -1466,7 +1607,7 @@ export default function Conversations() {
                       <div>
                         <h3 className="font-semibold">Carregando...</h3>
                         <p className="text-xs text-muted-foreground">
-                          Protocolo: {conversation.protocol}
+                          #{conversation.sequenceNumber}
                         </p>
                       </div>
                     </>
@@ -1511,7 +1652,7 @@ export default function Conversations() {
                           )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={handleDeleteConversation} className="text-destructive" data-testid="menu-delete-conversation">
-                            <Trash2 className="mr-2 h-4 w-4" />
+                            <FaTrash className="mr-2 h-4 w-4" />
                             Deletar Conversa
                           </DropdownMenuItem>
                           {import.meta.env.DEV && <DropdownMenuSeparator />}
@@ -1825,59 +1966,63 @@ export default function Conversations() {
                             <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-white/5">
                               {/* Action Buttons on Left */}
                               <div className="flex items-center gap-1 opacity-0 group-hover/message:opacity-100 transition-opacity">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 hover:bg-white/10"
-                                  onClick={() => handleReplyMessage(msg.id)}
-                                  data-testid={`button-reply-${msg.id}`}
-                                  title="Responder"
-                                >
-                                  <Reply className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 hover:bg-white/10"
-                                  onClick={() => handleForwardMessage(msg.id)}
-                                  data-testid={`button-forward-${msg.id}`}
-                                  title="Encaminhar"
-                                >
-                                  <Forward className="h-3.5 w-3.5" />
-                                </Button>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
+                                {!isMyMessage && (
+                                  <>
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       className="h-6 w-6 hover:bg-white/10"
-                                      data-testid={`button-emoji-${msg.id}`}
-                                      title="Reagir"
+                                      onClick={() => handleReplyMessage(msg.id)}
+                                      data-testid={`button-reply-${msg.id}`}
+                                      title="Responder"
                                     >
-                                      <Smile className="h-3.5 w-3.5" />
+                                      <Reply className="h-3.5 w-3.5" />
                                     </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="start" className="w-auto p-2">
-                                    <div className="grid grid-cols-5 gap-1">
-                                      {EMOJI_LIST.slice(0, 10).map((emoji) => (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 hover:bg-white/10"
+                                      onClick={() => handleForwardMessage(msg.id)}
+                                      data-testid={`button-forward-${msg.id}`}
+                                      title="Encaminhar"
+                                    >
+                                      <Forward className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
                                         <Button
-                                          key={emoji}
                                           variant="ghost"
                                           size="icon"
-                                          className="h-8 w-8 text-lg hover:bg-accent"
-                                          onClick={() => handleReactToMessage(msg.id, emoji)}
-                                          data-testid={`emoji-${emoji}-${msg.id}`}
+                                          className="h-6 w-6 hover:bg-white/10"
+                                          data-testid={`button-emoji-${msg.id}`}
+                                          title="Reagir"
                                         >
-                                          {emoji}
+                                          <Smile className="h-3.5 w-3.5" />
                                         </Button>
-                                      ))}
-                                    </div>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="start" className="w-auto p-2">
+                                        <div className="grid grid-cols-5 gap-1">
+                                          {EMOJI_LIST.slice(0, 10).map((emoji) => (
+                                            <Button
+                                              key={emoji}
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-8 w-8 text-lg hover:bg-accent"
+                                              onClick={() => handleReactToMessage(msg.id, emoji)}
+                                              data-testid={`emoji-${emoji}-${msg.id}`}
+                                            >
+                                              {emoji}
+                                            </Button>
+                                          ))}
+                                        </div>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-6 w-6 hover:bg-white/10 text-red-400 hover:text-red-500"
+                                  className="h-6 w-6 hover:bg-white/10"
                                   onClick={() => handleDeleteMessage(msg.id)}
                                   data-testid={`button-delete-${msg.id}`}
                                   title="Apagar"
@@ -2190,7 +2335,7 @@ export default function Conversations() {
                 </div>
               ) : contactsData?.users && contactsData.users.length > 0 ? (
                 <div className="space-y-1">
-                  {contactsData.users.map((contact) => (
+                  {contactsData.users.filter(contact => contact.id !== user?.id).map((contact) => (
                     <div
                       key={contact.id}
                       className={cn(
@@ -2287,7 +2432,7 @@ export default function Conversations() {
                 </div>
               ) : contactsData?.users && contactsData.users.length > 0 ? (
                 <div className="space-y-1">
-                  {contactsData.users.map((contact) => (
+                  {contactsData.users.filter(contact => contact.id !== user?.id).map((contact) => (
                     <div
                       key={contact.id}
                       className={cn(

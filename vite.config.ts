@@ -42,7 +42,23 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
-    allowedHosts: true,
+    port: 5001,
+    strictPort: true,
+    hmr: {
+      protocol: 'wss',
+      host: 'chatapp.easydev.com.br',
+      clientPort: 443,
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'ws://localhost:5000',
+        ws: true,
+      },
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],

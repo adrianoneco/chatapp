@@ -5,7 +5,7 @@ import { broadcastToAll, initWebSocketServer } from "./websocket";
 import { eq, or, like, desc, and, sql, inArray, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
-import { users, conversations, messages, messageReactions, channels } from "@shared/schema";
+import { users, conversations, messages, messageReactions, channels, protocols, webhooks, webhookLogs } from "@shared/schema";
 import {
   createUser,
   getUserByEmail,
@@ -16,6 +16,7 @@ import {
   resetPassword,
 } from "./auth";
 import { requireAuth, requireRole } from "./middleware";
+import { registerWebhookRoutes } from "./webhooks";
 import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
@@ -91,6 +92,38 @@ const uploadAudio = multer({
   }),
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB for audio
 });
+
+// Generate unique protocol with 10 alphanumeric characters [A-Z0-9]
+async function generateUniqueProtocol(): Promise<string> {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let protocol: string;
+  let attempts = 0;
+  const maxAttempts = 100;
+
+  while (attempts < maxAttempts) {
+    protocol = '';
+    for (let i = 0; i < 10; i++) {
+      protocol += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    // Check if protocol already exists in protocols table
+    const existing = await db
+      .select()
+      .from(protocols)
+      .where(eq(protocols.protocol, protocol))
+      .limit(1);
+
+    if (existing.length === 0) {
+      // Insert into protocols table to reserve it
+      await db.insert(protocols).values({ protocol });
+      return protocol;
+    }
+
+    attempts++;
+  }
+
+  throw new Error('Failed to generate unique protocol after maximum attempts');
+}
 
 const uploadDocument = multer({
   storage: multer.diskStorage({
@@ -474,7 +507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               : or(eq(conversations.attendantId, userId), eq(conversations.status, "waiting"))
           )
         )
-        .orderBy(desc(conversations.updatedAt));
+        .orderBy(desc(conversations.sequenceNumber));
 
       // Get last message for each conversation
       const conversationsWithLastMessage = await Promise.all(
@@ -648,7 +681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/conversations", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;
-      const protocol = `WEB-${Date.now()}-${Math.random().toString(36).substring(7).toUpperCase()}`;
+      const protocol = await generateUniqueProtocol();
       
       const [conversation] = await db
         .insert(conversations)
@@ -658,8 +691,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           clientId: user.role === "client" ? user.id : req.body.clientId,
           attendantId: user.role === "attendant" ? user.id : null,
           status: "waiting",
-          clientIp: req.ip,
+          clientIp: req.body.clientIp || req.ip || null,
           clientLocation: req.body.clientLocation || null,
+          gpsLocation: req.body.gpsLocation || false,
+          latitude: req.body.latitude || null,
+          longitude: req.body.longitude || null,
         })
         .returning();
 
@@ -1059,6 +1095,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           recorded: req.body.recorded || false,
           forwarded: req.body.forwarded || false,
           replyToId: req.body.replyToId || null,
+          fileName: req.body.fileName || null,
+          fileSize: req.body.fileSize || null,
           metadata: req.body.metadata || null,
         })
         .returning();
@@ -1279,6 +1317,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro ao fazer upload do documento" });
     }
   });
+
+  // Register webhook routes
+  registerWebhookRoutes(app);
 
   return httpServer;
 }
