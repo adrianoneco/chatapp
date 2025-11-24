@@ -20,9 +20,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useUsers } from "@/lib/api";
+import { useUsers, apiRequest } from "@/lib/api";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MessageInput } from "@/components/message-input";
 
 
 // Custom Video Player Component
@@ -411,6 +412,33 @@ export default function Conversations() {
 
   const currentContact = conversation?.client || conversation?.attendant;
   const currentConversation = conversations?.find(c => c.id === conversationId);
+
+  // Check if user can send messages
+  const canSendMessage = conversation 
+    ? (user?.role === "admin" || 
+       conversation.status === "waiting" ||
+       conversation.attendantId === user?.id)
+    : false;
+
+  // Check if user can assign conversation
+  const canAssignConversation = conversation
+    ? (user?.role === "attendant" || user?.role === "admin") && 
+      conversation.status === "waiting"
+    : false;
+
+  // Handle assigning conversation to current user
+  const handleAssignConversation = async () => {
+    if (!conversationId) return;
+    
+    try {
+      await apiRequest(`/conversations/${conversationId}/assign`, {
+        method: "PATCH",
+      });
+      toast.success("Conversa assumida com sucesso!");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao assumir conversa");
+    }
+  };
 
   // Expandir sidebar direita automaticamente em telas grandes
   useEffect(() => {
@@ -1348,44 +1376,25 @@ export default function Conversations() {
               </ScrollArea>
 
               {/* Input Area */}
-              <div className="p-4 bg-card/30 border-t border-border shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 relative bg-background/50 rounded-lg flex items-center px-3 py-2">
-                    <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0" data-testid="button-emoji">
-                      <Smile className="h-5 w-5" />
-                    </Button>
-                    <Input 
-                      placeholder="Digite uma mensagem..." 
-                      className="flex-1 bg-transparent border-0 focus-visible:ring-0 px-2"
-                      data-testid="input-message"
-                      value={messageInput}
-                      onChange={(e) => setMessageInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage();
-                        }
-                      }}
-                    />
-                    <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0" data-testid="button-attach">
-                      <Paperclip className="h-5 w-5" />
-                    </Button>
-                  </div>
-                  <Button 
-                    size="icon" 
-                    className="h-12 w-12 rounded-full shadow-lg hover-elevate active-elevate-2 shrink-0" 
-                    data-testid="button-send"
-                    onClick={handleSendMessage}
-                    disabled={!messageInput.trim() || sendMessageMutation.isPending}
-                  >
-                    {sendMessageMutation.isPending ? (
-                      <Loader2 className="h-6 w-6 animate-spin" />
-                    ) : (
-                      <Send className="h-6 w-6" />
-                    )}
-                  </Button>
-                </div>
-              </div>
+              <MessageInput
+                conversationId={conversationId || ""}
+                onSendMessage={(data) => {
+                  if (!conversationId) return;
+                  sendMessageMutation.mutate({
+                    conversationId,
+                    data,
+                  }, {
+                    onSuccess: () => {
+                      setReplyingTo(null);
+                    },
+                  });
+                }}
+                replyingTo={replyingTo}
+                onCancelReply={() => setReplyingTo(null)}
+                isPending={sendMessageMutation.isPending}
+                canSend={canSendMessage}
+                onAssignConversation={canAssignConversation ? handleAssignConversation : undefined}
+              />
             </>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 text-center bg-card/20">

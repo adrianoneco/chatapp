@@ -627,5 +627,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI text correction route
+  app.post("/api/messages/correct-text", requireAuth, async (req, res) => {
+    try {
+      const { correctText } = await import("./openai");
+      const correctedText = await correctText(req.body.text);
+      res.json({ correctedText });
+    } catch (error: any) {
+      console.error("Erro ao corrigir texto:", error);
+      res.status(500).json({ message: error.message || "Erro ao corrigir texto" });
+    }
+  });
+
+  // Quick messages route
+  app.get("/api/quick-messages", requireAuth, async (req, res) => {
+    try {
+      // Predefined quick messages in Portuguese
+      const quickMessages = [
+        { id: "1", text: "Olá! Como posso ajudar você hoje?", category: "saudacao" },
+        { id: "2", text: "Entendi sua solicitação. Vou verificar isso para você.", category: "confirmacao" },
+        { id: "3", text: "Obrigado por entrar em contato! Retornaremos em breve.", category: "agradecimento" },
+        { id: "4", text: "Estou verificando as informações. Aguarde um momento, por favor.", category: "espera" },
+        { id: "5", text: "Posso ajudar com mais alguma coisa?", category: "oferta" },
+        { id: "6", text: "Fico feliz em ajudar! Tenha um ótimo dia!", category: "despedida" },
+        { id: "7", text: "Desculpe pelo inconveniente. Vou resolver isso imediatamente.", category: "desculpa" },
+        { id: "8", text: "Sua solicitação foi registrada com sucesso!", category: "confirmacao" },
+        { id: "9", text: "Estamos à disposição de segunda a sexta, das 9h às 18h.", category: "horario" },
+        { id: "10", text: "Para mais informações, você pode acessar nosso site.", category: "informacao" },
+      ];
+      res.json({ quickMessages });
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao buscar mensagens prontas" });
+    }
+  });
+
+  // Media upload routes
+  app.post("/api/upload/image", requireAuth, uploadImage.single("image"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "Nenhuma imagem fornecida" });
+      }
+      const url = `/data/images/${req.file.filename}`;
+      res.json({ url });
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      res.status(500).json({ message: "Erro ao fazer upload da imagem" });
+    }
+  });
+
+  app.post("/api/upload/video", requireAuth, uploadVideo.single("video"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "Nenhum vídeo fornecido" });
+      }
+      const url = `/data/videos/${req.file.filename}`;
+      res.json({ url });
+    } catch (error) {
+      console.error("Error uploading video:", error);
+      res.status(500).json({ message: "Erro ao fazer upload do vídeo" });
+    }
+  });
+
+  app.post("/api/upload/audio", requireAuth, uploadAudio.single("audio"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "Nenhum áudio fornecido" });
+      }
+      const url = `/data/audio/${req.file.filename}`;
+      res.json({ url });
+    } catch (error) {
+      console.error("Error uploading audio:", error);
+      res.status(500).json({ message: "Erro ao fazer upload do áudio" });
+    }
+  });
+
   return httpServer;
 }
