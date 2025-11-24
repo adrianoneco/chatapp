@@ -2,9 +2,9 @@ import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { z } from "zod";
-import { eq, or, like } from "drizzle-orm";
+import { eq, or, like, desc, and, sql } from "drizzle-orm";
 import { db } from "./db";
-import { users } from "@shared/schema";
+import { users, conversations, messages, messageReactions } from "@shared/schema";
 import {
   createUser,
   getUserByEmail,
@@ -96,20 +96,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   wss.on("connection", (ws) => {
     ws.on("error", console.error);
   });
-
-  // Serve uploaded avatars statically
-  app.use("/uploads", (req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    next();
-  });
-  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
-
-  // Serve attached assets securely through /storage route
-  app.use("/storage", (req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    next();
-  });
-  app.use("/storage", express.static(path.join(process.cwd(), "attached_assets")));
 
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
@@ -323,6 +309,252 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ user: sanitized, avatarUrl });
     } catch (error) {
       res.status(500).json({ message: "Erro ao fazer upload do avatar" });
+    }
+  });
+
+  // Conversations routes
+  app.get("/api/conversations", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const userRole = (req.user as any).role;
+
+      // Get conversations where user is either client or attendant
+      const userConversations = await db
+        .select({
+          conversation: conversations,
+          client: users,
+          attendant: users,
+        })
+        .from(conversations)
+        .leftJoin(users, eq(conversations.clientId, users.id))
+        .leftJoin(users, eq(conversations.attendantId, users.id))
+        .where(
+          userRole === "client"
+            ? eq(conversations.clientId, userId)
+            : or(eq(conversations.attendantId, userId), eq(conversations.status, "waiting"))
+        )
+        .orderBy(desc(conversations.updatedAt));
+
+      // Get last message for each conversation
+      const conversationsWithLastMessage = await Promise.all(
+        userConversations.map(async ({ conversation, client, attendant }) => {
+          const [lastMessage] = await db
+            .select()
+            .from(messages)
+            .where(eq(messages.conversationId, conversation.id))
+            .orderBy(desc(messages.createdAt))
+            .limit(1);
+
+          // Count unread messages (simplified - messages after user's last read)
+          const unreadCount = 0; // TODO: implement proper read tracking
+
+          return {
+            ...conversation,
+            client: client ? sanitizeUser(client) : null,
+            attendant: attendant ? sanitizeUser(attendant) : null,
+            lastMessage,
+            unreadCount,
+          };
+        })
+      );
+
+      res.json(conversationsWithLastMessage);
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      res.status(500).json({ message: "Erro ao buscar conversas" });
+    }
+  });
+
+  app.get("/api/conversations/:id", requireAuth, async (req, res) => {
+    try {
+      const [conversation] = await db
+        .select({
+          conversation: conversations,
+          client: users,
+          attendant: users,
+        })
+        .from(conversations)
+        .leftJoin(users, eq(conversations.clientId, users.id))
+        .leftJoin(users, eq(conversations.attendantId, users.id))
+        .where(eq(conversations.id, req.params.id));
+
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      res.json({
+        ...conversation.conversation,
+        client: conversation.client ? sanitizeUser(conversation.client) : null,
+        attendant: conversation.attendant ? sanitizeUser(conversation.attendant) : null,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao buscar conversa" });
+    }
+  });
+
+  app.post("/api/conversations", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const protocol = `WEB-${Date.now()}-${Math.random().toString(36).substring(7).toUpperCase()}`;
+      
+      const [conversation] = await db
+        .insert(conversations)
+        .values({
+          protocol,
+          channel: "webchat",
+          clientId: user.role === "client" ? user.id : req.body.clientId,
+          attendantId: user.role === "attendant" ? user.id : null,
+          status: "waiting",
+          clientIp: req.ip,
+          clientLocation: req.body.clientLocation || null,
+        })
+        .returning();
+
+      res.status(201).json(conversation);
+    } catch (error) {
+      console.error("Error creating conversation:", error);
+      res.status(500).json({ message: "Erro ao criar conversa" });
+    }
+  });
+
+  app.patch("/api/conversations/:id/assign", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      
+      if (user.role !== "attendant" && user.role !== "admin") {
+        return res.status(403).json({ message: "Apenas atendentes podem assumir conversas" });
+      }
+
+      const [updated] = await db
+        .update(conversations)
+        .set({ 
+          attendantId: user.id,
+          status: "active",
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, req.params.id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao assumir conversa" });
+    }
+  });
+
+  // Messages routes
+  app.get("/api/conversations/:id/messages", requireAuth, async (req, res) => {
+    try {
+      const conversationMessages = await db
+        .select()
+        .from(messages)
+        .leftJoin(users, eq(messages.senderId, users.id))
+        .where(eq(messages.conversationId, req.params.id))
+        .orderBy(messages.createdAt);
+
+      // Get reactions for all messages
+      const messageIds = conversationMessages.map(m => m.messages.id);
+      const reactions = messageIds.length > 0
+        ? await db
+            .select({
+              messageId: messageReactions.messageId,
+              emoji: messageReactions.emoji,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(messageReactions)
+            .where(sql`${messageReactions.messageId} = ANY(${messageIds})`)
+            .groupBy(messageReactions.messageId, messageReactions.emoji)
+        : [];
+
+      const messagesWithReactions = conversationMessages.map(({ messages: message, users: sender }) => ({
+        ...message,
+        sender: sender ? sanitizeUser(sender) : null,
+        reactions: reactions
+          .filter(r => r.messageId === message.id)
+          .map(r => ({ emoji: r.emoji, count: r.count })),
+      }));
+
+      res.json(messagesWithReactions);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ message: "Erro ao buscar mensagens" });
+    }
+  });
+
+  app.post("/api/conversations/:id/messages", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      
+      const [message] = await db
+        .insert(messages)
+        .values({
+          conversationId: req.params.id,
+          senderId: user.id,
+          content: req.body.content,
+          type: req.body.type || "text",
+          mediaUrl: req.body.mediaUrl || null,
+          duration: req.body.duration || null,
+          caption: req.body.caption || null,
+          recorded: req.body.recorded || false,
+          forwarded: req.body.forwarded || false,
+          replyToId: req.body.replyToId || null,
+          metadata: req.body.metadata || null,
+        })
+        .returning();
+
+      // Update conversation timestamp
+      await db
+        .update(conversations)
+        .set({ updatedAt: new Date() })
+        .where(eq(conversations.id, req.params.id));
+
+      res.status(201).json(message);
+    } catch (error) {
+      console.error("Error creating message:", error);
+      res.status(500).json({ message: "Erro ao enviar mensagem" });
+    }
+  });
+
+  app.patch("/api/messages/:id", requireAuth, async (req, res) => {
+    try {
+      const [updated] = await db
+        .update(messages)
+        .set({ 
+          deleted: req.body.deleted || false,
+          updatedAt: new Date(),
+        })
+        .where(eq(messages.id, req.params.id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ message: "Mensagem não encontrada" });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao atualizar mensagem" });
+    }
+  });
+
+  app.post("/api/messages/:id/reactions", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      
+      const [reaction] = await db
+        .insert(messageReactions)
+        .values({
+          messageId: req.params.id,
+          userId: user.id,
+          emoji: req.body.emoji,
+        })
+        .returning();
+
+      res.status(201).json(reaction);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao adicionar reação" });
     }
   });
 

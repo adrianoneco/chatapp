@@ -10,6 +10,10 @@ import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { useRef, useEffect, useState } from "react";
+import { useConversations, useConversation, useMessages, useSendMessage, useDeleteMessage, useAddReaction, ConversationWithDetails, MessageWithDetails } from "@/hooks/use-conversations";
+import { useUser } from "@/hooks/use-user";
+import { format, isToday, isYesterday } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -87,16 +91,75 @@ const initialMessages: Message[] = [
   { id: 20, conversationId: 1, sender: "other", content: "Desculpa, não vi essa mensagem!", time: "10:47", date: "2025-11-10", replyTo: 9, type: "text", channel: "webchat", remoteJid: null },
   
   // Image Message
-  { id: 10, conversationId: 1, sender: "other", content: "", time: "10:48", date: "2025-11-10", type: "image", channel: "webchat", remoteJid: null, mediaUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8d29ya3xlbnwwfHwwfHx8MA%3D%3D", caption: "Olha essa referência" },
+  { 
+    id: 10, 
+    conversationId: 1, 
+    sender: "other", 
+    content: "", 
+    time: "10:48", 
+    date: "2025-11-10", 
+    type: "image", 
+    channel: "webchat", 
+    remoteJid: null, 
+    mediaUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8d29ya3xlbnwwfHwwfHx8MA%3D%3D", 
+    caption: "Olha essa referência",
+    metadata: {
+      file: {
+        name: "referencia-trabalho.jpg",
+        size: "2.4 MB",
+        type: "image/jpeg"
+      }
+    }
+  },
   
   // Recorded Audio
   { id: 11, conversationId: 1, sender: "me", content: "", time: "10:50", date: "2025-11-10", type: "audio", channel: "webchat", remoteJid: null, duration: "0:15", recorded: true },
   
   // Recorded Video
-  { id: 12, conversationId: 1, sender: "other", content: "", time: "10:52", date: "2025-11-10", type: "video", channel: "webchat", remoteJid: null, mediaUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", duration: "0:30", recorded: true },
+  { 
+    id: 12, 
+    conversationId: 1, 
+    sender: "other", 
+    content: "", 
+    time: "10:52", 
+    date: "2025-11-10", 
+    type: "video", 
+    channel: "webchat", 
+    remoteJid: null, 
+    mediaUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", 
+    duration: "0:30", 
+    recorded: true,
+    metadata: {
+      file: {
+        name: "video-gravado.mp4",
+        size: "1.8 MB",
+        type: "video/mp4"
+      }
+    }
+  },
   
   // Uploaded Video (The one provided)
-  { id: 13, conversationId: 1, sender: "me", content: "", time: "10:55", date: "2025-11-10", type: "video", channel: "webchat", remoteJid: null, mediaUrl: videoFile, duration: "0:12", caption: "Vídeo do projeto finalizado" },
+  { 
+    id: 13, 
+    conversationId: 1, 
+    sender: "me", 
+    content: "", 
+    time: "10:55", 
+    date: "2025-11-10", 
+    type: "video", 
+    channel: "webchat", 
+    remoteJid: null, 
+    mediaUrl: videoFile, 
+    duration: "0:12", 
+    caption: "Vídeo do projeto finalizado",
+    metadata: {
+      file: {
+        name: "9312ac4fd6cf30b9cabb0eb07b5bc517_1763919709453.mp4",
+        size: "856 KB",
+        type: "video/mp4"
+      }
+    }
+  },
   
   // Uploaded MP3 with ID3 (The one provided)
   { 
@@ -118,12 +181,37 @@ const initialMessages: Message[] = [
         album: "Here We Go Again",
         year: "2009",
         cover: cover14
+      },
+      file: {
+        name: "13. Behind Enemy Lines_1763919687567.mp3",
+        size: "5.2 MB",
+        type: "audio/mpeg"
       }
     }
   },
   
   // Uploaded MP3 without ID3
-  { id: 15, conversationId: 1, sender: "me", content: "", time: "11:00", date: "2025-11-10", type: "audio", channel: "webchat", remoteJid: null, mediaUrl: "#", duration: "2:15", caption: "Audio_sem_tags.mp3" },
+  { 
+    id: 15, 
+    conversationId: 1, 
+    sender: "me", 
+    content: "", 
+    time: "11:00", 
+    date: "2025-11-10", 
+    type: "audio", 
+    channel: "webchat", 
+    remoteJid: null, 
+    mediaUrl: "#", 
+    duration: "2:15", 
+    caption: "Audio_sem_tags.mp3",
+    metadata: {
+      file: {
+        name: "Audio_sem_tags.mp3",
+        size: "3.1 MB",
+        type: "audio/mpeg"
+      }
+    }
+  },
 
   // New uploaded audio files
   { 
@@ -145,6 +233,11 @@ const initialMessages: Message[] = [
         album: "Here We Go Again",
         year: "2009",
         cover: cover16
+      },
+      file: {
+        name: "01. Here We Go Again_1763921733934.mp3",
+        size: "5.4 MB",
+        type: "audio/mpeg"
       }
     }
   },
@@ -167,6 +260,11 @@ const initialMessages: Message[] = [
         album: "Camp Rock 2: The Final Jam",
         year: "2010",
         cover: cover17
+      },
+      file: {
+        name: "05. Demi Lovato & Joe Jonas - Wouldn't Change A Thing_1763921733934.mp3",
+        size: "4.9 MB",
+        type: "audio/mpeg"
       }
     }
   },
@@ -189,6 +287,11 @@ const initialMessages: Message[] = [
         album: "Unbroken",
         year: "2011",
         cover: cover18
+      },
+      file: {
+        name: "10. Give Your Heart A Break_1763921733934.mp3",
+        size: "4.8 MB",
+        type: "audio/mpeg"
       }
     }
   },
@@ -211,6 +314,11 @@ const initialMessages: Message[] = [
         album: "Here We Go Again",
         year: "2009",
         cover: cover19
+      },
+      file: {
+        name: "12. Back Around_1763921733934.mp3",
+        size: "4.5 MB",
+        type: "audio/mpeg"
       }
     }
   },
@@ -476,7 +584,14 @@ interface ConversationDetails {
 }
 
 // Conversation Details Content Component
-function ConversationDetailsContent({ currentDetails }: { currentDetails: ConversationDetails }) {
+interface ConversationDetailsProps {
+  conversation: ConversationWithDetails;
+}
+
+function ConversationDetailsContent({ conversation }: ConversationDetailsProps) {
+  const client = conversation.client!;
+  const attendant = conversation.attendant;
+
   return (
     <div className="p-4 space-y-6">
       {/* Protocol and Date */}
@@ -485,14 +600,14 @@ function ConversationDetailsContent({ currentDetails }: { currentDetails: Conver
           <Hash className="h-4 w-4 text-muted-foreground" />
           <div className="flex-1">
             <p className="text-xs text-muted-foreground">Protocolo</p>
-            <p className="font-mono font-medium">{currentDetails.protocol}</p>
+            <p className="font-mono font-medium">{conversation.protocol}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-sm">
           <Clock className="h-4 w-4 text-muted-foreground" />
           <div className="flex-1">
             <p className="text-xs text-muted-foreground">Data/Hora</p>
-            <p className="font-medium">{currentDetails.date}</p>
+            <p className="font-medium">{format(new Date(conversation.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
           </div>
         </div>
       </div>
@@ -507,72 +622,46 @@ function ConversationDetailsContent({ currentDetails }: { currentDetails: Conver
         </h4>
         <div className="flex items-center gap-3 p-3 bg-background/50 rounded-lg">
           <Avatar className="h-12 w-12">
-            <AvatarImage src={currentDetails.client.avatar} />
-            <AvatarFallback>{currentDetails.client.name.substring(0, 2)}</AvatarFallback>
+            <AvatarImage src={client.avatarUrl || undefined} />
+            <AvatarFallback>{client.displayName.substring(0, 2)}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="font-medium truncate">{currentDetails.client.name}</p>
+            <p className="font-medium truncate">{client.displayName}</p>
             <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
               <MapPin className="h-3 w-3" />
-              <span className="truncate">{currentDetails.client.location}</span>
+              <span className="truncate">{conversation.clientLocation || "Localização desconhecida"}</span>
             </div>
           </div>
         </div>
         <div className="text-xs space-y-1">
-          <p className="text-muted-foreground">IP: <span className="font-mono text-foreground">{currentDetails.client.ip}</span></p>
+          <p className="text-muted-foreground">IP: <span className="font-mono text-foreground">{conversation.clientIp || "Não disponível"}</span></p>
         </div>
       </div>
 
       <Separator />
 
       {/* Attendant Info */}
-      <div className="space-y-3">
-        <h4 className="text-sm font-semibold flex items-center gap-2">
-          <User className="h-4 w-4" />
-          Atendente
-        </h4>
-        <div className="flex items-center gap-3 p-3 bg-background/50 rounded-lg">
-          <Avatar className="h-10 w-10">
-            <AvatarImage src={currentDetails.attendant.avatar} />
-            <AvatarFallback>{currentDetails.attendant.name.substring(0, 2)}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium truncate">{currentDetails.attendant.name}</p>
-            <p className="text-xs text-muted-foreground">Atendente responsável</p>
-          </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Previous Conversations */}
-      <div className="space-y-3">
-        <h4 className="text-sm font-semibold">Conversas Anteriores</h4>
-        <div className="space-y-2">
-          {currentDetails.previousConversations.map((conv) => (
-            <div 
-              key={conv.id}
-              className="p-3 bg-background/50 rounded-lg hover:bg-background/70 transition-colors cursor-pointer"
-              data-testid={`previous-conversation-${conv.id}`}
-            >
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <span className="font-mono text-xs text-muted-foreground">{conv.protocol}</span>
-                <Badge 
-                  variant={conv.status === 'completed' ? 'default' : conv.status === 'pending' ? 'secondary' : 'outline'}
-                  className="text-[10px] h-5"
-                >
-                  {conv.status === 'completed' && <CheckCircle2 className="h-3 w-3 mr-1" />}
-                  {conv.status === 'pending' && <Loader2 className="h-3 w-3 mr-1" />}
-                  {conv.status === 'closed' && <XCircle className="h-3 w-3 mr-1" />}
-                  {conv.status === 'completed' ? 'Concluída' : conv.status === 'pending' ? 'Pendente' : 'Fechada'}
-                </Badge>
+      {attendant && (
+        <>
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Atendente
+            </h4>
+            <div className="flex items-center gap-3 p-3 bg-background/50 rounded-lg">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={attendant.avatarUrl || undefined} />
+                <AvatarFallback>{attendant.displayName.substring(0, 2)}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{attendant.displayName}</p>
+                <p className="text-xs text-muted-foreground">Atendente responsável</p>
               </div>
-              <p className="text-xs text-muted-foreground">{conv.date}</p>
-              <p className="text-xs mt-1">Atendente: <span className="font-medium">{conv.attendant}</span></p>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+          <Separator />
+        </>
+      )}
     </div>
   );
 }
@@ -620,24 +709,32 @@ export default function Conversations() {
   const [location, setLocation] = useLocation();
   const [match, params] = useRoute("/conversations/webchat/:id");
   const isChatOpen = !!match;
-  const conversationId = Number(params?.id);
-  const currentContact = contacts.find(c => c.id === conversationId) || contacts[0];
-  const currentDetails = conversationDetails[conversationId] || conversationDetails[1];
+  const conversationId = params?.id;
+  
+  // API hooks
+  const { data: user } = useUser();
+  const { data: conversations, isLoading: loadingConversations } = useConversations();
+  const { data: conversation } = useConversation(conversationId);
+  const { data: messages = [], isLoading: loadingMessages } = useMessages(conversationId);
+  const sendMessageMutation = useSendMessage();
+  const deleteMessageMutation = useDeleteMessage();
+  const addReactionMutation = useAddReaction();
   
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [detailsSidebarOpen, setDetailsSidebarOpen] = useState(false);
-  const [replyingTo, setReplyingTo] = useState<number | null>(null);
-  const [hoveredMessage, setHoveredMessage] = useState<number | null>(null);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [hoveredMessage, setHoveredMessage] = useState<string | null>(null);
   const [isLargeScreen, setIsLargeScreen] = useState(false);
+  const [messageInput, setMessageInput] = useState("");
   
   // Audio Player State
-  const [playingId, setPlayingId] = useState<number | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const filteredMessages = messages.filter(m => m.conversationId === (conversationId || 1));
+  const currentContact = conversation?.client || conversation?.attendant;
+  const currentConversation = conversations?.find(c => c.id === conversationId);
 
   // Expandir sidebar direita automaticamente em telas grandes
   useEffect(() => {
@@ -673,9 +770,9 @@ export default function Conversations() {
     if (scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [filteredMessages.length]);
+  }, [messages.length]);
 
-  const togglePlay = (msg: Message) => {
+  const togglePlay = (msg: MessageWithDetails) => {
     if (!msg.mediaUrl) return;
 
     if (playingId === msg.id) {
@@ -707,43 +804,27 @@ export default function Conversations() {
   };
 
   const exportConversationFull = async () => {
-    // Informações da conversa (baseadas em estrutura SQL típica)
-    // Coletar todos os atendentes únicos que participaram da conversa
-    const uniqueAttendants = [{
-      id: 10, // Mock ID - seria obtido do backend
-      name: currentDetails.attendant.name,
-      avatar: currentDetails.attendant.avatar,
-    }];
+    if (!conversation || !currentContact) return;
 
     const conversationInfo = {
       id: conversationId,
-      protocol: currentDetails.protocol,
-      channel: "webchat",
+      protocol: conversation.protocol,
+      channel: conversation.channel || "webchat",
       client: {
         id: currentContact.id,
-        name: currentContact.name,
-        avatar: currentContact.avatar,
-        ip: currentDetails.client.ip,
-        location: currentDetails.client.location,
+        name: currentContact.displayName,
+        avatar: currentContact.avatarUrl,
+        ip: conversation.clientIp,
+        location: conversation.clientLocation,
       },
-      attendants: uniqueAttendants,
-      participants: [
-        {
-          id: currentContact.id,
-          name: currentContact.name,
-          avatar: currentContact.avatar,
-          role: "client",
-        },
-        ...uniqueAttendants.map(att => ({
-          id: att.id,
-          name: att.name,
-          avatar: att.avatar,
-          role: "attendant" as const,
-        }))
-      ],
-      status: "active",
-      createdAt: currentDetails.date,
-      updatedAt: new Date().toISOString(),
+      attendant: conversation.attendant ? {
+        id: conversation.attendant.id,
+        name: conversation.attendant.displayName,
+        avatar: conversation.attendant.avatarUrl,
+      } : null,
+      status: conversation.status,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
     };
 
     // Função auxiliar para converter arquivo para base64
@@ -772,30 +853,22 @@ export default function Conversations() {
 
     // Processar mensagens para converter arquivos para base64
     const processedMessages = await Promise.all(
-      filteredMessages.map(async (msg) => {
-        // Determinar remetente com base no sender
-        const senderInfo = msg.sender === "me" 
-          ? {
-              id: uniqueAttendants[0].id,
-              name: uniqueAttendants[0].name,
-              role: "attendant" as const
-            }
-          : {
-              id: conversationInfo.client.id,
-              name: conversationInfo.client.name,
-              role: "client" as const
-            };
+      messages.map(async (msg) => {
+        const sender = msg.sender || (msg.senderId === user?.id ? user : currentContact);
 
         const processedMsg: any = {
           id: msg.id,
           conversationId: msg.conversationId,
-          sender: senderInfo,
-          attendantId: msg.sender === "me" ? uniqueAttendants[0].id : null,
+          senderId: msg.senderId,
+          sender: sender ? {
+            id: sender.id,
+            name: sender.displayName,
+            role: sender.role,
+          } : null,
           content: msg.content,
-          time: msg.time,
-          date: msg.date,
+          time: format(new Date(msg.createdAt), "HH:mm"),
+          date: format(new Date(msg.createdAt), "dd/MM/yyyy"),
           type: msg.type,
-          channel: msg.channel,
           deleted: msg.deleted || false,
         };
 
@@ -804,7 +877,7 @@ export default function Conversations() {
         if (msg.caption) processedMsg.caption = msg.caption;
         if (msg.recorded !== undefined) processedMsg.recorded = msg.recorded;
         if (msg.forwarded !== undefined) processedMsg.forwarded = msg.forwarded;
-        if (msg.replyTo !== undefined) processedMsg.replyTo = msg.replyTo;
+        if (msg.replyToId !== undefined) processedMsg.replyTo = msg.replyToId;
         if (msg.reactions) processedMsg.reactions = msg.reactions;
 
         // Converter mediaUrl para base64 se existir
@@ -832,6 +905,12 @@ export default function Conversations() {
           };
         }
 
+        // Adicionar informações do arquivo se existirem
+        if (msg.metadata?.file) {
+          if (!processedMsg.metadata) processedMsg.metadata = {};
+          processedMsg.metadata.file = msg.metadata.file;
+        }
+
         return processedMsg;
       })
     );
@@ -841,8 +920,6 @@ export default function Conversations() {
       protocol: conversationInfo.protocol,
       channel: conversationInfo.channel,
       client: conversationInfo.client,
-      attendants: conversationInfo.attendants,
-      participants: conversationInfo.participants,
       status: conversationInfo.status,
       createdAt: conversationInfo.createdAt,
       updatedAt: conversationInfo.updatedAt,
@@ -855,7 +932,7 @@ export default function Conversations() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `conversation-${currentContact.name}-${Date.now()}.json`;
+    link.download = `conversation-${currentContact?.displayName}-${Date.now()}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -863,70 +940,44 @@ export default function Conversations() {
   };
 
   const exportConversation = async () => {
-    // Informações da conversa (baseadas em estrutura SQL típica)
-    // Coletar todos os atendentes únicos que participaram da conversa
-    const uniqueAttendants = [{
-      id: 10, // Mock ID - seria obtido do backend
-      name: currentDetails.attendant.name,
-      avatar: currentDetails.attendant.avatar,
-    }];
+    if (!conversation || !currentContact) return;
 
     const conversationInfo = {
       id: conversationId,
-      protocol: currentDetails.protocol,
-      channel: "webchat",
+      protocol: conversation.protocol,
+      channel: conversation.channel || "webchat",
       client: {
         id: currentContact.id,
-        name: currentContact.name,
-        avatar: currentContact.avatar,
-        ip: currentDetails.client.ip,
-        location: currentDetails.client.location,
+        name: currentContact.displayName,
+        avatar: currentContact.avatarUrl,
       },
-      attendants: uniqueAttendants,
-      participants: [
-        {
-          id: currentContact.id,
-          name: currentContact.name,
-          avatar: currentContact.avatar,
-          role: "client",
-        },
-        ...uniqueAttendants.map(att => ({
-          id: att.id,
-          name: att.name,
-          avatar: att.avatar,
-          role: "attendant" as const,
-        }))
-      ],
-      status: "active",
-      createdAt: currentDetails.date,
-      updatedAt: new Date().toISOString(),
+      attendant: conversation.attendant ? {
+        id: conversation.attendant.id,
+        name: conversation.attendant.displayName,
+        avatar: conversation.attendant.avatarUrl,
+      } : null,
+      status: conversation.status,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
     };
 
     // Processar mensagens mantendo URLs públicas
-    const processedMessages = filteredMessages.map((msg) => {
-      // Determinar remetente com base no sender
-      const senderInfo = msg.sender === "me" 
-        ? {
-            id: uniqueAttendants[0].id,
-            name: uniqueAttendants[0].name,
-            role: "attendant" as const
-          }
-        : {
-            id: conversationInfo.client.id,
-            name: conversationInfo.client.name,
-            role: "client" as const
-          };
+    const processedMessages = messages.map((msg) => {
+      const sender = msg.sender || (msg.senderId === user?.id ? user : currentContact);
 
       const processedMsg: any = {
         id: msg.id,
         conversationId: msg.conversationId,
-        sender: senderInfo,
-        attendantId: msg.sender === "me" ? uniqueAttendants[0].id : null,
+        senderId: msg.senderId,
+        sender: sender ? {
+          id: sender.id,
+          name: sender.displayName,
+          role: sender.role,
+        } : null,
         content: msg.content,
-        time: msg.time,
-        date: msg.date,
+        time: format(new Date(msg.createdAt), "HH:mm"),
+        date: format(new Date(msg.createdAt), "dd/MM/yyyy"),
         type: msg.type,
-        channel: msg.channel,
         deleted: msg.deleted || false,
       };
 
@@ -935,7 +986,7 @@ export default function Conversations() {
       if (msg.caption) processedMsg.caption = msg.caption;
       if (msg.recorded !== undefined) processedMsg.recorded = msg.recorded;
       if (msg.forwarded !== undefined) processedMsg.forwarded = msg.forwarded;
-      if (msg.replyTo !== undefined) processedMsg.replyTo = msg.replyTo;
+      if (msg.replyToId !== undefined) processedMsg.replyTo = msg.replyToId;
       if (msg.reactions) processedMsg.reactions = msg.reactions;
 
       // Manter URL pública do mediaUrl
@@ -956,6 +1007,12 @@ export default function Conversations() {
         };
       }
 
+      // Adicionar informações do arquivo se existirem
+      if (msg.metadata?.file) {
+        if (!processedMsg.metadata) processedMsg.metadata = {};
+        processedMsg.metadata.file = msg.metadata.file;
+      }
+
       return processedMsg;
     });
 
@@ -964,8 +1021,6 @@ export default function Conversations() {
       protocol: conversationInfo.protocol,
       channel: conversationInfo.channel,
       client: conversationInfo.client,
-      attendants: conversationInfo.attendants,
-      participants: conversationInfo.participants,
       status: conversationInfo.status,
       createdAt: conversationInfo.createdAt,
       updatedAt: conversationInfo.updatedAt,
@@ -978,14 +1033,14 @@ export default function Conversations() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `conversation-${currentContact.name}-${Date.now()}.json`;
+    link.download = `conversation-${currentContact?.displayName}-${Date.now()}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const scrollToMessage = (messageId: number) => {
+  const scrollToMessage = (messageId: string) => {
     const element = document.getElementById(`message-${messageId}`);
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -994,53 +1049,61 @@ export default function Conversations() {
     }
   };
 
-  const getReplyMessage = (replyId: number) => {
+  const getReplyMessage = (replyId: string) => {
     return messages.find(m => m.id === replyId);
   };
 
-  const handleDeleteMessage = (messageId: number) => {
-    setMessages(messages.map(m => 
-      m.id === messageId ? { ...m, deleted: true, content: "Mensagem apagada" } : m
-    ));
+  const handleDeleteMessage = (messageId: string) => {
+    if (!conversationId) return;
+    deleteMessageMutation.mutate({ messageId, conversationId });
   };
 
-  const handleReactToMessage = (messageId: number, emoji: string) => {
-    setMessages(messages.map(m => {
-      if (m.id === messageId) {
-        const reactions = m.reactions || [];
-        const existingReaction = reactions.find(r => r.emoji === emoji);
-        
-        if (existingReaction) {
-          return {
-            ...m,
-            reactions: reactions.map(r => 
-              r.emoji === emoji ? { ...r, count: r.count + 1 } : r
-            )
-          };
-        } else {
-          return {
-            ...m,
-            reactions: [...reactions, { emoji, count: 1 }]
-          };
-        }
-      }
-      return m;
-    }));
+  const handleReactToMessage = (messageId: string, emoji: string) => {
+    if (!conversationId) return;
+    addReactionMutation.mutate({ messageId, conversationId, emoji });
   };
 
-  const handleForwardMessage = (messageId: number) => {
+  const handleForwardMessage = (messageId: string) => {
     const msg = messages.find(m => m.id === messageId);
-    if (msg) {
-      const newMessage: Message = {
-        ...msg,
-        id: Math.max(...messages.map(m => m.id)) + 1,
-        sender: "me",
-        forwarded: true,
-        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        reactions: undefined,
-        replyTo: undefined
-      };
-      setMessages([...messages, newMessage]);
+    if (msg && conversationId) {
+      sendMessageMutation.mutate({
+        conversationId,
+        data: {
+          content: msg.content,
+          type: msg.type,
+          mediaUrl: msg.mediaUrl || undefined,
+          forwarded: true,
+        },
+      });
+    }
+  };
+
+  const handleSendMessage = () => {
+    if (!messageInput.trim() || !conversationId) return;
+    
+    sendMessageMutation.mutate({
+      conversationId,
+      data: {
+        content: messageInput,
+        type: "text",
+        replyToId: replyingTo || undefined,
+      },
+    }, {
+      onSuccess: () => {
+        setMessageInput("");
+        setReplyingTo(null);
+      },
+    });
+  };
+
+  const formatMessageTime = (dateString: string) => {
+    const date = new Date(dateString);
+    if (isToday(date)) {
+      return format(date, "HH:mm");
+    } else if (isYesterday(date)) {
+      return "Ontem";
+    } else {
+      return format(date, "dd/MM");
     }
   };
 
@@ -1073,53 +1136,72 @@ export default function Conversations() {
             </div>
           </div>
           <ScrollArea className="flex-1">
-            <div className="space-y-1 p-2">
-              {contacts.map((contact) => (
-                <Link key={contact.id} href={`/conversations/webchat/${contact.id}`}>
-                  <div 
-                    className={cn(
-                      "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
-                      conversationId === contact.id ? "bg-accent/60" : "",
-                      sidebarCollapsed && "justify-center"
-                    )}
-                    data-testid={`link-contact-${contact.id}`}
-                  >
-                    <div className="relative shrink-0">
-                      <Avatar>
-                        <AvatarImage src={contact.avatar} />
-                        <AvatarFallback>{contact.name.substring(0, 2)}</AvatarFallback>
-                      </Avatar>
-                      {contact.status === "Online" && (
-                        <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
-                      )}
-                      {contact.unread > 0 && sidebarCollapsed && (
-                        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
-                          {contact.unread}
-                        </span>
-                      )}
-                    </div>
-                    {!sidebarCollapsed && (
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium truncate">{contact.name}</span>
-                          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">{contact.time}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm text-muted-foreground truncate group-hover:text-foreground transition-colors">
-                            {contact.lastMessage}
-                          </span>
-                          {contact.unread > 0 && (
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
-                              {contact.unread}
+            {loadingConversations ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : conversations && conversations.length > 0 ? (
+              <div className="space-y-1 p-2">
+                {conversations.map((conv) => {
+                  const contact = user?.id === conv.clientId ? conv.attendant : conv.client;
+                  const displayName = contact?.displayName || "Sem nome";
+                  const avatarUrl = contact?.avatarUrl || `https://i.pravatar.cc/150?u=${contact?.id}`;
+                  
+                  return (
+                    <Link key={conv.id} href={`/conversations/webchat/${conv.id}`}>
+                      <div 
+                        className={cn(
+                          "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
+                          conversationId === conv.id ? "bg-accent/60" : "",
+                          sidebarCollapsed && "justify-center"
+                        )}
+                        data-testid={`link-contact-${conv.id}`}
+                      >
+                        <div className="relative shrink-0">
+                          <Avatar>
+                            <AvatarImage src={avatarUrl} />
+                            <AvatarFallback>{displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          {conv.status === "active" && (
+                            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
+                          )}
+                          {conv.unreadCount > 0 && sidebarCollapsed && (
+                            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
+                              {conv.unreadCount}
                             </span>
                           )}
                         </div>
+                        {!sidebarCollapsed && (
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium truncate">{displayName}</span>
+                              <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                                {conv.lastMessage ? formatMessageTime(conv.lastMessage.createdAt) : ""}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm text-muted-foreground truncate group-hover:text-foreground transition-colors">
+                                {conv.lastMessage?.content || "Sem mensagens"}
+                              </span>
+                              {conv.unreadCount > 0 && (
+                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
+                                  {conv.unreadCount}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </Link>
-              ))}
-            </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-8 text-center">
+                <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-sm text-muted-foreground">Nenhuma conversa disponível</p>
+              </div>
+            )}
           </ScrollArea>
         </Card>
 
@@ -1138,20 +1220,36 @@ export default function Conversations() {
                       <ArrowLeft className="h-5 w-5" />
                     </Button>
                   </Link>
-                  <Avatar>
-                    <AvatarImage src={currentContact.avatar} />
-                    <AvatarFallback>{currentContact.name.substring(0, 2)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="font-semibold">{currentContact.name}</h3>
-                    <p className={cn(
-                      "text-xs flex items-center gap-1",
-                      currentContact.status === "Online" ? "text-green-500" : "text-muted-foreground"
-                    )}>
-                      <span className={cn("h-1.5 w-1.5 rounded-full", currentContact.status === "Online" ? "bg-green-500" : "bg-slate-400")} /> 
-                      {currentContact.status}
-                    </p>
-                  </div>
+                  {currentContact ? (
+                    <>
+                      <Avatar>
+                        <AvatarImage src={currentContact.avatarUrl || `https://i.pravatar.cc/150?u=${currentContact.id}`} />
+                        <AvatarFallback>{currentContact.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h3 className="font-semibold">{currentContact.displayName}</h3>
+                        <p className={cn(
+                          "text-xs flex items-center gap-1",
+                          conversation?.status === "active" ? "text-green-500" : "text-muted-foreground"
+                        )}>
+                          <span className={cn("h-1.5 w-1.5 rounded-full", conversation?.status === "active" ? "bg-green-500" : "bg-slate-400")} /> 
+                          {conversation?.status === "active" ? "Ativo" : conversation?.status === "waiting" ? "Aguardando" : "Fechado"}
+                        </p>
+                      </div>
+                    </>
+                  ) : conversation ? (
+                    <>
+                      <Avatar>
+                        <AvatarFallback>...</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h3 className="font-semibold">Carregando...</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Protocolo: {conversation.protocol}
+                        </p>
+                      </div>
+                    </>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" data-testid="button-call"><Phone className="h-5 w-5" /></Button>
@@ -1192,88 +1290,102 @@ export default function Conversations() {
 
               {/* Messages */}
               <ScrollArea className="flex-1 p-4 bg-card/50 backdrop-blur">
-                <div className="space-y-6">
-                  {filteredMessages.map((msg, index) => {
-                    const replyMsg = msg.replyTo ? getReplyMessage(msg.replyTo) : null;
+                {loadingMessages ? (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                    <MessageSquare className="h-16 w-16 mb-4 opacity-50" />
+                    <p>Nenhuma mensagem ainda</p>
+                    <p className="text-sm">Envie a primeira mensagem!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {messages.map((msg, index) => {
+                      const replyMsg = msg.replyToId ? getReplyMessage(msg.replyToId) : null;
+                      const isMyMessage = msg.senderId === user?.id;
                     
-                    if (msg.deleted) {
-                      return (
-                        <div key={msg.id} id={`message-${msg.id}`} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}>
-                          <div className={cn(
-                            "flex flex-col gap-2 max-w-[85%] md:max-w-[70%]"
-                          )}>
-                            {/* Preview da mensagem original com efeito de citação */}
-                            {replyMsg && (
-                              <div 
-                                className={cn(
-                                  "p-2.5 rounded-lg text-xs cursor-pointer border-l-4 backdrop-blur-md hover:bg-black/20 transition-colors",
-                                  msg.sender === "me" 
-                                    ? "bg-black/15 border-white/30" 
-                                    : "bg-black/10 border-white/30"
-                                )}
-                                onClick={() => scrollToMessage(replyMsg.id)}
-                              >
-                                <div className="flex items-center gap-1.5 mb-1 opacity-80">
-                                  <Quote className="h-3 w-3 shrink-0" />
-                                  <span className="font-semibold truncate">
-                                    {replyMsg.sender === "me" ? "Você" : currentContact.name}
-                                  </span>
-                                </div>
-                                <p className="truncate opacity-70 text-[11px]">
-                                  {replyMsg.content || (replyMsg.type === 'image' ? '📷 Imagem' : replyMsg.type === 'audio' ? '🎵 Áudio' : replyMsg.type === 'video' ? '🎬 Vídeo' : '📎 Arquivo')}
-                                </p>
-                              </div>
-                            )}
-                            
-                            {/* Mensagem apagada com efeito muted */}
+                      if (msg.deleted) {
+                        return (
+                          <div key={msg.id} id={`message-${msg.id}`} className={`flex ${isMyMessage ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1`}>
                             <div className={cn(
-                              "flex items-start gap-2 p-3 rounded-lg border backdrop-blur-md shadow-lg opacity-60",
-                              msg.sender === "me"
-                                ? "bg-black/20 border-white/5"
-                                : "bg-black/15 border-white/5"
+                              "flex flex-col gap-2 max-w-[85%] md:max-w-[70%]"
                             )}>
-                              <Trash2 className="h-4 w-4 text-muted-foreground/70 shrink-0 mt-0.5" />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold mb-1 text-muted-foreground/80">
-                                  {msg.sender === "me" ? "Você" : currentContact.name}
-                                </p>
-                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70 italic">
-                                  <span>Mensagem apagada</span>
+                              {/* Preview da mensagem original com efeito de citação */}
+                              {replyMsg && (
+                                <div 
+                                  className={cn(
+                                    "p-2.5 rounded-lg text-xs cursor-pointer border-l-4 backdrop-blur-md hover:bg-black/20 transition-colors",
+                                    isMyMessage 
+                                      ? "bg-black/15 border-white/30" 
+                                      : "bg-black/10 border-white/30"
+                                  )}
+                                  onClick={() => scrollToMessage(replyMsg.id)}
+                                >
+                                  <div className="flex items-center gap-1.5 mb-1 opacity-80">
+                                    <Quote className="h-3 w-3 shrink-0" />
+                                    <span className="font-semibold truncate">
+                                      {replyMsg.senderId === user?.id ? "Você" : replyMsg.sender?.displayName}
+                                    </span>
+                                  </div>
+                                  <p className="truncate opacity-70 text-[11px]">
+                                    {replyMsg.content || (replyMsg.type === 'image' ? '📷 Imagem' : replyMsg.type === 'audio' ? '🎵 Áudio' : replyMsg.type === 'video' ? '🎬 Vídeo' : '📎 Arquivo')}
+                                  </p>
                                 </div>
-                                <p className="text-[10px] text-muted-foreground/60 mt-1">{msg.time}</p>
+                              )}
+                              
+                              {/* Mensagem apagada com efeito muted */}
+                              <div className={cn(
+                                "flex items-start gap-2 p-3 rounded-lg border backdrop-blur-md shadow-lg opacity-60",
+                                isMyMessage
+                                  ? "bg-black/20 border-white/5"
+                                  : "bg-black/15 border-white/5"
+                              )}>
+                                <Trash2 className="h-4 w-4 text-muted-foreground/70 shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold mb-1 text-muted-foreground/80">
+                                    {isMyMessage ? "Você" : msg.sender?.displayName}
+                                  </p>
+                                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70 italic">
+                                    <span>Mensagem apagada</span>
+                                  </div>
+                                  <p className="text-[10px] text-muted-foreground/60 mt-1">
+                                    {format(new Date(msg.createdAt), "HH:mm")}
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    }
+                        );
+                      }
 
-                    return (
-                      <div
-                        key={msg.id}
-                        id={`message-${msg.id}`}
-                        className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1 group/message`}
-                        data-testid={`message-${msg.id}`}
-                        onMouseEnter={() => setHoveredMessage(msg.id)}
-                        onMouseLeave={() => setHoveredMessage(null)}
-                      >
+                      return (
+                        <div
+                          key={msg.id}
+                          id={`message-${msg.id}`}
+                          className={`flex ${isMyMessage ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-lg p-1 group/message`}
+                          data-testid={`message-${msg.id}`}
+                          onMouseEnter={() => setHoveredMessage(msg.id)}
+                          onMouseLeave={() => setHoveredMessage(null)}
+                        >
                         <div className="flex items-start gap-2 max-w-[85%] md:max-w-[70%]">
                           <div className="flex flex-col flex-1 relative">
 
-                            <div
-                              className={cn(
-                                "relative rounded-2xl px-4 py-2.5 shadow-lg overflow-hidden backdrop-blur-md",
-                                msg.sender === "me"
-                                  ? "bg-black/40 border border-white/10 text-white rounded-br-none after:content-[''] after:absolute after:bottom-0 after:right-[-8px] after:w-0 after:h-0 after:border-l-[8px] after:border-l-black/40 after:border-b-[8px] after:border-b-transparent after:border-t-[8px] after:border-t-transparent"
-                                  : "bg-black/30 border border-white/10 text-white rounded-bl-none before:content-[''] before:absolute before:bottom-0 before:left-[-8px] before:w-0 before:h-0 before:border-r-[8px] before:border-r-black/30 before:border-b-[8px] before:border-b-transparent before:border-t-[8px] before:border-t-transparent"
-                              )}
-                            >
+                              <div
+                                className={cn(
+                                  "relative rounded-2xl px-4 py-2.5 shadow-lg overflow-hidden backdrop-blur-md",
+                                  isMyMessage
+                                    ? "bg-black/40 border border-white/10 text-white rounded-br-none after:content-[''] after:absolute after:bottom-0 after:right-[-8px] after:w-0 after:h-0 after:border-l-[8px] after:border-l-black/40 after:border-b-[8px] after:border-b-transparent after:border-t-[8px] after:border-t-transparent"
+                                    : "bg-black/30 border border-white/10 text-white rounded-bl-none before:content-[''] before:absolute before:bottom-0 before:left-[-8px] before:w-0 before:h-0 before:border-r-[8px] before:border-r-black/30 before:border-b-[8px] before:border-b-transparent before:border-t-[8px] before:border-t-transparent"
+                                )}
+                              >
                             {/* Reply Preview with optional forwarded indicator */}
                             {replyMsg && (
                               <div 
                                 className={cn(
                                   "mb-2 p-2 rounded text-xs cursor-pointer border-l-4 relative overflow-hidden group",
-                                  msg.sender === "me" 
+                                  msg.senderId === user?.id 
                                     ? "bg-black/20 border-white/50 hover:bg-black/30" 
                                     : "bg-black/20 border-white/50 hover:bg-black/30"
                                 )}
@@ -1282,7 +1394,7 @@ export default function Conversations() {
                                 <div className="font-semibold mb-0.5 flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-1 flex-1 min-w-0">
                                     <Quote className="h-3 w-3 shrink-0" />
-                                    <span className="truncate">{replyMsg.sender === "me" ? "Você" : currentContact.name}</span>
+                                    <span className="truncate">{replyMsg.senderId === user?.id ? "Você" : replyMsg.sender?.displayName || currentContact?.displayName}</span>
                                   </div>
                                   <div className="flex items-center gap-2 text-[10px] opacity-70 shrink-0">
                                     {msg.forwarded && (
@@ -1311,7 +1423,7 @@ export default function Conversations() {
                             )}
                             
                             {/* Forwarded indicator in message header (only when no reply) */}
-                            {msg.forwarded && !msg.replyTo && (
+                            {msg.forwarded && !msg.replyToId && (
                               <div className="mb-2 flex items-center justify-end gap-1 text-[10px] opacity-70">
                                 <CornerDownRight className="h-2.5 w-2.5" />
                                 <span>Encaminhada</span>
@@ -1327,7 +1439,7 @@ export default function Conversations() {
                             {msg.type === 'image' && (
                               <div className="space-y-2">
                                 <img 
-                                  src={msg.mediaUrl} 
+                                  src={msg.mediaUrl || undefined} 
                                   alt="Imagem enviada" 
                                   className="rounded-lg max-h-[300px] w-full object-cover cursor-pointer hover:opacity-95 transition-opacity" 
                                   data-testid={`img-message-${msg.id}`}
@@ -1485,22 +1597,22 @@ export default function Conversations() {
                                 </Button>
                               </div>
 
-                              {/* Time on Right */}
-                              <div className="flex items-center gap-1 opacity-70 text-[10px] ml-auto">
-                                <span>{msg.time}</span>
-                                {msg.sender === "me" && (
-                                  <span className="text-blue-300">✓✓</span>
-                                )}
+                                {/* Time on Right */}
+                                <div className="flex items-center gap-1 opacity-70 text-[10px] ml-auto">
+                                  <span>{format(new Date(msg.createdAt), "HH:mm")}</span>
+                                  {isMyMessage && (
+                                    <span className="text-blue-300">✓✓</span>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          {/* Reactions */}
-                          {msg.reactions && msg.reactions.length > 0 && (
-                            <div className={cn(
-                              "flex flex-wrap gap-1 mt-1",
-                              msg.sender === "me" ? "justify-end" : "justify-start"
-                            )}>
+                            {/* Reactions */}
+                            {msg.reactions && msg.reactions.length > 0 && (
+                              <div className={cn(
+                                "flex flex-wrap gap-1 mt-1",
+                                isMyMessage ? "justify-end" : "justify-start"
+                              )}>
                               {msg.reactions.map((reaction, idx) => (
                                 <div
                                   key={idx}
@@ -1511,14 +1623,15 @@ export default function Conversations() {
                                 </div>
                               ))}
                             </div>
-                          )}
+                            )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                  <div ref={scrollRef} />
-                </div>
+                      );
+                    })}
+                    <div ref={scrollRef} />
+                  </div>
+                )}
               </ScrollArea>
 
               {/* Input Area */}
@@ -1532,13 +1645,31 @@ export default function Conversations() {
                       placeholder="Digite uma mensagem..." 
                       className="flex-1 bg-transparent border-0 focus-visible:ring-0 px-2"
                       data-testid="input-message"
+                      value={messageInput}
+                      onChange={(e) => setMessageInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
                     />
                     <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0" data-testid="button-attach">
                       <Paperclip className="h-5 w-5" />
                     </Button>
                   </div>
-                  <Button size="icon" className="h-12 w-12 rounded-full shadow-lg hover-elevate active-elevate-2 shrink-0" data-testid="button-send">
-                    <Mic className="h-6 w-6" />
+                  <Button 
+                    size="icon" 
+                    className="h-12 w-12 rounded-full shadow-lg hover-elevate active-elevate-2 shrink-0" 
+                    data-testid="button-send"
+                    onClick={handleSendMessage}
+                    disabled={!messageInput.trim() || sendMessageMutation.isPending}
+                  >
+                    {sendMessageMutation.isPending ? (
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    ) : (
+                      <Send className="h-6 w-6" />
+                    )}
                   </Button>
                 </div>
               </div>
@@ -1571,7 +1702,7 @@ export default function Conversations() {
                     <SheetTitle>Detalhes da Conversa</SheetTitle>
                   </SheetHeader>
                   <ScrollArea className="h-[calc(100vh-5rem)]">
-                    <ConversationDetailsContent currentDetails={currentDetails} />
+                    <ConversationDetailsContent conversation={conversation!} />
                   </ScrollArea>
                 </SheetContent>
               </Sheet>
@@ -1598,7 +1729,7 @@ export default function Conversations() {
                       </Button>
                     </div>
                     <ScrollArea className="flex-1">
-                      <ConversationDetailsContent currentDetails={currentDetails} />
+                      <ConversationDetailsContent conversation={conversation!} />
                     </ScrollArea>
                   </>
                 )}

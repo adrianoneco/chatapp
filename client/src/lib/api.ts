@@ -3,6 +3,24 @@ import type { UserPublic } from "@shared/schema";
 
 const API_URL = "/api";
 
+export async function apiRequest<T = any>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(path.startsWith("http") ? path : `${API_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Erro na requisição" }));
+    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 async function fetchAPI(path: string, options?: RequestInit) {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,

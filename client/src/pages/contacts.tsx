@@ -5,16 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, UserPlus, MoreHorizontal, Mail, Phone, LayoutGrid, List, Upload, Edit2, Trash2 } from "lucide-react";
+import { Search, UserPlus, MoreHorizontal, Mail, Phone, LayoutGrid, List, Upload, Edit2, Trash2, MessageSquare } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useState } from "react";
 import { useUsers, useRegister, useUpdateUser, useDeleteUser, useUploadAvatar } from "@/lib/api";
+import { useCreateConversation } from "@/hooks/use-conversations";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 const userSchema = z.object({
   displayName: z.string().min(2, "Nome muito curto"),
@@ -30,11 +32,13 @@ export default function Contacts() {
   const [editingUser, setEditingUser] = useState<any>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
+  const [, setLocation] = useLocation();
   const { data, isLoading } = useUsers("client", search);
   const registerMutation = useRegister();
   const updateMutation = useUpdateUser();
   const deleteMutation = useDeleteUser();
   const uploadAvatarMutation = useUploadAvatar();
+  const createConversationMutation = useCreateConversation();
 
   const form = useForm<z.infer<typeof userSchema>>({
     resolver: zodResolver(userSchema),
@@ -121,6 +125,19 @@ export default function Contacts() {
       } catch (error: any) {
         toast.error(error.message || "Erro ao excluir contato");
       }
+    }
+  };
+
+  const handleStartConversation = async (clientId: string, clientName: string) => {
+    try {
+      const result = await createConversationMutation.mutateAsync({
+        clientId,
+        channel: "webchat",
+      });
+      toast.success(`Conversa iniciada com ${clientName}`);
+      setLocation(`/conversations/webchat/${result.id}`);
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao iniciar conversa");
     }
   };
 
@@ -229,6 +246,9 @@ export default function Contacts() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleStartConversation(client.id, client.displayName)}>
+                              <MessageSquare className="mr-2 h-4 w-4" /> Iniciar Conversa
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleOpenDialog(client)}>
                               <Edit2 className="mr-2 h-4 w-4" /> Editar
                             </DropdownMenuItem>
@@ -267,6 +287,9 @@ export default function Contacts() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleStartConversation(client.id, client.displayName)}>
+                            <MessageSquare className="mr-2 h-4 w-4" /> Iniciar Conversa
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleOpenDialog(client)}>
                             <Edit2 className="mr-2 h-4 w-4" /> Editar
                           </DropdownMenuItem>
