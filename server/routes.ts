@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
-import { WebSocketServer, WebSocket } from "ws";
 import { z } from "zod";
+import { broadcastToAll, initWebSocketServer } from "./websocket";
 import { eq, or, like, desc, and, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
@@ -20,12 +20,6 @@ import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-
-type WSMessage = 
-  | { type: "user:created"; user: any }
-  | { type: "user:updated"; user: any }
-  | { type: "user:deleted"; id: string }
-  | { type: "avatar:updated"; user: any };
 
 const imageFilter = (req: any, file: any, cb: any) => {
   const allowedTypes = /jpeg|jpg|png|gif|webp/;
@@ -129,21 +123,8 @@ const updateUserSchema = z.object({
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
-  // WebSocket setup
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
-
-  function broadcastToAll(message: WSMessage) {
-    const payload = JSON.stringify(message);
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(payload);
-      }
-    });
-  }
-
-  wss.on("connection", (ws) => {
-    ws.on("error", console.error);
-  });
+  // Initialize WebSocket server on the same HTTP server but separate path
+  initWebSocketServer(httpServer);
 
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
@@ -466,6 +447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .returning();
 
+      broadcastToAll({ type: "conversation:created", conversation });
       res.status(201).json(conversation);
     } catch (error) {
       console.error("Error creating conversation:", error);
@@ -495,6 +477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Conversa não encontrada" });
       }
 
+      broadcastToAll({ type: "conversation:assigned", conversation: updated });
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Erro ao assumir conversa" });
@@ -567,6 +550,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .set({ updatedAt: new Date() })
         .where(eq(conversations.id, req.params.id));
 
+      broadcastToAll({ type: "message:created", message, conversationId: req.params.id });
       res.status(201).json(message);
     } catch (error) {
       console.error("Error creating message:", error);
@@ -589,6 +573,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Mensagem não encontrada" });
       }
 
+      if (updated.deleted) {
+        broadcastToAll({ 
+          type: "message:deleted", 
+          messageId: req.params.id, 
+          conversationId: updated.conversationId 
+        });
+      } else {
+        broadcastToAll({ 
+          type: "message:updated", 
+          message: updated, 
+          conversationId: updated.conversationId 
+        });
+      }
+
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Erro ao atualizar mensagem" });
@@ -607,6 +605,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           emoji: req.body.emoji,
         })
         .returning();
+
+      // Get the message to find the conversationId
+      const [message] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, req.params.id));
+
+      if (message) {
+        broadcastToAll({ 
+          type: "reaction:added", 
+          reaction, 
+          messageId: req.params.id,
+          conversationId: message.conversationId 
+        });
+      }
 
       res.status(201).json(reaction);
     } catch (error) {

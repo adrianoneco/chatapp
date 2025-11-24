@@ -2,6 +2,13 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 type WSMessage =
+  | { type: "conversation:created"; conversation: any }
+  | { type: "conversation:updated"; conversation: any }
+  | { type: "conversation:assigned"; conversation: any }
+  | { type: "message:created"; message: any; conversationId: string }
+  | { type: "message:updated"; message: any; conversationId: string }
+  | { type: "message:deleted"; messageId: string; conversationId: string }
+  | { type: "reaction:added"; reaction: any; messageId: string; conversationId: string }
   | { type: "user:created"; user: any }
   | { type: "user:updated"; user: any }
   | { type: "user:deleted"; id: string }
@@ -12,6 +19,7 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
+    // Connect to websocket on same server but separate path (/ws)
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     
@@ -19,7 +27,7 @@ export function useWebSocket() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("WebSocket connected");
+      console.log("WebSocket connected to", wsUrl);
     };
 
     ws.onmessage = (event) => {
@@ -27,6 +35,26 @@ export function useWebSocket() {
         const message: WSMessage = JSON.parse(event.data);
         
         switch (message.type) {
+          case "conversation:created":
+          case "conversation:updated":
+          case "conversation:assigned":
+            queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+            if (message.conversation?.id) {
+              queryClient.invalidateQueries({ queryKey: [`/conversations/${message.conversation.id}`] });
+            }
+            break;
+          
+          case "message:created":
+          case "message:updated":
+          case "message:deleted":
+            queryClient.invalidateQueries({ queryKey: [`/conversations/${message.conversationId}/messages`] });
+            queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+            break;
+          
+          case "reaction:added":
+            queryClient.invalidateQueries({ queryKey: [`/conversations/${message.conversationId}/messages`] });
+            break;
+          
           case "user:created":
           case "user:updated":
           case "user:deleted":
