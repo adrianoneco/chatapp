@@ -93,7 +93,7 @@ export function useCreateConversation() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (data: { clientLocation?: string }) => {
+    mutationFn: async (data: { clientId?: string; channel?: string; clientLocation?: string }) => {
       return apiRequest(`/api/conversations`, {
         method: "POST",
         body: JSON.stringify(data),

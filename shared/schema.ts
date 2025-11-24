@@ -11,6 +11,7 @@ export const users = pgTable("users", {
   role: text("role").notNull().$type<"client" | "attendant" | "admin">().default("client"),
   avatarUrl: text("avatar_url"),
   phone: text("phone"),
+  deleted: boolean("deleted").default(false).notNull(),
   passwordResetToken: text("password_reset_token"),
   passwordResetExpires: timestamp("password_reset_expires"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

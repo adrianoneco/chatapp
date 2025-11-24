@@ -26,10 +26,20 @@ type WSMessage =
   | { type: "user:deleted"; id: string }
   | { type: "avatar:updated"; user: any };
 
-const upload = multer({
+const imageFilter = (req: any, file: any, cb: any) => {
+  const allowedTypes = /jpeg|jpg|png|gif|webp/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = allowedTypes.test(file.mimetype);
+  if (extname && mimetype) {
+    return cb(null, true);
+  }
+  cb(new Error("Apenas imagens são permitidas"));
+};
+
+const uploadAvatar = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
-      const uploadDir = path.join(process.cwd(), "uploads", "avatars");
+      const uploadDir = path.join(process.cwd(), "data", "avatars");
       fs.mkdirSync(uploadDir, { recursive: true });
       cb(null, uploadDir);
     },
@@ -38,16 +48,53 @@ const upload = multer({
       cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
     },
   }),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (extname && mimetype) {
-      return cb(null, true);
-    }
-    cb(new Error("Apenas imagens são permitidas"));
-  },
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: imageFilter,
+});
+
+const uploadImage = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(process.cwd(), "data", "images");
+      fs.mkdirSync(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
+const uploadVideo = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(process.cwd(), "data", "videos");
+      fs.mkdirSync(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB for videos
+});
+
+const uploadAudio = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(process.cwd(), "data", "audio");
+      fs.mkdirSync(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
+    },
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB for audio
 });
 
 const loginSchema = z.object({
@@ -211,24 +258,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const role = req.query.role as "client" | "attendant" | "admin" | undefined;
       const search = req.query.search as string | undefined;
 
-      let conditions = [];
+      let conditions = [eq(users.deleted, false)];
       
       if (role) {
         conditions.push(eq(users.role, role));
       }
 
       if (search) {
-        conditions.push(
-          or(
-            like(users.displayName, `%${search}%`),
-            like(users.email, `%${search}%`)
-          )
+        const searchCondition = or(
+          like(users.displayName, `%${search}%`),
+          like(users.email, `%${search}%`)
         );
+        if (searchCondition) {
+          conditions.push(searchCondition);
+        }
       }
 
-      const allUsers = conditions.length > 0
-        ? await db.select().from(users).where(or(...conditions))
-        : await db.select().from(users);
+      const allUsers = await db.select().from(users).where(and(...conditions));
 
       res.json({ users: allUsers.map(sanitizeUser) });
     } catch (error) {
@@ -273,7 +319,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/users/:id", requireAuth, async (req, res) => {
     try {
-      const [deleted] = await db.delete(users)
+      const [deleted] = await db.update(users)
+        .set({ deleted: true, updatedAt: new Date() })
         .where(eq(users.id, req.params.id))
         .returning();
 
@@ -288,13 +335,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users/:id/avatar", requireAuth, upload.single("avatar"), async (req, res) => {
+  app.post("/api/users/:id/avatar", requireAuth, uploadAvatar.single("avatar"), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "Nenhum arquivo enviado" });
       }
 
-      const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+      const avatarUrl = `/data/avatars/${req.file.filename}`;
       const [updated] = await db.update(users)
         .set({ avatarUrl, updatedAt: new Date() })
         .where(eq(users.id, req.params.id))

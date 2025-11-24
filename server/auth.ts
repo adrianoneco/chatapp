@@ -37,12 +37,24 @@ export async function createUser(
 }
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
-  const [user] = await db.select().from(users).where(eq(users.email, email));
+  const [user] = await db.select().from(users)
+    .where(eq(users.email, email));
+  
+  if (user && user.deleted) {
+    return undefined;
+  }
+  
   return user;
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
-  const [user] = await db.select().from(users).where(eq(users.id, id));
+  const [user] = await db.select().from(users)
+    .where(eq(users.id, id));
+  
+  if (user && user.deleted) {
+    return undefined;
+  }
+  
   return user;
 }
 

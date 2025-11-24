@@ -61,6 +61,12 @@ app.use("/uploads", (req, res, next) => {
 });
 app.use("/uploads", express.static("uploads"));
 
+app.use("/data", (req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  next();
+});
+app.use("/data", express.static("data"));
+
 app.use("/storage", (req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   next();
