@@ -27,6 +27,7 @@ export const conversations = pgTable("conversations", {
   status: text("status").notNull().$type<"active" | "waiting" | "closed">().default("waiting"),
   clientIp: text("client_ip"),
   clientLocation: text("client_location"),
+  deleted: boolean("deleted").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

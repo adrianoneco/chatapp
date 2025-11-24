@@ -499,6 +499,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/conversations/:id/start", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      
+      if (user.role !== "attendant" && user.role !== "admin") {
+        return res.status(403).json({ message: "Apenas atendentes podem iniciar conversas" });
+      }
+
+      const [updated] = await db
+        .update(conversations)
+        .set({ 
+          attendantId: user.id,
+          status: "active",
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, req.params.id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      broadcastToAll({ type: "conversation:updated", conversation: updated });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao iniciar conversa" });
+    }
+  });
+
+  app.patch("/api/conversations/:id/close", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      
+      if (user.role !== "attendant" && user.role !== "admin") {
+        return res.status(403).json({ message: "Apenas atendentes podem encerrar conversas" });
+      }
+
+      const [updated] = await db
+        .update(conversations)
+        .set({ 
+          status: "closed",
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, req.params.id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      broadcastToAll({ type: "conversation:updated", conversation: updated });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao encerrar conversa" });
+    }
+  });
+
+  app.patch("/api/conversations/:id/reopen", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      
+      if (user.role !== "attendant" && user.role !== "admin") {
+        return res.status(403).json({ message: "Apenas atendentes podem reabrir conversas" });
+      }
+
+      const [updated] = await db
+        .update(conversations)
+        .set({ 
+          status: "active",
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, req.params.id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      broadcastToAll({ type: "conversation:updated", conversation: updated });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao reabrir conversa" });
+    }
+  });
+
+  app.delete("/api/conversations/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      
+      if (user.role !== "attendant" && user.role !== "admin") {
+        return res.status(403).json({ message: "Apenas atendentes podem deletar conversas" });
+      }
+
+      const [updated] = await db
+        .update(conversations)
+        .set({ 
+          deleted: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, req.params.id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ message: "Conversa não encontrada" });
+      }
+
+      broadcastToAll({ type: "conversation:updated", conversation: updated });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Erro ao deletar conversa" });
+    }
+  });
+
   // Messages routes
   app.get("/api/conversations/:id/messages", requireAuth, async (req, res) => {
     try {
