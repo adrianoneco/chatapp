@@ -9,7 +9,7 @@ import { Search, UserPlus, MoreHorizontal, Shield, Headset, LayoutGrid, List, Ed
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUsers, useRegister, useUpdateUser, useDeleteUser, useUploadAvatar } from "@/lib/api";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,6 +29,7 @@ export default function Attendants() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   const { data, isLoading } = useUsers("attendant", search);
   const registerMutation = useRegister();
@@ -46,9 +47,22 @@ export default function Attendants() {
     },
   });
 
+  useEffect(() => {
+    if (avatarFile) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(avatarFile);
+    } else {
+      setAvatarPreview(null);
+    }
+  }, [avatarFile]);
+
   const handleOpenDialog = (user?: any) => {
     if (user) {
       setEditingUser(user);
+      setAvatarPreview(user.avatarUrl || null);
       form.reset({
         displayName: user.displayName,
         email: user.email,
@@ -57,8 +71,10 @@ export default function Attendants() {
       });
     } else {
       setEditingUser(null);
+      setAvatarPreview(null);
       form.reset();
     }
+    setAvatarFile(null);
     setIsDialogOpen(true);
   };
 
@@ -298,6 +314,24 @@ export default function Attendants() {
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Avatar (opcional)</label>
+                {avatarPreview && (
+                  <div className="flex justify-center">
+                    <Avatar className="h-24 w-24">
+                      <AvatarImage src={avatarPreview} />
+                      <AvatarFallback>{editingUser?.displayName?.substring(0, 2).toUpperCase() || "?"}</AvatarFallback>
+                    </Avatar>
+                  </div>
+                )}
+                <div>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+              </div>
               <FormField
                 control={form.control}
                 name="displayName"
@@ -352,16 +386,6 @@ export default function Attendants() {
                   )}
                 />
               )}
-              <div className="space-y-2">
-                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Avatar (opcional)</label>
-                <div>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
-                  />
-                </div>
-              </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancelar
