@@ -47,30 +47,135 @@ const EVENT_GROUPS = {
   conversations: {
     label: "Conversas",
     events: [
-      { value: "conversation:created", label: "Conversa Criada" },
-      { value: "conversation:updated", label: "Conversa Atualizada" },
-      { value: "conversation:started", label: "Conversa Iniciada" },
-      { value: "conversation:closed", label: "Conversa Fechada" },
-      { value: "conversation:reopened", label: "Conversa Reaberta" },
-      { value: "conversation:transferred", label: "Conversa Transferida" },
-      { value: "conversation:deleted", label: "Conversa Deletada" },
+      { value: "conversation.created", label: "Conversa Criada" },
+      { value: "conversation.assigned", label: "Conversa Atribuída" },
+      { value: "conversation.transferred", label: "Conversa Transferida" },
+      { value: "conversation.closed", label: "Conversa Fechada" },
     ]
   },
   messages: {
     label: "Mensagens",
     events: [
-      { value: "message:created", label: "Mensagem Enviada" },
-      { value: "message:deleted", label: "Mensagem Deletada" },
-      { value: "message:reaction", label: "Reação em Mensagem" },
+      { value: "message.sent", label: "Mensagem Enviada" },
+      { value: "message.updated", label: "Mensagem Atualizada" },
+      { value: "message.deleted", label: "Mensagem Deletada" },
     ]
   },
   users: {
     label: "Usuários",
     events: [
-      { value: "user:created", label: "Usuário Criado" },
-      { value: "user:updated", label: "Usuário Atualizado" },
-      { value: "user:deleted", label: "Usuário Deletado" },
+      { value: "user.created", label: "Usuário Criado" },
+      { value: "user.updated", label: "Usuário Atualizado" },
+      { value: "user.deleted", label: "Usuário Deletado" },
     ]
+  },
+};
+
+const EXAMPLE_PAYLOADS: Record<string, any> = {
+  "conversation.created": {
+    event: "conversation.created",
+    timestamp: new Date().toISOString(),
+    data: {
+      id: "conv_123",
+      protocol: "ABC1234567",
+      channel: "webchat",
+      status: "waiting",
+      clientId: "user_456",
+      clientIp: "192.168.1.1",
+      clientLocation: "São Paulo, BR"
+    }
+  },
+  "conversation.assigned": {
+    event: "conversation.assigned",
+    timestamp: new Date().toISOString(),
+    data: {
+      id: "conv_123",
+      protocol: "ABC1234567",
+      status: "active",
+      attendantId: "att_789"
+    }
+  },
+  "conversation.transferred": {
+    event: "conversation.transferred",
+    timestamp: new Date().toISOString(),
+    data: {
+      conversation: { id: "conv_123", protocol: "ABC1234567" },
+      fromAttendantId: "att_789",
+      toAttendantId: "att_012"
+    }
+  },
+  "conversation.closed": {
+    event: "conversation.closed",
+    timestamp: new Date().toISOString(),
+    data: {
+      id: "conv_123",
+      protocol: "ABC1234567",
+      status: "closed",
+      closedAt: new Date().toISOString()
+    }
+  },
+  "message.sent": {
+    event: "message.sent",
+    timestamp: new Date().toISOString(),
+    data: {
+      message: {
+        id: "msg_456",
+        conversationId: "conv_123",
+        senderId: "att_789",
+        content: "Olá, como posso ajudar?",
+        type: "text"
+      },
+      conversationId: "conv_123"
+    }
+  },
+  "message.updated": {
+    event: "message.updated",
+    timestamp: new Date().toISOString(),
+    data: {
+      message: {
+        id: "msg_456",
+        conversationId: "conv_123",
+        content: "Mensagem editada",
+        updatedAt: new Date().toISOString()
+      },
+      conversationId: "conv_123"
+    }
+  },
+  "message.deleted": {
+    event: "message.deleted",
+    timestamp: new Date().toISOString(),
+    data: {
+      messageId: "msg_456",
+      conversationId: "conv_123"
+    }
+  },
+  "user.created": {
+    event: "user.created",
+    timestamp: new Date().toISOString(),
+    data: {
+      id: "user_789",
+      email: "usuario@example.com",
+      displayName: "Novo Usuário",
+      role: "client"
+    }
+  },
+  "user.updated": {
+    event: "user.updated",
+    timestamp: new Date().toISOString(),
+    data: {
+      id: "user_789",
+      email: "usuario@example.com",
+      displayName: "Nome Atualizado",
+      updatedAt: new Date().toISOString()
+    }
+  },
+  "user.deleted": {
+    event: "user.deleted",
+    timestamp: new Date().toISOString(),
+    data: {
+      id: "user_789",
+      user: { email: "usuario@example.com", displayName: "Usuário Deletado" }
+    }
   },
 };
 
@@ -628,7 +733,7 @@ export function WebhooksSettings() {
 
       {/* Test Dialog */}
       <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Testar Webhook</DialogTitle>
             <DialogDescription>
@@ -636,6 +741,32 @@ export function WebhooksSettings() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Quick Test Buttons */}
+            <div className="space-y-2">
+              <Label>Payloads de Exemplo</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(EXAMPLE_PAYLOADS).map(([event, payload]) => {
+                  const eventLabel = Object.values(EVENT_GROUPS)
+                    .flatMap(g => g.events)
+                    .find(e => e.value === event)?.label || event;
+                  
+                  return (
+                    <Button
+                      key={event}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTestPayload(JSON.stringify(payload, null, 2))}
+                      className="justify-start text-xs"
+                    >
+                      <Send className="h-3 w-3 mr-2" />
+                      {eventLabel}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Payload JSON</Label>
               <Textarea
@@ -647,34 +778,34 @@ export function WebhooksSettings() {
             </div>
 
             {testResult && (
-              <Alert className={testResult.success ? "border-green-500 bg-green-50 dark:bg-green-950/20" : "border-red-500 bg-red-50 dark:bg-red-950/20"}>
+              <Alert className={testResult.success ? "border-green-600 bg-green-950/30 dark:bg-green-950/30" : "border-red-600 bg-red-950/30 dark:bg-red-950/30"}>
                 <div className="flex items-start gap-3">
                   {testResult.success ? (
-                    <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                    <CheckCircle2 className="h-5 w-5 text-green-500 dark:text-green-400 mt-0.5" />
                   ) : (
-                    <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                    <XCircle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5" />
                   )}
                   <div className="flex-1 space-y-2">
                     <AlertDescription>
-                      <div className="font-semibold mb-2">
+                      <div className="font-semibold mb-2 text-foreground">
                         {testResult.success ? "✓ Requisição bem-sucedida" : "✗ Requisição falhou"}
                       </div>
                       {testResult.status && (
-                        <div className="text-sm">
+                        <div className="text-sm text-foreground/90">
                           <strong>Status HTTP:</strong> {testResult.status} {testResult.statusText || ""}
                         </div>
                       )}
                       {testResult.error && (
-                        <div className="text-sm text-red-600 dark:text-red-400">
+                        <div className="text-sm text-red-400 dark:text-red-300">
                           <strong>Erro:</strong> {testResult.error}
                         </div>
                       )}
                       {testResult.body && (
                         <details className="mt-2">
-                          <summary className="cursor-pointer text-sm font-medium hover:underline">
+                          <summary className="cursor-pointer text-sm font-medium hover:underline text-foreground/80">
                             Ver resposta completa
                           </summary>
-                          <pre className="mt-2 p-3 bg-secondary/50 rounded text-xs overflow-x-auto max-h-[200px]">
+                          <pre className="mt-2 p-3 bg-black/40 dark:bg-black/60 rounded text-xs overflow-x-auto max-h-[200px] text-green-400 dark:text-green-300 border border-border/50">
                             {typeof testResult.body === 'string' ? testResult.body : JSON.stringify(testResult.body, null, 2)}
                           </pre>
                         </details>

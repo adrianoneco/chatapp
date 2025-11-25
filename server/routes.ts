@@ -16,7 +16,7 @@ import {
   resetPassword,
 } from "./auth";
 import { requireAuth, requireRole } from "./middleware";
-import { registerWebhookRoutes } from "./webhooks";
+import { registerWebhookRoutes, triggerWebhooksForEvent } from "./webhooks";
 import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
@@ -193,6 +193,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       req.session.userId = user.id;
       broadcastToAll({ type: "user:created", user });
+      
+      // Trigger webhooks
+      await triggerWebhooksForEvent("user.created", {
+        event: "user.created",
+        timestamp: new Date().toISOString(),
+        data: sanitizeUser(user)
+      });
+      
       res.json({ user });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -338,6 +346,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const sanitized = sanitizeUser(updated);
       broadcastToAll({ type: "user:updated", user: sanitized });
+      
+      // Trigger webhooks
+      await triggerWebhooksForEvent("user.updated", {
+        event: "user.updated",
+        timestamp: new Date().toISOString(),
+        data: sanitized
+      });
+      
       res.json({ user: sanitized });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -359,6 +375,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       broadcastToAll({ type: "user:deleted", id: req.params.id });
+      
+      // Trigger webhooks
+      await triggerWebhooksForEvent("user.deleted", {
+        event: "user.deleted",
+        timestamp: new Date().toISOString(),
+        data: { id: req.params.id, user: sanitizeUser(deleted) }
+      });
+      
       res.json({ message: "Usuário excluído com sucesso" });
     } catch (error) {
       res.status(500).json({ message: "Erro ao excluir usuário" });
@@ -700,6 +724,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .returning();
 
       broadcastToAll({ type: "conversation:created", conversation });
+      
+      // Trigger webhooks
+      await triggerWebhooksForEvent("conversation.created", {
+        event: "conversation.created",
+        timestamp: new Date().toISOString(),
+        data: conversation
+      });
+      
       res.status(201).json(conversation);
     } catch (error) {
       console.error("Error creating conversation:", error);
@@ -755,6 +787,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       broadcastToAll({ type: "conversation:assigned", conversation: updated });
+      
+      // Trigger webhooks
+      await triggerWebhooksForEvent("conversation.assigned", {
+        event: "conversation.assigned",
+        timestamp: new Date().toISOString(),
+        data: updated
+      });
+      
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Erro ao assumir conversa" });
@@ -817,6 +857,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       broadcastToAll({ type: "conversation:updated", conversation: updated });
+      
+      // Trigger webhooks
+      await triggerWebhooksForEvent("conversation.transferred", {
+        event: "conversation.transferred",
+        timestamp: new Date().toISOString(),
+        data: { 
+          conversation: updated, 
+          fromAttendantId: current.attendantId, 
+          toAttendantId: attendantId 
+        }
+      });
+      
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Erro ao transferir conversa" });
@@ -912,6 +964,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       broadcastToAll({ type: "conversation:updated", conversation: updated });
+      
+      // Trigger webhooks
+      await triggerWebhooksForEvent("conversation.closed", {
+        event: "conversation.closed",
+        timestamp: new Date().toISOString(),
+        data: updated
+      });
+      
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Erro ao encerrar conversa" });
@@ -1082,6 +1142,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         duration: req.body.duration
       });
 
+      // Determine if message is for client (forMe = true means message is directed to client)
+      const isClient = user.id === conversation.clientId;
+      const forMe = !isClient; // If sender is attendant, message is for client (forMe = true)
+
       const [message] = await db
         .insert(messages)
         .values({
@@ -1094,6 +1158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           caption: req.body.caption || null,
           recorded: req.body.recorded || false,
           forwarded: req.body.forwarded || false,
+          forMe: forMe,
           replyToId: req.body.replyToId || null,
           fileName: req.body.fileName || null,
           fileSize: req.body.fileSize || null,
@@ -1116,6 +1181,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(conversations.id, req.params.id));
 
       broadcastToAll({ type: "message:created", message, conversationId: req.params.id });
+      
+      // Trigger webhooks
+      await triggerWebhooksForEvent("message.sent", {
+        event: "message.sent",
+        timestamp: new Date().toISOString(),
+        data: { message, conversationId: req.params.id }
+      });
+      
       res.status(201).json(message);
     } catch (error) {
       console.error("Error creating message:", error);
@@ -1144,11 +1217,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           messageId: req.params.id, 
           conversationId: updated.conversationId 
         });
+        
+        // Trigger webhooks
+        await triggerWebhooksForEvent("message.deleted", {
+          event: "message.deleted",
+          timestamp: new Date().toISOString(),
+          data: { messageId: req.params.id, conversationId: updated.conversationId }
+        });
       } else {
         broadcastToAll({ 
           type: "message:updated", 
           message: updated, 
           conversationId: updated.conversationId 
+        });
+        
+        // Trigger webhooks
+        await triggerWebhooksForEvent("message.updated", {
+          event: "message.updated",
+          timestamp: new Date().toISOString(),
+          data: { message: updated, conversationId: updated.conversationId }
         });
       }
 
