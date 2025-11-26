@@ -154,12 +154,13 @@ export default function Contacts() {
 
   const handleStartConversation = async (clientId: string, clientName: string) => {
     try {
+      const channel = "webchat"; // pode ser alterado para whatsapp, telegram, etc.
       const result = await createConversationMutation.mutateAsync({
         clientId,
-        channel: "webchat",
+        channel: channel,
       });
       toast.success(`Conversa iniciada com ${clientName}`);
-      setLocation(`/conversations/webchat/${result.id}`);
+      setLocation(`/conversations/${channel}/${result.id}`);
     } catch (error: any) {
       toast.error(error.message || "Erro ao iniciar conversa");
     }

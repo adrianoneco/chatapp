@@ -56,7 +56,7 @@ function Router() {
         <Route path="/conversations">
           {() => <ProtectedRoute component={Conversations} />}
         </Route>
-        <Route path="/conversations/webchat/:id">
+        <Route path="/conversations/:channel/:id">
           {() => <ProtectedRoute component={Conversations} />}
         </Route>
         <Route path="/contacts">

@@ -1126,6 +1126,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Conversa não encontrada" });
       }
 
+      // Check if conversation is active before allowing messages
+      if (conversation.status === "waiting") {
+        return res.status(403).json({ message: "É necessário iniciar a conversa antes de enviar mensagens" });
+      }
+
+      if (conversation.status === "closed") {
+        return res.status(403).json({ message: "Não é possível enviar mensagens em conversas encerradas" });
+      }
+
       // Permission check: only admin or assigned attendant can send messages
       const isAssignedAttendant = conversation.attendantId === user.id;
       const isAdmin = user.role === "admin";

@@ -477,9 +477,10 @@ function ConversationDetailsContent({ conversation }: ConversationDetailsProps) 
 
 export default function Conversations() {
   const [location, setLocation] = useLocation();
-  const [match, params] = useRoute("/conversations/webchat/:id");
+  const [match, params] = useRoute("/conversations/:channel/:id");
   const isChatOpen = !!match;
   const conversationId = params?.id;
+  const channelFromUrl = params?.channel || "webchat";
   
   // API hooks
   const { data: user } = useUser();
@@ -620,13 +621,21 @@ export default function Conversations() {
   // Check if user can send messages - only assigned attendant or admin
   // If conversation is waiting, show assign button for attendants/admins
   const canSendMessage = conversation 
-    ? (user?.role === "admin" || conversation.attendantId === user?.id)
+    ? (user?.role === "admin" || conversation.attendantId === user?.id) && 
+      conversation.status === "active"
     : false;
 
   // Check if user can assign conversation
   const canAssignConversation = conversation
     ? (user?.role === "attendant" || user?.role === "admin") && 
       conversation.status === "waiting"
+    : false;
+  
+  // Check if conversation needs to be started
+  const needsToStart = conversation
+    ? (user?.role === "attendant" || user?.role === "admin") &&
+      conversation.status === "waiting" &&
+      conversation.attendantId === user?.id
     : false;
 
   // Handle assigning conversation to current user
@@ -1284,7 +1293,7 @@ export default function Conversations() {
       setNewConversationDialogOpen(false);
       setContactSearch("");
       setSelectedChannel("all");
-      setLocation(`/conversations/webchat/${result.id}`);
+      setLocation(`/conversations/${validChannel}/${result.id}`);
     } catch (error: any) {
       toast.error(error.message || "Erro ao iniciar conversa");
     }
@@ -1393,7 +1402,7 @@ export default function Conversations() {
                   return (
                     <ContextMenu key={conv.id}>
                       <ContextMenuTrigger asChild>
-                        <Link href={`/conversations/webchat/${conv.id}`}>
+                        <Link href={`/conversations/${conv.channel || 'webchat'}/${conv.id}`}>
                           <div 
                             className={cn(
                               "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
@@ -1454,7 +1463,7 @@ export default function Conversations() {
                               try {
                                 await startConversationMutation.mutateAsync(conv.id);
                                 toast.success("Conversa iniciada com sucesso!");
-                                setLocation(`/conversations/webchat/${conv.id}`);
+                                setLocation(`/conversations/${conv.channel || 'webchat'}/${conv.id}`);
                               } catch (error: any) {
                                 toast.error(error.message || "Erro ao iniciar conversa");
                               }
@@ -1487,7 +1496,7 @@ export default function Conversations() {
                             <ContextMenuItem 
                               onClick={(e) => {
                                 e.preventDefault();
-                                setLocation(`/conversations/webchat/${conv.id}`);
+                                setLocation(`/conversations/${conv.channel || 'webchat'}/${conv.id}`);
                                 setTimeout(() => setTransferDialogOpen(true), 200);
                               }}
                               data-testid={`context-transfer-${conv.id}`}
@@ -1504,7 +1513,7 @@ export default function Conversations() {
                               try {
                                 await reopenConversationMutation.mutateAsync(conv.id);
                                 toast.success("Conversa reaberta com sucesso!");
-                                setLocation(`/conversations/webchat/${conv.id}`);
+                                setLocation(`/conversations/${conv.channel || 'webchat'}/${conv.id}`);
                               } catch (error: any) {
                                 toast.error(error.message || "Erro ao reabrir conversa");
                               }
@@ -2087,6 +2096,9 @@ export default function Conversations() {
                 replyMessage={replyingTo ? getReplyMessage(replyingTo) : null}
                 isPending={sendMessageMutation.isPending}
                 canSend={canSendMessage}
+                conversationStatus={conversation?.status}
+                needsToStart={needsToStart}
+                onStartConversation={needsToStart ? handleStartConversation : undefined}
                 onAssignConversation={canAssignConversation ? handleAssignConversation : undefined}
               />
             </>

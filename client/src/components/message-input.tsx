@@ -52,6 +52,9 @@ interface MessageInputProps {
   disabled?: boolean;
   isPending?: boolean;
   canSend?: boolean;
+  conversationStatus?: "active" | "waiting" | "closed";
+  needsToStart?: boolean;
+  onStartConversation?: () => void;
   onAssignConversation?: () => void;
 }
 
@@ -64,6 +67,9 @@ export function MessageInput({
   disabled = false,
   isPending = false,
   canSend = true,
+  conversationStatus = "active",
+  needsToStart = false,
+  onStartConversation,
   onAssignConversation,
 }: MessageInputProps) {
   const [messageInput, setMessageInput] = useState("");
@@ -483,6 +489,43 @@ export function MessageInput({
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Show appropriate message based on conversation status
+  if (conversationStatus === "waiting") {
+    return (
+      <div className="p-4 bg-card/30 border-t border-border shrink-0">
+        <div className="flex flex-col items-center justify-center gap-2 text-center py-4">
+          <p className="text-sm text-muted-foreground">
+            {needsToStart 
+              ? "É necessário iniciar a conversa antes de enviar mensagens"
+              : "Esta conversa está aguardando um atendente"}
+          </p>
+          {needsToStart && onStartConversation && (
+            <Button onClick={onStartConversation} data-testid="button-start-conversation">
+              Iniciar Conversa
+            </Button>
+          )}
+          {!needsToStart && onAssignConversation && (
+            <Button onClick={onAssignConversation} data-testid="button-assign-conversation">
+              Assumir Conversa
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (conversationStatus === "closed") {
+    return (
+      <div className="p-4 bg-card/30 border-t border-border shrink-0">
+        <div className="flex flex-col items-center justify-center gap-2 text-center py-4">
+          <p className="text-sm text-muted-foreground">
+            Esta conversa está encerrada. Não é possível enviar mensagens.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!canSend) {
     return (
       <div className="p-4 bg-card/30 border-t border-border shrink-0">
@@ -490,11 +533,6 @@ export function MessageInput({
           <p className="text-sm text-muted-foreground">
             Apenas o atendente vinculado pode enviar mensagens nesta conversa
           </p>
-          {onAssignConversation && (
-            <Button onClick={onAssignConversation} data-testid="button-assign-conversation">
-              Assumir Conversa
-            </Button>
-          )}
         </div>
       </div>
     );
