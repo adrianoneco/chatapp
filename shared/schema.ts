@@ -49,7 +49,7 @@ export const messages = pgTable("messages", {
   conversationId: varchar("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   senderId: varchar("sender_id").notNull().references(() => users.id),
   content: text("content").notNull(),
-  type: text("type").notNull().$type<"text" | "image" | "video" | "audio">().default("text"),
+  type: text("type").notNull().$type<"text" | "image" | "video" | "audio" | "document" | "contact" | "location">().default("text"),
   mediaUrl: text("media_url"),
   duration: text("duration"),
   caption: text("caption"),
@@ -72,6 +72,19 @@ export const messages = pgTable("messages", {
       name: string;
       size: string;
       type: string;
+    };
+    contact?: {
+      id: string;
+      name: string;
+      email?: string;
+      phone?: string;
+      avatarUrl?: string;
+    };
+    location?: {
+      latitude: number;
+      longitude: number;
+      address?: string;
+      name?: string;
     };
   } | null>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

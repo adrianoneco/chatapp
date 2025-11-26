@@ -4,11 +4,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   Send, Loader2, Sparkles, MessageSquare, Camera, Video, 
-  Mic, Paperclip, X, Image as ImageIcon, Play, Pause, Square, StopCircle, Reply 
+  Mic, Paperclip, X, Image as ImageIcon, Play, Pause, Square, StopCircle, Reply,
+  FileText, UserCircle, MapPin, ChevronUp, Search, CheckCircle2 
 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { apiRequest } from "@/lib/api";
 import { detectFileType, FileInfo, readAudioMetadata, AudioMetadata } from "@/lib/file-utils";
@@ -24,7 +28,7 @@ interface MessageInputProps {
   conversationId: string;
   onSendMessage: (data: {
     content: string;
-    type: "text" | "image" | "video" | "audio" | "document";
+    type: "text" | "image" | "video" | "audio" | "document" | "contact" | "location";
     mediaUrl?: string;
     duration?: string;
     caption?: string;
@@ -37,6 +41,19 @@ interface MessageInputProps {
         album?: string;
         year?: string;
         cover: string | null;
+      };
+      contact?: {
+        id: string;
+        name: string;
+        email?: string;
+        phone?: string;
+        avatarUrl?: string;
+      };
+      location?: {
+        latitude: number;
+        longitude: number;
+        address?: string;
+        name?: string;
       };
     };
   }) => void;
@@ -94,6 +111,16 @@ export function MessageInput({
   const [recordingTime, setRecordingTime] = useState(0);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
+  
+  // Contact and Location states
+  const [showContactDialog, setShowContactDialog] = useState(false);
+  const [showLocationDialog, setShowLocationDialog] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [locationName, setLocationName] = useState("");
+  const [gettingLocation, setGettingLocation] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -489,6 +516,121 @@ export function MessageInput({
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Load contacts for sending
+  const loadContacts = async () => {
+    setLoadingContacts(true);
+    try {
+      const response = await apiRequest<{ users: any[] }>("/users?role=client");
+      setContacts(response.users || []);
+    } catch (error) {
+      toast.error("Erro ao carregar contatos");
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
+
+  // Handle send contact
+  const handleSendContact = async () => {
+    if (!selectedContactId) {
+      toast.error("Selecione um contato");
+      return;
+    }
+
+    const contact = contacts.find(c => c.id === selectedContactId);
+    if (!contact) return;
+
+    onSendMessage({
+      content: `Contato: ${contact.displayName}`,
+      type: "contact",
+      replyToId: replyingTo || undefined,
+      metadata: {
+        contact: {
+          id: contact.id,
+          name: contact.displayName,
+          email: contact.email,
+          phone: contact.phone,
+          avatarUrl: contact.avatarUrl,
+        },
+      },
+    });
+
+    setShowContactDialog(false);
+    setSelectedContactId(null);
+    setContactSearch("");
+    toast.success("Contato enviado!");
+  };
+
+  // Handle send location
+  const handleSendLocation = async () => {
+    setGettingLocation(true);
+    
+    try {
+      // Get current position
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        });
+      });
+
+      const { latitude, longitude } = position.coords;
+      
+      // Try to get address from coordinates
+      let address = "";
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=pt-BR`
+        );
+        const data = await response.json();
+        if (data.display_name) {
+          address = data.display_name;
+        }
+      } catch (error) {
+        console.error("Error getting address:", error);
+      }
+
+      onSendMessage({
+        content: `Localização${locationName ? `: ${locationName}` : ""}`,
+        type: "location",
+        replyToId: replyingTo || undefined,
+        metadata: {
+          location: {
+            latitude,
+            longitude,
+            address: address || undefined,
+            name: locationName || undefined,
+          },
+        },
+      });
+
+      setShowLocationDialog(false);
+      setLocationName("");
+      toast.success("Localização enviada!");
+    } catch (error: any) {
+      if (error.code === 1) {
+        toast.error("Permissão de localização negada");
+      } else {
+        toast.error("Erro ao obter localização");
+      }
+    } finally {
+      setGettingLocation(false);
+    }
+  };
+
+  // Open contact dialog and load contacts
+  const handleOpenContactDialog = () => {
+    setShowContactDialog(true);
+    if (contacts.length === 0) {
+      loadContacts();
+    }
+  };
+
+  const filteredContacts = contacts.filter(contact =>
+    contact.displayName.toLowerCase().includes(contactSearch.toLowerCase()) ||
+    contact.email?.toLowerCase().includes(contactSearch.toLowerCase())
+  );
+
   // Show appropriate message based on conversation status
   if (conversationStatus === "waiting") {
     return (
@@ -649,16 +791,33 @@ export function MessageInput({
               >
                 <Mic className="h-4 w-4" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                onClick={() => fileInputRef.current?.click()}
-                title="Enviar anexo"
-                data-testid="button-attach"
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    title="Enviar anexo"
+                    data-testid="button-attach"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="top" className="w-48">
+                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()} data-testid="menu-send-document">
+                    <FileText className="mr-2 h-4 w-4" />
+                    Enviar Documento
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleOpenContactDialog} data-testid="menu-send-contact">
+                    <UserCircle className="mr-2 h-4 w-4" />
+                    Contato
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowLocationDialog(true)} data-testid="menu-send-location">
+                    <MapPin className="mr-2 h-4 w-4" />
+                    Localização
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
           <Button
@@ -864,6 +1023,169 @@ export function MessageInput({
                 <>
                   <Send className="mr-2 h-4 w-4" />
                   Enviar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Contact Dialog */}
+      <Dialog open={showContactDialog} onOpenChange={setShowContactDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Enviar Contato</DialogTitle>
+            <DialogDescription>
+              Selecione um contato para enviar na conversa
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar contato..."
+                value={contactSearch}
+                onChange={(e) => setContactSearch(e.target.value)}
+                className="pl-9"
+                data-testid="input-search-contact"
+              />
+            </div>
+
+            <ScrollArea className="h-[400px] pr-4">
+              {loadingContacts ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredContacts.length > 0 ? (
+                <div className="space-y-1">
+                  {filteredContacts.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors",
+                        selectedContactId === contact.id
+                          ? "bg-primary/10 hover:bg-primary/20 border-2 border-primary"
+                          : "hover:bg-accent/50 border-2 border-transparent"
+                      )}
+                      onClick={() => setSelectedContactId(contact.id)}
+                      data-testid={`contact-item-${contact.id}`}
+                    >
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={contact.avatarUrl || undefined} />
+                        <AvatarFallback>
+                          {contact.displayName.substring(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{contact.displayName}</p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {contact.email || contact.phone || "Sem informações"}
+                        </p>
+                      </div>
+                      {selectedContactId === contact.id && (
+                        <CheckCircle2 className="h-5 w-5 text-primary" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                  <UserCircle className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-sm text-muted-foreground">
+                    {contactSearch ? "Nenhum contato encontrado" : "Nenhum contato disponível"}
+                  </p>
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowContactDialog(false);
+                setSelectedContactId(null);
+                setContactSearch("");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSendContact}
+              disabled={!selectedContactId}
+              data-testid="button-send-contact"
+            >
+              <Send className="mr-2 h-4 w-4" />
+              Enviar Contato
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Location Dialog */}
+      <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Enviar Localização</DialogTitle>
+            <DialogDescription>
+              Compartilhe sua localização atual na conversa
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-muted/50 rounded-lg flex items-center gap-3">
+              <MapPin className="h-8 w-8 text-primary" />
+              <div className="flex-1">
+                <p className="text-sm font-medium">Localização GPS</p>
+                <p className="text-xs text-muted-foreground">
+                  Sua localização atual será compartilhada
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">
+                Nome do local (opcional)
+              </label>
+              <Input
+                placeholder="Ex: Minha casa, Escritório..."
+                value={locationName}
+                onChange={(e) => setLocationName(e.target.value)}
+                data-testid="input-location-name"
+              />
+            </div>
+
+            <div className="text-xs text-muted-foreground bg-yellow-500/10 border border-yellow-500/20 rounded p-3">
+              <p className="font-medium text-yellow-700 dark:text-yellow-400 mb-1">
+                Atenção
+              </p>
+              <p>
+                Ao enviar sua localização, você compartilhará suas coordenadas GPS com o destinatário.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowLocationDialog(false);
+                setLocationName("");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSendLocation}
+              disabled={gettingLocation}
+              data-testid="button-send-location"
+            >
+              {gettingLocation ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Obtendo...
+                </>
+              ) : (
+                <>
+                  <MapPin className="mr-2 h-4 w-4" />
+                  Enviar Localização
                 </>
               )}
             </Button>

@@ -1735,7 +1735,15 @@ export default function Conversations() {
                                     </span>
                                   </div>
                                   <p className="truncate opacity-70 text-[11px]">
-                                    {replyMsg.content || (replyMsg.type === 'image' ? '📷 Imagem' : replyMsg.type === 'audio' ? '🎵 Áudio' : replyMsg.type === 'video' ? '🎬 Vídeo' : '📎 Arquivo')}
+                                    {replyMsg.content || (
+                                      replyMsg.type === 'image' ? '📷 Imagem' : 
+                                      replyMsg.type === 'audio' ? '🎵 Áudio' : 
+                                      replyMsg.type === 'video' ? '🎬 Vídeo' : 
+                                      replyMsg.type === 'contact' ? '👤 Contato' : 
+                                      replyMsg.type === 'location' ? '📍 Localização' : 
+                                      replyMsg.type === 'document' ? '📄 Documento' : 
+                                      '📎 Arquivo'
+                                    )}
                                   </p>
                                 </div>
                               )}
@@ -1821,7 +1829,15 @@ export default function Conversations() {
                                       Mensagem apagada
                                     </span>
                                   ) : (
-                                    replyMsg.content || (replyMsg.type === 'image' ? 'Imagem' : replyMsg.type === 'audio' ? 'Áudio' : replyMsg.type === 'video' ? 'Vídeo' : 'Arquivo')
+                                    replyMsg.content || (
+                                      replyMsg.type === 'image' ? 'Imagem' : 
+                                      replyMsg.type === 'audio' ? 'Áudio' : 
+                                      replyMsg.type === 'video' ? 'Vídeo' : 
+                                      replyMsg.type === 'contact' ? 'Contato' : 
+                                      replyMsg.type === 'location' ? 'Localização' : 
+                                      replyMsg.type === 'document' ? 'Documento' : 
+                                      'Arquivo'
+                                    )
                                   )}
                                 </p>
                               </div>
@@ -1967,6 +1983,96 @@ export default function Conversations() {
                                       <span>{msg.duration || "--:--"}</span>
                                     </div>
                                   </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {msg.type === 'contact' && msg.metadata?.contact && (
+                              <div className="min-w-[250px]">
+                                <div className="flex gap-3 items-center bg-black/20 p-3 rounded-lg border border-white/10">
+                                  <Avatar className="h-12 w-12">
+                                    <AvatarImage src={msg.metadata.contact.avatarUrl || undefined} />
+                                    <AvatarFallback>
+                                      {msg.metadata.contact.name.substring(0, 2).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-semibold text-sm truncate">{msg.metadata.contact.name}</p>
+                                    {msg.metadata.contact.email && (
+                                      <p className="text-xs opacity-70 truncate">{msg.metadata.contact.email}</p>
+                                    )}
+                                    {msg.metadata.contact.phone && (
+                                      <p className="text-xs opacity-70 truncate">{msg.metadata.contact.phone}</p>
+                                    )}
+                                  </div>
+                                  <User className="h-5 w-5 opacity-50" />
+                                </div>
+                              </div>
+                            )}
+
+                            {msg.type === 'location' && msg.metadata?.location && (
+                              <div className="min-w-[300px] space-y-2">
+                                <div className="relative rounded-lg overflow-hidden bg-muted h-[200px] border border-white/10">
+                                  <iframe
+                                    width="100%"
+                                    height="200"
+                                    frameBorder="0"
+                                    style={{ border: 0 }}
+                                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${msg.metadata.location.longitude - 0.01}%2C${msg.metadata.location.latitude - 0.01}%2C${msg.metadata.location.longitude + 0.01}%2C${msg.metadata.location.latitude + 0.01}&layer=mapnik&marker=${msg.metadata.location.latitude}%2C${msg.metadata.location.longitude}`}
+                                    allowFullScreen
+                                  />
+                                </div>
+                                <div className="bg-black/20 p-3 rounded-lg">
+                                  <div className="flex items-start gap-2">
+                                    <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                                    <div className="flex-1 min-w-0">
+                                      {msg.metadata.location.name && (
+                                        <p className="font-medium text-sm mb-1">{msg.metadata.location.name}</p>
+                                      )}
+                                      {msg.metadata.location.address && (
+                                        <p className="text-xs opacity-70 mb-2">{msg.metadata.location.address}</p>
+                                      )}
+                                      <div className="flex items-center gap-2 text-[10px] font-mono opacity-60">
+                                        <span>{msg.metadata.location.latitude.toFixed(6)}</span>
+                                        <span>•</span>
+                                        <span>{msg.metadata.location.longitude.toFixed(6)}</span>
+                                      </div>
+                                      <a
+                                        href={`https://www.google.com/maps?q=${msg.metadata.location.latitude},${msg.metadata.location.longitude}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-primary hover:underline mt-2 inline-block"
+                                      >
+                                        Abrir no Google Maps →
+                                      </a>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {msg.type === 'document' && (
+                              <div className="min-w-[250px]">
+                                <div className="flex gap-3 items-center bg-black/20 p-3 rounded-lg border border-white/10">
+                                  <div className="h-12 w-12 rounded bg-white/10 flex items-center justify-center shrink-0">
+                                    <File className="h-6 w-6 opacity-80" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm truncate font-medium">{msg.fileName || msg.caption || "Documento"}</p>
+                                    {msg.fileSize && (
+                                      <p className="text-xs opacity-70">{msg.fileSize}</p>
+                                    )}
+                                  </div>
+                                  {msg.mediaUrl && (
+                                    <a
+                                      href={msg.mediaUrl}
+                                      download
+                                      className="text-primary hover:text-primary/80"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <Download className="h-5 w-5" />
+                                    </a>
+                                  )}
                                 </div>
                               </div>
                             )}
