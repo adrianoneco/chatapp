@@ -702,6 +702,20 @@ export default function Conversations() {
     }
   };
 
+  const handleAssignToMe = async () => {
+    if (!conversationId || !user?.id) return;
+    
+    try {
+      await transferConversationMutation.mutateAsync({
+        conversationId,
+        attendantId: user.id,
+      });
+      toast.success("Conversa atribuída a você com sucesso!");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao atribuir conversa");
+    }
+  };
+
   const handleTransferConversation = async () => {
     if (!conversationId || !selectedAttendant) {
       toast.error("Selecione um atendente para transferir");
@@ -1668,6 +1682,12 @@ export default function Conversations() {
                                 <StopCircle className="mr-2 h-4 w-4" />
                                 Encerrar Conversa
                               </DropdownMenuItem>
+                              {conversation?.attendant?.displayName?.toLowerCase().includes('easybot') && (
+                                <DropdownMenuItem onClick={handleAssignToMe} data-testid="menu-assign-to-me">
+                                  <User className="mr-2 h-4 w-4" />
+                                  Atribuir a mim
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={() => setTransferDialogOpen(true)} data-testid="menu-transfer-conversation">
                                 <User className="mr-2 h-4 w-4" />
                                 Transferir
@@ -2311,8 +2331,8 @@ export default function Conversations() {
               </div>
             ) : attendantsData?.users && attendantsData.users.length > 0 ? (
               <>
-                {/* Show current attendant if it's easybot */}
-                {conversation?.attendant?.displayName?.toLowerCase() === 'easybot' && (
+                {/* Show current attendant - always show if there is one */}
+                {conversation?.attendant && (
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-muted-foreground">
                       Atendente Atual
@@ -2328,9 +2348,11 @@ export default function Conversations() {
                         <p className="font-medium">{conversation.attendant.displayName}</p>
                         <p className="text-xs text-muted-foreground">{conversation.attendant.email}</p>
                       </div>
-                      <Badge variant="secondary" className="text-xs">
-                        Bot
-                      </Badge>
+                      {conversation.attendant.displayName?.toLowerCase().includes('easybot') && (
+                        <Badge variant="secondary" className="text-xs">
+                          Bot
+                        </Badge>
+                      )}
                     </div>
                     <Separator className="my-4" />
                     <label className="text-sm font-medium text-muted-foreground">
