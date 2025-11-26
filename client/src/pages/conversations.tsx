@@ -2311,6 +2311,34 @@ export default function Conversations() {
               </div>
             ) : attendantsData?.users && attendantsData.users.length > 0 ? (
               <>
+                {/* Show current attendant if it's easybot */}
+                {conversation?.attendant?.displayName?.toLowerCase() === 'easybot' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Atendente Atual
+                    </label>
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={conversation.attendant.avatarUrl || undefined} />
+                        <AvatarFallback>
+                          {conversation.attendant.displayName.substring(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <p className="font-medium">{conversation.attendant.displayName}</p>
+                        <p className="text-xs text-muted-foreground">{conversation.attendant.email}</p>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        Bot
+                      </Badge>
+                    </div>
+                    <Separator className="my-4" />
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Transferir para
+                    </label>
+                  </div>
+                )}
+                
                 <Select value={selectedAttendant} onValueChange={setSelectedAttendant}>
                   <SelectTrigger data-testid="select-attendant">
                     <SelectValue placeholder="Selecione um atendente" />
