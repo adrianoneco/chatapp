@@ -1378,7 +1378,23 @@ export default function Conversations() {
               </div>
             ) : conversations && conversations.length > 0 ? (
               <div className="space-y-1 p-2">
-                {conversations.filter(conv => conv.status === activeTab).map((conv) => {
+                {conversations.filter(conv => {
+                  // Special handling: easybot conversations should appear in "waiting" tab
+                  const isEasybotConversation = conv.attendant?.displayName?.toLowerCase() === 'easybot';
+                  
+                  if (isEasybotConversation && activeTab === "waiting") {
+                    // Show easybot conversations in Pendentes tab regardless of status
+                    return true;
+                  }
+                  
+                  if (isEasybotConversation && activeTab !== "waiting") {
+                    // Hide easybot conversations from other tabs
+                    return false;
+                  }
+                  
+                  // Normal filtering for other conversations
+                  return conv.status === activeTab;
+                }).map((conv) => {
                   // Determine who to show: if user is client, show attendant; if user is attendant/admin, show client
                   const contact = user?.id === conv.clientId ? conv.attendant : conv.client;
                   
@@ -1556,7 +1572,12 @@ export default function Conversations() {
                 </ContextMenu>
                   );
                 })}
-                {conversations.filter(conv => conv.status === activeTab).length === 0 && (
+                {conversations.filter(conv => {
+                  const isEasybotConversation = conv.attendant?.displayName?.toLowerCase() === 'easybot';
+                  if (isEasybotConversation && activeTab === "waiting") return true;
+                  if (isEasybotConversation && activeTab !== "waiting") return false;
+                  return conv.status === activeTab;
+                }).length === 0 && (
                   <div className="flex flex-col items-center justify-center p-8 text-center">
                     <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-4" />
                     <p className="text-sm text-muted-foreground">
