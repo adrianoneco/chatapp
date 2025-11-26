@@ -528,7 +528,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eq(conversations.deleted, false),
             userRole === "client"
               ? eq(conversations.clientId, userId)
-              : or(eq(conversations.attendantId, userId), eq(conversations.status, "waiting"))
+              : or(
+                  eq(conversations.attendantId, userId), 
+                  eq(conversations.status, "waiting"),
+                  // Show easybot conversations to all attendants
+                  sql`LOWER(${attendantUser.displayName}) = 'easybot'`
+                )
           )
         )
         .orderBy(desc(conversations.sequenceNumber));
