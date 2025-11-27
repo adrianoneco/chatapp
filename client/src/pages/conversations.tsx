@@ -408,9 +408,15 @@ function ConversationDetailsContent({ conversation }: ConversationDetailsProps) 
               Atendente
             </h4>
             <div className="flex items-center gap-3 p-3 bg-background/50 rounded-lg">
-              <Avatar className="h-12 w-12 border-2 border-primary/20">
-                <AvatarImage src={attendant.avatarUrl || undefined} />
-                <AvatarFallback>{attendant.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
+              <Avatar className="h-14 w-14 border-2 border-primary/30 ring-2 ring-primary/10">
+                <AvatarImage 
+                  src={attendant.avatarUrl || undefined} 
+                  alt={attendant.displayName}
+                  className="object-cover"
+                />
+                <AvatarFallback className="text-base font-semibold bg-primary/10 text-primary">
+                  {attendant.displayName.substring(0, 2).toUpperCase()}
+                </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{attendant.displayName}</p>
