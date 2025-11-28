@@ -68,6 +68,7 @@ export interface MessageWithDetails {
   recorded: boolean;
   forwarded: boolean;
   deleted: boolean;
+  messageStatus: "sent" | "delivered" | "read";
   replyToId: string | null;
   metadata: {
     audio_tags?: {

@@ -1,12 +1,12 @@
 import { MainLayout } from "@/components/layout/main-layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit, Trash2, Lock } from "lucide-react";
+import { Plus, Lock } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api";
@@ -16,9 +16,10 @@ interface Channel {
   id: string;
   name: string;
   slug: string;
-  icon: string | null;
-  color: string | null;
+  description: string | null;
+  imageUrl: string | null;
   enabled: boolean;
+  locked: boolean;
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;
@@ -31,21 +32,45 @@ export default function Channels() {
   const [formData, setFormData] = useState({
     name: "",
     slug: "",
-    icon: "",
-    color: "#3b82f6",
+    description: "",
+    imageUrl: "",
     enabled: true,
+    locked: false,
   });
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
 
   const { data: channels = [], isLoading } = useQuery<Channel[]>({
     queryKey: ["/channels"],
     queryFn: () => apiRequest("/channels"),
   });
 
+  const uploadImageMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("image", file);
+      return apiRequest("/channels/upload-image", {
+        method: "POST",
+        body: formData,
+      });
+    },
+  });
+
   const createMutation = useMutation({
-    mutationFn: (data: typeof formData) => apiRequest("/channels", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+    mutationFn: async (data: typeof formData) => {
+      let imageUrl = data.imageUrl;
+      
+      // Upload image if selected
+      if (selectedImage) {
+        const uploadResult = await uploadImageMutation.mutateAsync(selectedImage);
+        imageUrl = uploadResult.imageUrl;
+      }
+      
+      return apiRequest("/channels", {
+        method: "POST",
+        body: JSON.stringify({ ...data, imageUrl }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/channels"] });
       toast.success("Canal criado com sucesso!");
@@ -57,11 +82,20 @@ export default function Channels() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: typeof formData }) => 
-      apiRequest(`/channels/${id}`, {
+    mutationFn: async ({ id, data }: { id: string; data: typeof formData }) => {
+      let imageUrl = data.imageUrl;
+      
+      // Upload image if selected
+      if (selectedImage) {
+        const uploadResult = await uploadImageMutation.mutateAsync(selectedImage);
+        imageUrl = uploadResult.imageUrl;
+      }
+      
+      return apiRequest(`/channels/${id}`, {
         method: "PATCH",
-        body: JSON.stringify(data),
-      }),
+        body: JSON.stringify({ ...data, imageUrl }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/channels"] });
       toast.success("Canal atualizado com sucesso!");
@@ -91,20 +125,25 @@ export default function Channels() {
       setFormData({
         name: channel.name,
         slug: channel.slug,
-        icon: channel.icon || "",
-        color: channel.color || "#3b82f6",
+        description: channel.description || "",
+        imageUrl: channel.imageUrl || "",
         enabled: channel.enabled,
+        locked: channel.locked,
       });
+      setImagePreview(channel.imageUrl || "");
     } else {
       setEditingChannel(null);
       setFormData({
         name: "",
         slug: "",
-        icon: "",
-        color: "#3b82f6",
+        description: "",
+        imageUrl: "",
         enabled: true,
+        locked: false,
       });
+      setImagePreview("");
     }
+    setSelectedImage(null);
     setDialogOpen(true);
   };
 
@@ -114,10 +153,25 @@ export default function Channels() {
     setFormData({
       name: "",
       slug: "",
-      icon: "",
-      color: "#3b82f6",
+      description: "",
+      imageUrl: "",
       enabled: true,
+      locked: false,
     });
+    setSelectedImage(null);
+    setImagePreview("");
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -132,6 +186,10 @@ export default function Channels() {
   const handleDelete = (channel: Channel) => {
     if (channel.isDefault) {
       toast.error("Não é possível deletar o canal padrão");
+      return;
+    }
+    if (channel.locked) {
+      toast.error("Não é possível deletar um canal bloqueado");
       return;
     }
     if (confirm(`Tem certeza que deseja deletar o canal "${channel.name}"?`)) {
@@ -165,8 +223,18 @@ export default function Channels() {
               <Card key={channel.id} className="relative">
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl">{channel.icon || "📱"}</span>
+                    <div className="flex items-center gap-3">
+                      {channel.imageUrl ? (
+                        <img 
+                          src={channel.imageUrl} 
+                          alt={channel.name}
+                          className="h-12 w-12 rounded-lg object-cover border"
+                        />
+                      ) : (
+                        <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center text-2xl">
+                          📱
+                        </div>
+                      )}
                       <div>
                         <CardTitle className="flex items-center gap-2">
                           {channel.name}
@@ -176,42 +244,26 @@ export default function Channels() {
                               Padrão
                             </Badge>
                           )}
+                          {channel.locked && (
+                            <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
+                              <Lock className="h-3 w-3 mr-1" />
+                              Bloqueado
+                            </Badge>
+                          )}
                         </CardTitle>
+                        {channel.description && (
+                          <p className="text-sm text-muted-foreground mt-1">{channel.description}</p>
+                        )}
                         <CardDescription>/{channel.slug}</CardDescription>
                       </div>
                     </div>
                     <Badge
                       variant={channel.enabled ? "default" : "secondary"}
-                      style={channel.enabled ? { backgroundColor: channel.color || undefined } : undefined}
                     >
                       {channel.enabled ? "Ativo" : "Inativo"}
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleOpenDialog(channel)}
-                      disabled={channel.isDefault}
-                    >
-                      <Edit className="h-3.5 w-3.5 mr-1" />
-                      Editar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(channel)}
-                      disabled={channel.isDefault}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1" />
-                      Deletar
-                    </Button>
-                  </div>
-                </CardContent>
               </Card>
             ))}
           </div>
@@ -255,33 +307,35 @@ export default function Channels() {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="icon">Ícone (emoji)</Label>
+                  <Label htmlFor="description">Descrição</Label>
                   <Input
-                    id="icon"
-                    value={formData.icon}
-                    onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                    placeholder="💬"
-                    maxLength={2}
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Canal de atendimento via WhatsApp"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="color">Cor</Label>
-                  <div className="flex gap-2">
+                  <Label htmlFor="image">Imagem do Canal</Label>
+                  <div className="flex items-center gap-4">
+                    {imagePreview && (
+                      <img 
+                        src={imagePreview} 
+                        alt="Preview"
+                        className="h-16 w-16 rounded-lg object-cover border"
+                      />
+                    )}
                     <Input
-                      id="color"
-                      type="color"
-                      value={formData.color}
-                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                      className="w-20 h-10"
-                    />
-                    <Input
-                      type="text"
-                      value={formData.color}
-                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                      placeholder="#3b82f6"
+                      id="image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
                       className="flex-1"
                     />
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Formatos aceitos: JPG, PNG, GIF (máx. 5MB)
+                  </p>
                 </div>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="enabled">Canal ativo</Label>
@@ -289,6 +343,17 @@ export default function Channels() {
                     id="enabled"
                     checked={formData.enabled}
                     onCheckedChange={(enabled) => setFormData({ ...formData, enabled })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="locked">Bloquear canal</Label>
+                    <p className="text-xs text-muted-foreground">Impede edição e exclusão</p>
+                  </div>
+                  <Switch
+                    id="locked"
+                    checked={formData.locked}
+                    onCheckedChange={(locked) => setFormData({ ...formData, locked })}
                   />
                 </div>
               </div>

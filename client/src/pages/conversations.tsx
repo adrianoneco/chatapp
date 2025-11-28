@@ -4,9 +4,10 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize, PanelLeftClose, PanelLeft, Reply, Forward, Laugh, X, MapPin, Clock, Hash, User, CheckCircle2, XCircle, Loader2, Plus, PlayCircle, StopCircle, RotateCcw, X as XIcon, Globe, Copy, Download } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Smile, Paperclip, ArrowLeft, MessageSquare, CornerDownRight, Quote, Trash2, Play, Pause, Mic, Image as ImageIcon, Film, File, Disc, Music, Volume2, VolumeX, Maximize, PanelLeftClose, PanelLeft, Reply, Forward, Laugh, X, MapPin, Clock, Hash, User, CheckCircle2, XCircle, Loader2, Plus, PlayCircle, StopCircle, RotateCcw, X as XIcon, Globe, Copy, Download, Check, CheckCheck } from "lucide-react";
 import { FaTrash } from "react-icons/fa6";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocation, useRoute } from "wouter";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
@@ -21,7 +22,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -521,9 +521,6 @@ export default function Conversations() {
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [messageToForward, setMessageToForward] = useState<MessageWithDetails | null>(null);
-  const [replyDialogOpen, setReplyDialogOpen] = useState(false);
-  const [selectedReplyContacts, setSelectedReplyContacts] = useState<string[]>([]);
-  const [messageToReply, setMessageToReply] = useState<MessageWithDetails | null>(null);
   const createConversationMutation = useCreateConversation();
   const startConversationMutation = useStartConversation();
   const closeConversationMutation = useCloseConversation();
@@ -1158,70 +1155,21 @@ export default function Conversations() {
     );
   };
 
-  const toggleReplyContactSelection = (contactId: string) => {
-    setSelectedReplyContacts(prev => 
-      prev.includes(contactId) 
-        ? prev.filter(id => id !== contactId)
-        : [...prev, contactId]
-    );
-  };
-
   const handleReplyMessage = (messageId: string) => {
     const msg = messages.find(m => m.id === messageId);
     if (msg) {
-      setMessageToReply(msg);
-      setReplyDialogOpen(true);
-      setSelectedReplyContacts([]);
-    }
-  };
-
-  const handleReplyToContacts = async () => {
-    if (!messageToReply || selectedReplyContacts.length === 0) return;
-
-    try {
-      for (const contactId of selectedReplyContacts) {
-        // Buscar ou criar conversa com o contato
-        const response = await apiRequest(`/conversations/with/${contactId}`, {
-          method: 'GET'
-        });
-
-        let targetConversationId: string;
-        if (response.conversation) {
-          targetConversationId = response.conversation.id;
-        } else {
-          // Criar nova conversa se não existir
-          const createResponse = await apiRequest('/conversations', {
-            method: 'POST',
-            body: JSON.stringify({ contactId })
-          });
-          targetConversationId = createResponse.id;
+      setReplyingTo(messageId);
+      // Scroll para o campo de input
+      setTimeout(() => {
+        const inputElement = document.querySelector('textarea') as HTMLTextAreaElement;
+        if (inputElement) {
+          inputElement.focus();
         }
-
-        // Enviar mensagem com resposta (reutilizando o mesmo arquivo)
-        await apiRequest(`/conversations/${targetConversationId}/messages`, {
-          method: 'POST',
-          body: JSON.stringify({
-            content: messageToReply.content,
-            type: messageToReply.type,
-            mediaUrl: messageToReply.mediaUrl || undefined,
-            metadata: messageToReply.metadata || undefined,
-            duration: messageToReply.duration || undefined,
-            fileName: messageToReply.fileName || undefined,
-            fileSize: messageToReply.fileSize || undefined,
-            replyToId: messageToReply.id,
-          })
-        });
-      }
-
-      toast.success(`Resposta enviada para ${selectedReplyContacts.length} contato(s)`);
-      setReplyDialogOpen(false);
-      setSelectedReplyContacts([]);
-      setMessageToReply(null);
-    } catch (error) {
-      console.error('Error replying to message:', error);
-      toast.error('Erro ao enviar resposta');
+      }, 100);
     }
   };
+
+
 
   const handleSendMessage = () => {
     if (!messageInput.trim() || !conversationId) return;
@@ -1341,7 +1289,7 @@ export default function Conversations() {
       <div className="flex h-[calc(100vh-5.50rem)] overflow-hidden">
         {/* Contacts List */}
         <Card className={cn(
-          "flex flex-col h-full border-0 bg-card/50 backdrop-blur shrink-0 transition-all duration-300 relative rounded-none",
+          "flex flex-col h-full border-0 border-r bg-card/50 backdrop-blur shrink-0 transition-all duration-300 relative rounded-none",
           isChatOpen ? "hidden lg:flex" : "flex w-full",
           sidebarCollapsed ? "lg:w-20" : "lg:w-80"
         )}>
@@ -1438,10 +1386,10 @@ export default function Conversations() {
                   return (
                     <ContextMenu key={conv.id}>
                       <ContextMenuTrigger asChild>
-                        <Link href={`/conversations/${conv.channel || 'webchat'}/${conv.id}`}>
+                        <Link href={`/conversations/${conv.channel || 'webchat'}/${conv.id}`} className="block w-full">
                           <div 
                             className={cn(
-                              "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
+                              "flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors text-left group cursor-pointer",
                               conversationId === conv.id ? "bg-accent/60" : "",
                               sidebarCollapsed && "justify-center"
                             )}
@@ -1463,18 +1411,20 @@ export default function Conversations() {
                         </div>
                         {!sidebarCollapsed && (
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs font-mono px-1.5 py-0">
+                            <div className="flex items-center justify-between mb-1 gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <Badge variant="outline" className="text-xs font-mono px-1.5 py-0 shrink-0">
                                   #{conv.sequenceNumber}
                                 </Badge>
-                                <span className="font-medium truncate">{displayName}</span>
+                                <span className="font-medium truncate" title={displayName}>
+                                  {displayName.length > 15 ? displayName.substring(0, 15) + '...' : displayName}
+                                </span>
                               </div>
-                              <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                              <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
                                 {conv.lastMessage ? formatMessageTime(conv.lastMessage.createdAt) : ""}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
                               <span className="text-sm text-muted-foreground truncate group-hover:text-foreground transition-colors">
                                 {conv.lastMessage?.content || "Sem mensagens"}
                               </span>
@@ -1781,7 +1731,7 @@ export default function Conversations() {
                                       {replyMsg.senderId === user?.id ? "Você" : replyMsg.sender?.displayName}
                                     </span>
                                   </div>
-                                  <p className="truncate opacity-70 text-[11px]">
+                                  <p className="line-clamp-2 opacity-70 text-[11px] break-words">
                                     {replyMsg.content || (
                                       replyMsg.type === 'image' ? '📷 Imagem' : 
                                       replyMsg.type === 'audio' ? '🎵 Áudio' : 
@@ -1869,7 +1819,7 @@ export default function Conversations() {
                                     </div>
                                   </div>
                                 </div>
-                                <p className="truncate opacity-90">
+                                <p className="line-clamp-2 break-words opacity-90">
                                   {replyMsg.deleted ? (
                                     <span className="italic flex items-center gap-1">
                                       <Trash2 className="h-2.5 w-2.5" />
@@ -1900,7 +1850,7 @@ export default function Conversations() {
                               )}>
                                 <div className="flex items-center gap-1.5 opacity-80">
                                   <CornerDownRight className="h-3 w-3 shrink-0" />
-                                  <span className="font-semibold">Mensagem Encaminhada</span>
+                                  <span className="font-semibold truncate">Mensagem Encaminhada</span>
                                 </div>
                               </div>
                             )}
@@ -1908,7 +1858,7 @@ export default function Conversations() {
                             {/* Message Content Based on Type */}
                             
                             {msg.type === 'text' && (
-                              <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
                             )}
 
                             {msg.type === 'image' && (
@@ -2197,7 +2147,30 @@ export default function Conversations() {
                                 <div className="flex items-center gap-1 opacity-70 text-[10px] ml-auto">
                                   <span>{format(new Date(msg.createdAt), "HH:mm")}</span>
                                   {isMyMessage && (
-                                    <span className="text-blue-300">✓✓</span>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="flex items-center">
+                                            {msg.messageStatus === "read" && (
+                                              <CheckCheck className="h-3.5 w-3.5 text-blue-400" />
+                                            )}
+                                            {msg.messageStatus === "delivered" && (
+                                              <CheckCheck className="h-3.5 w-3.5 text-gray-400" />
+                                            )}
+                                            {msg.messageStatus === "sent" && (
+                                              <Check className="h-3.5 w-3.5 text-gray-400" />
+                                            )}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>
+                                            {msg.messageStatus === "read" && "Lida"}
+                                            {msg.messageStatus === "delivered" && "Entregue"}
+                                            {msg.messageStatus === "sent" && "Enviada"}
+                                          </p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                   )}
                                 </div>
                               </div>
@@ -2499,103 +2472,6 @@ export default function Conversations() {
                 </div>
               )}
             </ScrollArea>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Reply Message Dialog */}
-      <Dialog open={replyDialogOpen} onOpenChange={setReplyDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Responder Mensagem</DialogTitle>
-            <DialogDescription>
-              Selecione um ou mais contatos para responder esta mensagem
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar contatos..."
-                value={contactSearch}
-                onChange={(e) => setContactSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            
-            <ScrollArea className="h-[300px] pr-4">
-              {loadingContacts ? (
-                <div className="flex items-center justify-center p-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : contactsData?.users && contactsData.users.length > 0 ? (
-                <div className="space-y-1">
-                  {contactsData.users.filter(contact => contact.id !== user?.id).map((contact) => (
-                    <div
-                      key={contact.id}
-                      className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors",
-                        selectedReplyContacts.includes(contact.id)
-                          ? "bg-primary/10 hover:bg-primary/20"
-                          : "hover:bg-accent/50"
-                      )}
-                      onClick={() => toggleReplyContactSelection(contact.id)}
-                    >
-                      <div className={cn(
-                        "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
-                        selectedReplyContacts.includes(contact.id)
-                          ? "bg-primary border-primary"
-                          : "border-muted-foreground/50"
-                      )}>
-                        {selectedReplyContacts.includes(contact.id) && (
-                          <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
-                        )}
-                      </div>
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={contact.avatarUrl || undefined} />
-                        <AvatarFallback>{contact.displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{contact.displayName}</p>
-                        <p className="text-sm text-muted-foreground truncate">{contact.email}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center p-8 text-center">
-                  <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <p className="text-sm text-muted-foreground">
-                    {contactSearch ? "Nenhum contato encontrado" : "Nenhum contato disponível"}
-                  </p>
-                </div>
-              )}
-            </ScrollArea>
-
-            <div className="flex items-center justify-between pt-4 border-t">
-              <p className="text-sm text-muted-foreground">
-                {selectedReplyContacts.length} {selectedReplyContacts.length === 1 ? 'contato selecionado' : 'contatos selecionados'}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setReplyDialogOpen(false);
-                    setSelectedReplyContacts([]);
-                    setMessageToReply(null);
-                  }}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleReplyToContacts}
-                  disabled={selectedReplyContacts.length === 0}
-                >
-                  <Reply className="h-4 w-4 mr-2" />
-                  Responder
-                </Button>
-              </div>
-            </div>
           </div>
         </DialogContent>
       </Dialog>

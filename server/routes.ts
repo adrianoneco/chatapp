@@ -63,6 +63,22 @@ const uploadImage = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
+const uploadChannelImage = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(process.cwd(), "data", "channels");
+      fs.mkdirSync(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: imageFilter,
+});
+
 const uploadVideo = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
@@ -424,9 +440,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/channels/upload-image", requireAuth, requireRole(["admin"]), uploadChannelImage.single("image"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "Nenhuma imagem enviada" });
+      }
+
+      const imageUrl = `/data/channels/${req.file.filename}`;
+      res.json({ imageUrl });
+    } catch (error) {
+      console.error("Error uploading channel image:", error);
+      res.status(500).json({ message: "Erro ao fazer upload da imagem" });
+    }
+  });
+
   app.post("/api/channels", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
-      const { name, slug, icon, color, enabled } = req.body;
+      const { name, slug, description, imageUrl, enabled, locked } = req.body;
 
       if (!name || !slug) {
         return res.status(400).json({ message: "Nome e slug são obrigatórios" });
@@ -435,9 +465,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const [channel] = await db.insert(channels).values({
         name,
         slug,
-        icon,
-        color,
+        description,
+        imageUrl,
         enabled: enabled ?? true,
+        locked: locked ?? false,
         isDefault: false,
       }).returning();
 
@@ -454,9 +485,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/channels/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, slug, icon, color, enabled } = req.body;
+      const { name, slug, description, imageUrl, enabled, locked } = req.body;
 
-      // Check if channel is default
+      // Check if channel is default or locked
       const [channel] = await db.select().from(channels).where(eq(channels.id, id));
       if (!channel) {
         return res.status(404).json({ message: "Canal não encontrado" });
@@ -466,8 +497,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Não é possível editar o canal padrão" });
       }
 
+      if (channel.locked) {
+        return res.status(403).json({ message: "Não é possível editar um canal bloqueado" });
+      }
+
       const [updated] = await db.update(channels)
-        .set({ name, slug, icon, color, enabled, updatedAt: new Date() })
+        .set({ name, slug, description, imageUrl, enabled, locked, updatedAt: new Date() })
         .where(eq(channels.id, id))
         .returning();
 
@@ -485,7 +520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
 
-      // Check if channel is default
+      // Check if channel is default or locked
       const [channel] = await db.select().from(channels).where(eq(channels.id, id));
       if (!channel) {
         return res.status(404).json({ message: "Canal não encontrado" });
@@ -493,6 +528,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (channel.isDefault) {
         return res.status(403).json({ message: "Não é possível deletar o canal padrão" });
+      }
+
+      if (channel.locked) {
+        return res.status(403).json({ message: "Não é possível deletar um canal bloqueado" });
       }
 
       await db.delete(channels).where(eq(channels.id, id));
@@ -1173,6 +1212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           recorded: req.body.recorded || false,
           forwarded: req.body.forwarded || false,
           forMe: forMe,
+          messageStatus: "sent",
           replyToId: req.body.replyToId || null,
           fileName: req.body.fileName || null,
           fileSize: req.body.fileSize || null,
@@ -1212,12 +1252,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/messages/:id", requireAuth, async (req, res) => {
     try {
+      const updateData: any = {
+        updatedAt: new Date(),
+      };
+      
+      if (req.body.deleted !== undefined) {
+        updateData.deleted = req.body.deleted;
+      }
+      
+      if (req.body.messageStatus !== undefined) {
+        updateData.messageStatus = req.body.messageStatus;
+      }
+      
       const [updated] = await db
         .update(messages)
-        .set({ 
-          deleted: req.body.deleted || false,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(eq(messages.id, req.params.id))
         .returning();
 
