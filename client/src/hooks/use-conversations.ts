@@ -42,6 +42,7 @@ export interface ConversationWithDetails {
     email: string;
     avatarUrl: string | null;
     phone: string | null;
+    remoteJid: string | null;
     role: string;
   } | null;
   attendant: {
@@ -51,6 +52,13 @@ export interface ConversationWithDetails {
     avatarUrl: string | null;
     phone: string | null;
     role: string;
+  } | null;
+  channelInfo?: {
+    id: string;
+    name: string;
+    slug: string;
+    imageUrl: string | null;
+    enabled: boolean;
   } | null;
   lastMessage?: MessageWithDetails;
   unreadCount: number;

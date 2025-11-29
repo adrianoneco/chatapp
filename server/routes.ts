@@ -558,10 +558,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           conversation: conversations,
           client: clientUser,
           attendant: attendantUser,
+          channel: channels,
         })
         .from(conversations)
         .leftJoin(clientUser, eq(conversations.clientId, clientUser.id))
         .leftJoin(attendantUser, eq(conversations.attendantId, attendantUser.id))
+        .leftJoin(channels, eq(conversations.channel, channels.slug))
         .where(
           and(
             eq(conversations.deleted, false),
@@ -579,7 +581,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get last message for each conversation
       const conversationsWithLastMessage = await Promise.all(
-        userConversations.map(async ({ conversation, client, attendant }) => {
+        userConversations.map(async ({ conversation, client, attendant, channel }) => {
           const [lastMessage] = await db
             .select()
             .from(messages)
@@ -594,6 +596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...conversation,
             client: client ? sanitizeUser(client) : null,
             attendant: attendant ? sanitizeUser(attendant) : null,
+            channelInfo: channel,
             lastMessage,
             unreadCount,
           };

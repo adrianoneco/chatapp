@@ -273,6 +273,21 @@ function ConversationDetailsContent({ conversation }: ConversationDetailsProps) 
   const client = conversation.client!;
   const attendant = conversation.attendant;
   const { data: history, isLoading: loadingHistory } = useConversationHistory(conversation.id);
+  const [copied, setCopied] = useState(false);
+
+  const formatPhoneNumber = (remoteJid: string | null) => {
+    if (!remoteJid) return null;
+    const number = remoteJid.split('@')[0];
+    // Formato: +55 (00) 0000-0000 ou +55 (00) 00000-0000
+    if (number.length === 13 && number.startsWith('55')) {
+      // +55 (00) 00000-0000
+      return `+55 (${number.slice(2, 4)}) ${number.slice(4, 9)}-${number.slice(9)}`;
+    } else if (number.length === 12 && number.startsWith('55')) {
+      // +55 (00) 0000-0000
+      return `+55 (${number.slice(2, 4)}) ${number.slice(4, 8)}-${number.slice(8)}`;
+    }
+    return number;
+  };
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { label: string; className: string }> = {
@@ -290,7 +305,9 @@ function ConversationDetailsContent({ conversation }: ConversationDetailsProps) 
 
   const copyProtocol = () => {
     navigator.clipboard.writeText(conversation.protocol);
+    setCopied(true);
     toast.success("Protocolo copiado!");
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const downloadNotes = () => {
@@ -332,7 +349,7 @@ function ConversationDetailsContent({ conversation }: ConversationDetailsProps) 
             <div className="flex items-center gap-2">
               <p className="font-mono font-medium flex-1">{conversation.protocol}</p>
               <TooltipProvider>
-                <Tooltip>
+                <Tooltip open={copied}>
                   <TooltipTrigger asChild>
                     <Button 
                       variant="outline" 
@@ -344,7 +361,7 @@ function ConversationDetailsContent({ conversation }: ConversationDetailsProps) 
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Copiar protocolo</p>
+                    <p>{copied ? "Copiado!" : "Copiar protocolo"}</p>
                   </TooltipContent>
                 </Tooltip>
                 <Tooltip>
@@ -366,6 +383,22 @@ function ConversationDetailsContent({ conversation }: ConversationDetailsProps) 
             </div>
           </div>
         </div>
+        <div className="flex items-center gap-2 text-sm">
+          <Globe className="h-4 w-4 text-muted-foreground" />
+          <div className="flex-1">
+            <p className="text-xs text-muted-foreground">Canal</p>
+            <p className="font-mono font-medium uppercase">{conversation.channel || 'WEBCHAT'}</p>
+          </div>
+        </div>
+        {client.remoteJid && (
+          <div className="flex items-center gap-2 text-sm">
+            <Phone className="h-4 w-4 text-muted-foreground" />
+            <div className="flex-1">
+              <p className="text-xs text-muted-foreground">Telefone</p>
+              <p className="font-mono font-medium">{formatPhoneNumber(client.remoteJid)}</p>
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-2 text-sm">
           <Clock className="h-4 w-4 text-muted-foreground" />
           <div className="flex-1">
@@ -1396,12 +1429,23 @@ export default function Conversations() {
                             data-testid={`link-contact-${conv.id}`}
                           >
                         <div className="relative shrink-0">
-                          <Avatar>
-                            <AvatarImage src={avatarUrl} />
-                            <AvatarFallback>{displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
-                          </Avatar>
+                          <div className="relative">
+                            <Avatar>
+                              <AvatarImage src={avatarUrl} />
+                              <AvatarFallback>{displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            {conv.channelInfo?.imageUrl && (
+                              <div className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-background border border-border overflow-hidden flex items-center justify-center">
+                                <img 
+                                  src={conv.channelInfo.imageUrl} 
+                                  alt={conv.channelInfo.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+                            )}
+                          </div>
                           {conv.status === "active" && (
-                            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
+                            <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
                           )}
                           {conv.unreadCount > 0 && sidebarCollapsed && (
                             <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">

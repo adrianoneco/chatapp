@@ -39,6 +39,7 @@ export const conversations = pgTable("conversations", {
   gpsLocation: boolean("gps_location").default(false),
   latitude: real("latitude"),
   longitude: real("longitude"),
+  messageRef: text("message_ref"),
   deleted: boolean("deleted").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
